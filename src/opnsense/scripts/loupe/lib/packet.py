@@ -21,6 +21,8 @@ class Packet(NamedTuple):
     sport: int
     dport: int
     payload: bytes
+    seq: int = 0
+    flags: int = 0
 
 
 def mac_str(b):
@@ -69,9 +71,11 @@ def decode(ts, frame) -> Optional[Packet]:
     if proto == PROTO_TCP:
         if end < off + 20:
             return None
-        sport, dport = struct.unpack_from("!HH", frame, off)
+        sport, dport, seq = struct.unpack_from("!HHI", frame, off)
         doff = (frame[off + 12] >> 4) * 4
+        flags = frame[off + 13]
         payload = frame[off + doff:end]
+        return Packet(ts, mac_str(src_mac), mac_str(dst_mac), src, dst, proto, sport, dport, bytes(payload), seq, flags)
     elif proto == PROTO_UDP:
         if end < off + 8:
             return None

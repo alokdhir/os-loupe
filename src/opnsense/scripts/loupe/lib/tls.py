@@ -67,7 +67,24 @@ def parse_handshake(hs) -> Optional[Hello]:
     return Hello(sni, alpn, ech, sni is not None or not truncated)
 
 
+MAX_RECORD = 16384 + 256
+
+
+def looks_like_hello(payload):
+    """Cheap sanity checks so random bulk data that happens to start 16 03 .. .. .. 01 is rejected."""
+    if len(payload) < 9 or payload[0] != 0x16 or payload[1] != 0x03 or payload[2] > 0x04 or payload[5] != 0x01:
+        return False
+    rlen = struct.unpack_from("!H", payload, 3)[0]
+    hlen = int.from_bytes(payload[6:9], "big")
+    return 4 <= rlen <= MAX_RECORD and 38 <= hlen <= 0xFFFF and payload[9:10] in (b"\x03", b"")
+
+
 def parse_tcp_payload(payload) -> Optional[Hello]:
-    if len(payload) < 6 or payload[0] != 0x16 or payload[5] != 0x01:
+    if not looks_like_hello(payload):
         return None
     return parse_handshake(record_payload(payload))
+
+
+def record_length(payload):
+    """Total bytes of the first TLS record (header included), from its header."""
+    return 5 + struct.unpack_from("!H", payload, 3)[0]
