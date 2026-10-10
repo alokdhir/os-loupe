@@ -68,6 +68,8 @@ On a gigabit home link running on an Intel N150: about 0.5% of one CPU core idle
 
 Loupe records which device talked to which site name and how much — not page contents, URLs or anything inside encrypted connections. Encrypted Client Hello (ECH), VPNs and relays (iCloud Private Relay) hide the real site; Loupe shows those as what they are. It's a tool for the network's owner; use it with the people on your network in mind.
 
+In a workplace, tell people that their devices' traffic is recorded this way. Per-person browsing records are regulated in many places (for example the GDPR in the EU, and notice requirements in some US states); check what applies to you before turning it on.
+
 ## Install
 
 Loupe is not in the official plugin list yet. To try it, install it from this repository on the OPNsense box itself — from the console (option 8, *Shell*) or SSH, as root:

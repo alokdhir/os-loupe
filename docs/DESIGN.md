@@ -47,7 +47,7 @@ Everything Loupe knows comes from these. Required ones stop Loupe from working i
 | ARP and IPv6 neighbour tables (sysctl, as `arp -an` / `ndp -an` show them) | IP → MAC, to tie traffic to a device | every 60 s | required |
 | Interface addresses (`getifaddrs()`) | which networks are local | at start, every 10 min | required |
 | Unbound cache (`dump_cache` over Unbound's TLS control port) | names for connections opened before Loupe started | at start | optional (Unbound) |
-| dnsmasq leases and static hosts (`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`) | device names | every 10 min | optional (Kea and ISC DHCP not read yet: LOUPE-15) |
+| DHCP leases and fixed entries: dnsmasq (`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`), Kea (`/var/db/kea/kea-leases4.csv`, reservations in `kea-dhcp4.conf`), ISC dhcpd (`dhcpd.leases`, `host` entries in `dhcpd.conf`) | device names | every 10 min | optional; a server's fixed entries are read only while it has a lease file (Kea is installed with a sample config) |
 | IEEE vendor list (`/usr/local/opnsense/contrib/ieee/oui.csv`, shipped with OPNsense) | MAC maker | at start | optional |
 | Settings (`/usr/local/etc/loupe.json`, from the OPNsense config via a template) | interfaces, retention, your service and device names | daemon: at start (Apply restarts it); reports: every query | required |
 | Shipped rules (`data/devices.json`, `data/services.json`) | device types, icons, makers, Apple model names; service names, address ranges, ports, VPN providers | at start / every query | required |
@@ -117,7 +117,7 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 
 ## Untested / open risks
 
-- **DHCP servers other than dnsmasq:** lease-file names are read from dnsmasq only; Kea and ISC DHCP installs lose that clue.
+- **Kea and ISC DHCP** lease and config formats are read from their documentation and tested with sample files; Loupe has only run against dnsmasq so far.
 - **IPv6** is implemented (filters, parsing) but has not seen real traffic yet.
 - **VLANs / several LAN interfaces:** supported by configuration, tested only on one bridged LAN.
 - **Large state tables:** the state table is read every 10 seconds. The kernel hands it over in ~1.5 ms for 1,000 states, but decoding it in Python costs ~25 µs per state either way (netlink fields or `pfctl` text, `tools/bench_pfstate.py`): ~0.25% of a core at 1,000 states, ~12% at 50,000. Beyond that it would need a compiled helper or a longer poll interval (pf keeps closed states only 30–45 s, so the interval can't go much past 20 s).

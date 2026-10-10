@@ -120,6 +120,67 @@ class TestUserRules(unittest.TestCase):
         self.assertEqual(devid.classify("ac:00:00:00:00:02", hostname="ok-1")[0], "Good")
 
 
+KEA_CSV = """address,hwaddr,client_id,valid_lifetime,expire,subnet_id,fqdn_fwd,fqdn_rev,hostname,state,user_context,pool_id
+10.9.1.20,ac:00:00:00:00:01,,3600,1000,1,0,0,old-name.lan,0,,0
+10.9.1.20,AC:00:00:00:00:01,,3600,2000,1,0,0,laptop.lan,0,,0
+10.9.1.21,ac:00:00:00:00:02,,3600,2000,1,0,0,gone,2,,0
+10.9.1.22,ac:00:00:00:00:03,,3600,2000,1,0,0,,0,,0
+"""
+ISC_LEASES = """# The format of this file is documented in the dhcpd.leases(5) manual page.
+lease 10.9.1.30 {
+  starts 4 2026/10/08 12:00:00;
+  binding state active;
+  hardware ethernet ac:00:00:00:00:04;
+  client-hostname "printer";
+}
+lease 10.9.1.31 {
+  binding state free;
+  hardware ethernet ac:00:00:00:00:05;
+  client-hostname "left";
+}
+"""
+KEA_CONF = """// Kea dhcp4
+{ "Dhcp4": { "subnet4": [ { "id": 1, "subnet": "10.9.0.0/16",
+  # a comment
+  "reservations": [ { "hw-address": "ac:00:00:00:00:06", "ip-address": "10.9.10.10", "hostname": "server.lan" } ] } ] } }
+"""
+ISC_CONF = """host nas {
+  hardware ethernet ac:00:00:00:00:07;
+  fixed-address 10.9.10.20;
+}
+"""
+
+
+class TestDhcpServers(unittest.TestCase):
+    def test_parsers(self):
+        self.assertEqual(devid._kea_leases(KEA_CSV), {"ac:00:00:00:00:01": "laptop"})
+        self.assertEqual(devid._isc_leases(ISC_LEASES), {"ac:00:00:00:00:04": "printer"})
+        self.assertEqual(devid._kea_reservations(KEA_CONF), {"10.9.10.10": "server"})
+        self.assertEqual(devid._isc_hosts(ISC_CONF), {"10.9.10.20": "nas"})
+
+    def test_only_servers_in_use(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            files = {"KEA_CONF": KEA_CONF, "ISC_CONF": ISC_CONF}
+            saved = {k: getattr(devid, k) for k in ("DNSMASQ_LEASES", "DNSMASQ_HOSTS", "KEA_LEASES", "KEA_CONF",
+                                                     "ISC_LEASES", "ISC_CONF")}
+            try:
+                for k in saved:
+                    setattr(devid, k, os.path.join(d, k))
+                for k, text in files.items():
+                    with open(os.path.join(d, k), "w") as f:
+                        f.write(text)
+                self.assertEqual(devid.static_hosts(), {})            # configs alone (e.g. Kea's sample): ignored
+                with open(devid.KEA_LEASES, "w") as f:
+                    f.write(KEA_CSV)
+                self.assertEqual(devid.static_hosts(), {"10.9.10.10": "server"})
+                self.assertEqual(devid.leases(), {"ac:00:00:00:00:01": "laptop"})
+            finally:
+                for k, v in saved.items():
+                    setattr(devid, k, v)
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -265,29 +265,117 @@ def mdns_name(info):
     return (own or hosts or names or [None])[0]
 
 
-def leases(path="/var/db/dnsmasq.leases"):
-    """mac -> hostname from dnsmasq's lease file."""
-    out = {}
+# Where OPNsense's DHCP servers keep their leases and fixed entries. Each server that is not in use simply
+# has no file; all that exist are read, dnsmasq first.
+DNSMASQ_LEASES = "/var/db/dnsmasq.leases"
+DNSMASQ_HOSTS = "/var/etc/dnsmasq-hosts"
+KEA_LEASES = "/var/db/kea/kea-leases4.csv"
+KEA_CONF = "/usr/local/etc/kea/kea-dhcp4.conf"
+ISC_LEASES = "/var/dhcpd/var/db/dhcpd.leases"
+ISC_CONF = "/var/dhcpd/etc/dhcpd.conf"
+
+
+def _read(path):
     try:
-        with open(path) as f:
-            for line in f:
-                p = line.split()
-                if len(p) >= 4 and p[3] != "*":
-                    out[p[1].lower()] = p[3]
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
     except OSError:
-        pass
+        return ""
+
+
+def _dnsmasq_leases(text):
+    out = {}
+    for line in text.splitlines():
+        p = line.split()
+        if len(p) >= 4 and p[3] != "*":
+            out[p[1].lower()] = p[3]
     return out
 
 
-def static_hosts(path="/var/etc/dnsmasq-hosts"):
-    """ip -> short name from dnsmasq's static host entries."""
+def _kea_leases(text):
+    """Kea memfile CSV: address,hwaddr,client_id,valid_lifetime,expire,...,hostname,state,... (newest last)."""
+    out, newest = {}, {}
+    for row in csv.DictReader(text.splitlines()):
+        mac, name = (row.get("hwaddr") or "").lower(), (row.get("hostname") or "").rstrip(".")
+        try:
+            expire = int(row.get("expire") or 0)
+        except ValueError:
+            expire = 0
+        if mac and name and row.get("state", "0") != "2" and expire >= newest.get(mac, 0):   # 2: expired
+            out[mac], newest[mac] = name.split(".")[0], expire
+    return out
+
+
+def _isc_leases(text):
+    """ISC dhcpd.leases: lease ADDR { ... hardware ethernet MAC; client-hostname "NAME"; } (newest last)."""
     out = {}
+    for block in re.finditer(r"lease \S+ \{(.*?)\}", text, re.S):
+        body = block.group(1)
+        mac = re.search(r"hardware ethernet ([0-9a-fA-F:]{17});", body)
+        name = re.search(r'client-hostname "([^"]+)";', body)
+        if mac and name and "binding state free" not in body:
+            out[mac.group(1).lower()] = name.group(1)
+    return out
+
+
+def leases():
+    """mac -> host name the device registered with, from whichever DHCP servers keep leases here."""
+    out = {}
+    out.update(_isc_leases(_read(ISC_LEASES)))
+    out.update(_kea_leases(_read(KEA_LEASES)))
+    out.update(_dnsmasq_leases(_read(DNSMASQ_LEASES)))
+    return out
+
+
+def _dnsmasq_hosts(text):
+    out = {}
+    for line in text.splitlines():
+        p = line.split()
+        if len(p) >= 3 and not line.startswith("#"):
+            out.setdefault(p[0], p[2])
+    return out
+
+
+def _kea_reservations(text):
+    """Reservations (hostname + ip-address) anywhere in Kea's dhcp4 config."""
+    text = re.sub(r"(?m)^\s*(#|//).*$", "", text)          # Kea allows comment lines
     try:
-        with open(path) as f:
-            for line in f:
-                p = line.split()
-                if len(p) >= 3 and not line.startswith("#"):
-                    out.setdefault(p[0], p[2])
-    except OSError:
-        pass
+        conf = json.loads(text)
+    except ValueError:
+        return {}
+    out = {}
+
+    def walk(node):
+        if isinstance(node, dict):
+            if node.get("ip-address") and node.get("hostname"):
+                out.setdefault(node["ip-address"], node["hostname"].split(".")[0])
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+    walk(conf)
+    return out
+
+
+def _isc_hosts(text):
+    """host NAME { hardware ethernet MAC; fixed-address IP; } in dhcpd.conf."""
+    out = {}
+    for block in re.finditer(r"host (\S+) \{(.*?)\}", text, re.S):
+        ip = re.search(r"fixed-address ([0-9.]+);", block.group(2))
+        if ip:
+            out.setdefault(ip.group(1), block.group(1).strip('"'))
+    return out
+
+
+def static_hosts():
+    """ip -> name from the DHCP servers' fixed entries (reservations, static mappings, host entries)."""
+    out = {}
+    # Kea ships installed with a sample config full of example reservations: only trust a server's
+    # fixed entries while it is actually handing out leases here
+    kea = _kea_reservations(_read(KEA_CONF)) if os.path.exists(KEA_LEASES) else {}
+    isc = _isc_hosts(_read(ISC_CONF)) if os.path.exists(ISC_LEASES) else {}
+    for found in (_dnsmasq_hosts(_read(DNSMASQ_HOSTS)), kea, isc):
+        for ip, name in found.items():
+            out.setdefault(ip, name)
     return out
