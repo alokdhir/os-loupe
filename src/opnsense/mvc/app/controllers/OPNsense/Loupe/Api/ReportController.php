@@ -88,7 +88,7 @@ class ReportController extends ApiControllerBase
 
     /* what each grid's search box matches: the columns it shows, never the explanations behind them */
     private const SEARCH = [
-        'devices' => ['name', 'shown_type', 'vendor'],
+        'devices' => ['name', 'shown_type', 'ip', 'vendor'],
         'services' => ['service', 'names'],
         'sites' => ['name', 'service', 'servers'],
         'ports' => ['port'],
