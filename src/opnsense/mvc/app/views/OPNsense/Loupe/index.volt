@@ -195,49 +195,61 @@ POSSIBILITY OF SUCH DAMAGE.
         }
 
         /* Settings tabs */
-        let settingsLoaded = false;
-        function showSettings() {
-            if (settingsLoaded) return;
-            settingsLoaded = true;
-            mapDataToFormUI({'frm_settings': '/api/loupe/settings/get'}).done(function () {
-                formatTokenizersUI();
-                $('.selectpicker').selectpicker('refresh');
-            });
-            $('#{{ formGridServices['table_id'] }}').UIBootgrid({
-                search: '/api/loupe/settings/search_service',
-                get: '/api/loupe/settings/get_service/',
-                set: '/api/loupe/settings/set_service/',
-                add: '/api/loupe/settings/add_service/',
-                del: '/api/loupe/settings/del_service/'
-            });
-            $('#{{ formGridOverrides['table_id'] }}').UIBootgrid({
-                search: '/api/loupe/settings/search_device',
-                get: '/api/loupe/settings/get_device/',
-                set: '/api/loupe/settings/set_device/',
-                add: '/api/loupe/settings/add_device/',
-                del: '/api/loupe/settings/del_device/'
-            });
-            clearable('{{ formGridServices['table_id'] }}');
-            clearable('{{ formGridOverrides['table_id'] }}');
+        /* Settings tab: one page at a time; each starts the first time it is shown (grids need to be visible) */
+        const started = {};
+        const startPage = {
+            general: function () {
+                mapDataToFormUI({'frm_settings': '/api/loupe/settings/get'}).done(function () {
+                    formatTokenizersUI();
+                    $('.selectpicker').selectpicker('refresh');
+                });
+            },
+            servicenames: function () {
+                $('#{{ formGridServices['table_id'] }}').UIBootgrid({
+                    search: '/api/loupe/settings/search_service',
+                    get: '/api/loupe/settings/get_service/',
+                    set: '/api/loupe/settings/set_service/',
+                    add: '/api/loupe/settings/add_service/',
+                    del: '/api/loupe/settings/del_service/'
+                });
+                clearable('{{ formGridServices['table_id'] }}');
+            },
+            devicenames: function () {
+                $('#{{ formGridOverrides['table_id'] }}').UIBootgrid({
+                    search: '/api/loupe/settings/search_device',
+                    get: '/api/loupe/settings/get_device/',
+                    set: '/api/loupe/settings/set_device/',
+                    add: '/api/loupe/settings/add_device/',
+                    del: '/api/loupe/settings/del_device/'
+                });
+                clearable('{{ formGridOverrides['table_id'] }}');
+            }
+        };
+        function showSettings(page) {
+            $('.loupe-pages .btn').removeClass('active').filter('[data-page="' + page + '"]').addClass('active');
+            $('.loupe-page').hide().filter('#page_' + page).show();
+            if (!started[page]) {
+                started[page] = true;
+                startPage[page]();
+            }
         }
 
-        /* tabs <-> address: #device=…, #q=…, #services, #general, #servicenames, #devicenames */
-        const TABS = {devices: '#tab_devices', services: '#tab_services', general: '#subtab_general',
-                      servicenames: '#subtab_servicenames', devicenames: '#subtab_devicenames'};
-        const REPORT = ['devices', 'services'];
+        /* tabs <-> address: #device=…, #q=…, #services, and the settings pages #general, #servicenames, #devicenames */
+        const TABS = {devices: '#tab_devices', services: '#tab_services', settings: '#tab_settings'};
+        const PAGES = ['general', 'servicenames', 'devicenames'];
 
         function tabOf(hash) {
             if (/^#device=/.test(hash)) return 'devices';
             if (/^#(q=|lookup$|sites$)/.test(hash)) return 'services';
-            const t = hash.replace(/^#/, '');
-            return TABS[t] ? t : '{{ activetab }}';
+            const t = hash.replace(/^#/, '') || '{{ activetab }}';
+            return PAGES.indexOf(t) >= 0 ? 'settings' : (TABS[t] ? t : 'devices');
         }
 
         function route() {
             const hash = window.location.hash;
             const tab = tabOf(hash);
             $('#maintabs a[href="' + TABS[tab] + '"]').tab('show');
-            $('.loupe-apply').toggle(REPORT.indexOf(tab) < 0);
+            $('.loupe-apply').toggle(tab === 'settings');
             if (tab === 'devices') {
                 const m = hash.match(/device=([^&]+)/);
                 if (m) { showDevice(decodeURIComponent(m[1])); } else { showDevices(); }
@@ -246,20 +258,19 @@ POSSIBILITY OF SUCH DAMAGE.
                 q = m ? decodeURIComponent(m[1]) : '';
                 showServices();
             } else {
-                showSettings();
+                const page = hash.replace(/^#/, '') || '{{ activetab }}';
+                showSettings(PAGES.indexOf(page) >= 0 ? page : PAGES[0]);
             }
         }
 
         $('#maintabs a[data-toggle="tab"][href]').on('click', function () {
             const tab = Object.keys(TABS).find(k => TABS[k] === $(this).attr('href'));
-            const keep = (tab === 'services' && q) ? '#q=' + encodeURIComponent(q) : '#' + tab;
+            const keep = (tab === 'services' && q) ? '#q=' + encodeURIComponent(q)
+                : (tab === 'settings' ? '#' + PAGES[0] : '#' + tab);
             if (window.location.hash === keep) { route(); } else { window.location.hash = keep; }
         });
-        /* the "Settings" label of the sub-tab dropdown opens its first page (the ▾ lists them all) */
-        $('#maintabs li.dropdown > a[data-toggle="tab"]:not([href])').on('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.location.hash === '#general') { route(); } else { window.location.hash = '#general'; }
+        $('.loupe-pages .btn').click(function () {
+            window.location.hash = '#' + $(this).data('page');
         });
         $(window).on('hashchange', route);
 
@@ -286,7 +297,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 }, function (data) {
                     if (data.result === 'saved') {
                         $('#' + dialog).modal('hide');
-                        if (settingsLoaded) $('#{{ formGridOverrides['table_id'] }}').bootgrid('reload');
+                        if (started.devicenames) $('#{{ formGridOverrides['table_id'] }}').bootgrid('reload');
                         route();
                     } else if (data.validations) {
                         handleFormValidation('frm_' + dialog, data.validations);
@@ -322,11 +333,7 @@ POSSIBILITY OF SUCH DAMAGE.
         'tabs': [
             ['tab_id': 'devices', 'tab_descr': lang._('Devices')],
             ['tab_id': 'services', 'tab_descr': lang._('Services')],
-            ['tab_id': 'settings', 'tab_descr': lang._('Settings'), 'subtabs': [
-                ['tab_id': 'general', 'tab_descr': lang._('General')],
-                ['tab_id': 'servicenames', 'tab_descr': lang._('Service names')],
-                ['tab_id': 'devicenames', 'tab_descr': lang._('Device names')]
-            ]]
+            ['tab_id': 'settings', 'tab_descr': lang._('Settings')]
         ]
     ]]) }}
 </ul>
@@ -468,16 +475,25 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
     </div>
 
-    <div id="subtab_general" class="tab-pane fade in">
-        {{ partial("layout_partials/base_form", ['fields': formSettings, 'id': 'frm_settings']) }}
-    </div>
-    <div id="subtab_servicenames" class="tab-pane fade in">
-        <p class="loupe-bar"><strong>{{ lang._('Service names') }}</strong><br/>{{ lang._('Your own names for domains. They add to and override the built-in list, and apply to all history.') }}</p>
-        {{ partial('layout_partials/base_bootgrid_table', formGridServices) }}
-    </div>
-    <div id="subtab_devicenames" class="tab-pane fade in">
-        <p class="loupe-bar"><strong>{{ lang._('Device names') }}</strong><br/>{{ lang._('Name a device or correct its detected type. Matched by MAC address; the pencil next to a device does the same.') }}</p>
-        {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
+    <div id="tab_settings" class="tab-pane fade in">
+        <div class="loupe-bar">
+            <div class="btn-group loupe-pages">
+                <button type="button" class="btn btn-default btn-sm" data-page="general">{{ lang._('General') }}</button>
+                <button type="button" class="btn btn-default btn-sm" data-page="servicenames">{{ lang._('Service names') }}</button>
+                <button type="button" class="btn btn-default btn-sm" data-page="devicenames">{{ lang._('Device names') }}</button>
+            </div>
+        </div>
+        <div id="page_general" class="loupe-page">
+            {{ partial("layout_partials/base_form", ['fields': formSettings, 'id': 'frm_settings']) }}
+        </div>
+        <div id="page_servicenames" class="loupe-page">
+            <p class="loupe-bar">{{ lang._('Your own names for domains. They add to and override the built-in list, and apply to all history.') }}</p>
+            {{ partial('layout_partials/base_bootgrid_table', formGridServices) }}
+        </div>
+        <div id="page_devicenames" class="loupe-page">
+            <p class="loupe-bar">{{ lang._('Name a device or correct its detected type. Matched by MAC address; the pencil next to a device does the same.') }}</p>
+            {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
+        </div>
     </div>
 </div>
 

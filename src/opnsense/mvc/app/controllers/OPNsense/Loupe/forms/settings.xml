@@ -1,9 +1,5 @@
 <form>
     <field>
-        <label>General</label>
-        <type>header</type>
-    </field>
-    <field>
         <id>loupe.general.enabled</id>
         <label>Enable</label>
         <type>checkbox</type>
