@@ -107,6 +107,17 @@ POSSIBILITY OF SUCH DAMAGE.
         let hours = parseFloat(localStorage.getItem('loupe.hours') || '24');
         let chart = null;
 
+        // page header: "Reporting: Loupe" on the list, "Loupe: <device>" on a device
+        const $h1 = $('.page-content-head h1');
+        const h1Text = $h1.contents().filter(function () { return this.nodeType === 3; }).first();
+        const origHeader = h1Text.length ? h1Text[0].nodeValue : '';
+        const origTitle = document.title;
+        function setHeader(device) {
+            const text = device ? 'Loupe: ' + device : origHeader;
+            if (h1Text.length) h1Text[0].nodeValue = text;
+            document.title = device ? text + ' | ' + origTitle.split(' | ').pop() : origTitle;
+        }
+
         function periodButtons() {
             $('#loupe-period .btn').removeClass('active').filter('[data-hours="' + hours + '"]').addClass('active');
         }
@@ -161,6 +172,7 @@ POSSIBILITY OF SUCH DAMAGE.
         });
 
         function showDevices() {
+            setHeader(null);
             $('#loupe-detail').hide();
             $('#loupe-list').show();
             ajaxGet('/api/loupe/report/devices/' + hours, {}, function (data) {
@@ -189,6 +201,7 @@ POSSIBILITY OF SUCH DAMAGE.
             ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
                 if (data.error) { $('#loupe-detail-title').text(data.error); return; }
                 const d = data.device || {};
+                setHeader(d.name || d.ip || id);
                 $('#loupe-detail-title').html(loupe.esc(d.name || d.ip || id)
                     + editButton({mac: d.mac, ip: d.ip, name: d.name || d.ip, type: d.type, custom: d.custom})
                     + ' <small>' + loupe.esc([d.model, d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>'
