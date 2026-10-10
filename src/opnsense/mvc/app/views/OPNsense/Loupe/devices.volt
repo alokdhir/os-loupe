@@ -298,7 +298,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <div id="loupe-edit-error" class="alert alert-danger" style="display: none"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default pull-left" id="loupe-edit-reset">{{ lang._('Use detected') }}</button>
+                <button type="button" class="btn btn-default pull-left" id="loupe-edit-reset">{{ lang._('Reset to automatic') }}</button>
                 <button type="button" class="btn btn-default" data-dismiss="modal">{{ lang._('Cancel') }}</button>
                 <button type="button" class="btn btn-primary" id="loupe-edit-save">{{ lang._('Save') }}</button>
             </div>
