@@ -66,18 +66,28 @@ On a gigabit home link running on an Intel N150: about 0.5% of one CPU core idle
 
 Loupe records which device talked to which site name and how much — not page contents, URLs or anything inside encrypted connections. Encrypted Client Hello (ECH), VPNs and relays (iCloud Private Relay) hide the real site; Loupe shows those as what they are. It's a tool for the network's owner; use it with the people on your network in mind.
 
-## Install (development)
+## Install
 
-Requires OPNsense 26.x (Python 3 with `cryptography` and `sqlite3`, both present by default).
+Loupe is not in the official plugin list yet. To try it, install it from this repository on the OPNsense box itself — from the console (option 8, *Shell*) or SSH, as root:
 
 ```sh
-ROUTER=user@192.168.1.1 tools/deploy.sh            # copy src/ into /usr/local, reload configd and the menu
-ROUTER=user@192.168.1.1 tools/deploy.sh uninstall  # remove it again (data in /var/db/loupe is kept)
+fetch -o - https://github.com/alokdhir/os-loupe/archive/refs/heads/master.tar.gz | tar -xzf - -C /tmp
+sh /tmp/os-loupe-master/tools/install.sh
 ```
 
-`deploy.sh` logs in over SSH as the account in `ROUTER` and installs with `sudo`, so that account needs SSH access and passwordless `sudo` on the router (an admin user in the `wheel` group, with *System → Settings → Administration → Sudo* set to allow it without a password).
+or, where `git` is installed (`pkg install git`), which makes updating a `git pull`:
+
+```sh
+git clone https://github.com/alokdhir/os-loupe /root/os-loupe
+sh /root/os-loupe/tools/install.sh                                   # install
+cd /root/os-loupe && git pull && sh tools/install.sh                 # update
+```
 
 Then open **Reporting → Loupe → Settings**, tick *Enable* on the *General* page, choose the LAN interface(s) and press *Apply*.
+
+`sh tools/install.sh uninstall` removes it again; the traffic data in `/var/db/loupe` is kept until you delete it. Requires OPNsense 26.x (Python 3 with `cryptography` and `sqlite3`, both present by default).
+
+For development, `ROUTER=user@router tools/deploy.sh` copies your working tree to a router over SSH and runs the same installer there.
 
 The layout follows a plugin directory in [opnsense/plugins](https://github.com/opnsense/plugins) (`Makefile`, `pkg-descr`, `src/` installed under `/usr/local`), so it can be built as a package from that tree.
 
