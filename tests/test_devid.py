@@ -68,6 +68,13 @@ class TestDevid(unittest.TestCase):
         self.assertEqual(devid.classify("ac:00:00:00:00:12", info=info)[0], "HomeKit accessory")
 
 
+    def test_ip_kvm(self):
+        info = {"dhcp_vendor_class": "udhcp 1.37.0", "mdns_hosts": ["kvm-0a1b.local"]}
+        self.assertEqual(devid.classify("ac:00:00:00:0a:1b", info=info)[:2], ("NanoKVM", "hostname kvm-0a1b.local"))
+        self.assertEqual(devid.classify("ac:00:00:00:00:13", hostname="pikvm")[0], "PiKVM")
+        self.assertNotEqual(devid.classify("ac:00:00:00:00:14", hostname="kvm-host-1")[0], "NanoKVM")
+
+
 if __name__ == "__main__":
     unittest.main()
 

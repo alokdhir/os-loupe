@@ -65,6 +65,7 @@ SERVICES = [
 ]
 
 HOSTNAMES = [
+    (r"(?i)^kvm-[0-9a-f]{4}$", "NanoKVM"), (r"(?i)^pikvm\b", "PiKVM"),     # their default names
     (r"(?i)iphone", "iPhone"), (r"(?i)ipad", "iPad"), (r"(?i)macbook|imac|mac-?mini|mac-?studio|mac-?pro", "Mac"),
     (r"(?i)apple-?tv", "Apple TV"), (r"(?i)homepod", "HomePod"), (r"(?i)watch", "Watch"),
     (r"(?i)^(ps[345]|playstation)", "PlayStation"), (r"(?i)xbox", "Xbox"), (r"(?i)nintendo|switch", "Nintendo Switch"),
