@@ -60,7 +60,7 @@ Evidence is trusted in a fixed order — Bonjour model, host name, hosting role,
 
 ## Footprint
 
-On a 5 Gbps home connection (Intel N150): about 0.5% of one CPU core idle, ~4% during a full-speed transfer, and 30–50 MB of memory.
+On a gigabit home link running on an Intel N150: about 0.5% of one CPU core idle, ~4% during a full-speed transfer, and 30–50 MB of memory.
 
 ## Privacy
 

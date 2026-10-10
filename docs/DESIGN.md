@@ -29,7 +29,7 @@ Every connection through the router has a pf state with exact packet and byte co
 
 pf keeps a closed state for at least its close timeouts (TCP fin-wait 45 s, single-packet UDP 30 s), longer than the 10-second poll, so every connection's final counters are seen. Counters are `initiator:responder`; the device-opened direction decides which side is "up".
 
-Measured on the development box (5 Gbps line), Loupe's totals matched the WAN interface counters: upload exact, download ~96% (the rest is traffic that never had a LAN-side state, such as the router's own).
+Measured on the development box, Loupe's totals matched the WAN interface counters: upload exact, download ~96% (the rest is traffic that never had a LAN-side state, such as the router's own).
 
 ## Names
 
@@ -76,7 +76,7 @@ Standard OPNsense MVC: one page with tabs (Devices, Services, Settings), UIBootg
 
 ## Footprint
 
-On an Intel N150 with a 5 Gbps connection: about 0.5–0.8% of one core idle, a few percent during a full-speed transfer, 30–50 MB of memory. Database growth is still being measured over a full month.
+On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core idle, a few percent during a full-speed transfer, 30–50 MB of memory. Database growth is still being measured over a full month.
 
 ## Known limits
 
