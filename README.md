@@ -22,7 +22,7 @@ Loupe runs as a small service on the router and combines three sources:
 
 Each connection gets the name from its own handshake first, then from the DNS answer that device received for that address, then from any device's DNS answer. Service names come from a built-in map of ~300 domains (plus address-range and port fallbacks for nameless traffic) that you can extend in the settings; they are applied when reports are built, so changes cover all history.
 
-Data lives in SQLite at `/var/db/loupe/loupe.db`.
+Data lives in SQLite at `/var/db/loupe/loupe.db`. The design, the alternatives considered and the known limits are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ### Why not just NetFlow / Insight?
 

@@ -1,0 +1,100 @@
+# Loupe design notes
+
+What Loupe does, how, what was considered instead, and what is known not to work yet. For contributors and reviewers; the README is the user-facing overview.
+
+## Goal
+
+Per-device history of *who talked to what, how much, and when* — device → site/service, bytes each way, over time — inside the OPNsense GUI, light enough to leave running on a small box.
+
+Non-goals: blocking or policy (that is the firewall's job), alerts, deep packet inspection, live per-packet views. Zenarmor and ntopng cover those.
+
+## Overview
+
+```
+            kernel                                   loupd (Python, one process)                    GUI
+ ┌──────────────────────────┐   BPF   ┌────────────────────────────────────────┐          ┌─────────────────────┐
+ │ LAN interface(s)         │────────▶│ capture: TLS ClientHello, QUIC Initial, │          │ MVC pages + widget   │
+ │  only handshakes, DNS,   │         │   DNS answers, DHCP, mDNS  → names,     │          │   ↓ API              │
+ │  DHCP, mDNS pass         │         │   device clues                          │          │ ReportController     │
+ ├──────────────────────────┤ pfctl   │ every 10 s: pf state table → byte       │  SQLite  │   ↓ configd          │
+ │ pf state table           │────────▶│   deltas per device/server/port         │─────────▶│ query.py (read-only) │
+ │  (exact counters)        │ -ss -vv │ every 60 s: flush; hourly: prune;       │   WAL    │   applies names,     │
+ └──────────────────────────┘         │ every 10 min: classify devices          │          │   overrides, labels  │
+                                      └────────────────────────────────────────┘          └─────────────────────┘
+```
+
+## Bytes: pf state counters
+
+Every connection through the router has a pf state with exact packet and byte counters for both directions. On the LAN interface that state is recorded **before NAT**, with the device's own address. `lib/pfstate.py` reads `pfctl -ss -vv` every 10 seconds, keeps states whose `origif` is a selected interface and that have exactly one local endpoint, and records the change in each state's counters since the last read. The first read after start is only a baseline, so restarts never double count.
+
+pf keeps a closed state for at least its close timeouts (TCP fin-wait 45 s, single-packet UDP 30 s), longer than the 10-second poll, so every connection's final counters are seen. Counters are `initiator:responder`; the device-opened direction decides which side is "up".
+
+Measured on the development box (5 Gbps line), Loupe's totals matched the WAN interface counters: upload exact, download ~96% (the rest is traffic that never had a LAN-side state, such as the router's own).
+
+## Names
+
+Each connection is named, in order of trust:
+
+1. its own TLS ClientHello (SNI) or QUIC Initial (decrypted with the public RFC 9001 / 9369 keys), matched by the exact 4-tuple;
+2. the DNS answer *that device* received for the server address;
+3. any device's DNS answer for that address (`dns*`).
+
+The kernel BPF filter (`capture.py`) passes only handshake starts, the continuation segment of large ClientHellos, DNS answers, DHCP client messages and mDNS; bulk traffic never reaches userland. At start, Unbound's cache (`unbound-control dump_cache`) seeds the DNS map so connections opened before Loupe started still get names.
+
+A state's name is fixed once given, so a later, unrelated DNS answer for the same address does not rename it.
+
+## Devices
+
+A device is its MAC address (IP as fallback). Clues: the MAC vendor (OPNsense's IEEE list), the private-MAC bit, DHCP host name / vendor class / parameter list, mDNS host names, models and services, and the domains it talks to.
+
+Identification is **data, not code**: `data/devices.json` holds the rules, the icon and maker per type, and Apple model names; `lib/devid.py` only matches them, in a fixed order of trust (mDNS model → host name → hosting role → strong mDNS services → DHCP vendor → DHCP fingerprint → domains it talks to → other mDNS services → MAC vendor → private MAC). Every rule carries synthetic example evidence that the tests run through the engine, which catches typos and rules that take over other rules' devices.
+
+## Storage
+
+SQLite at `/var/db/loupe/loupe.db`, WAL mode: `loupd` is the only writer; `query.py` opens it read-only from configd.
+
+- `flows_5m` / `flows_1h`: per bucket, device, server, port, protocol and name — bytes up/down, packets, connections, and when loupd last added to the row. Kept 30 days / 365 days by default.
+- `lookups`: names each device looked up or connected to, per day, including ones that moved no data. 30 days.
+- `devices`: detected facts only.
+
+Names, user overrides and service labels are applied **when a report is built**, never stored: editing a service name or resetting a device fixes all history immediately.
+
+## GUI
+
+Standard OPNsense MVC: one page with tabs (Devices, Services, Settings), UIBootgrid grids fed by `searchRecordsetBase`, the standard dialog and form partials, a dashboard widget, configd actions for the service and for queries, templates for `rc.conf.d` and `loupe.json`, and `rc.d` running the daemon under `daemon -r`.
+
+## Alternatives considered
+
+| Option | Why not |
+|---|---|
+| **NetFlow / Insight (flowd)** | On a bridged LAN it misses LAN→internet packets on ingress, so uploads appear only after NAT with the router's address and per-device upload is wrong; long flows are exported every 30 minutes; no names. |
+| **Full packet capture / DPI** | Far more CPU per byte, and records more than the goal needs (privacy). |
+| **pflog** | Logs rule matches, not byte counts. |
+| **Suricata EVE flow records** | Heavy to run just for accounting; Suricata is optional and often off. |
+| **Zenarmor / ntopng** | Broader products with their own engines; Loupe aims to be small and native. |
+| **DuckDB instead of SQLite** | Built for large analytic scans; no concurrent reader while a writer has the file open, a large extra package, and Loupe's data is small. |
+
+## Footprint
+
+On an Intel N150 with a 5 Gbps connection: about 0.5–0.8% of one core idle, a few percent during a full-speed transfer, 30–50 MB of memory. Database growth is still being measured over a full month.
+
+## Known limits
+
+- **Hidden names:** Encrypted Client Hello, DNS-over-HTTPS that bypasses the router, VPNs and relays (iCloud Private Relay) hide the real site. Loupe labels VPNs (and the provider when the device looked up its domain) and Private Relay as what they are.
+- **Containers and VMs behind one MAC** look like one device; a distro rule can be swayed by a container's update traffic.
+- **Private MACs** can rotate, which splits a device's history until the user names it or turns the private address off for the network.
+- **Multicast and broadcast** traffic is not counted.
+- **Traffic that never crosses the router** (device to device on the LAN) is invisible by design.
+
+## Untested / open risks
+
+- **DHCP servers other than dnsmasq:** lease-file names are read from dnsmasq only; Kea and ISC DHCP installs lose that clue.
+- **IPv6** is implemented (filters, parsing) but has not seen real traffic yet.
+- **VLANs / several LAN interfaces:** supported by configuration, tested only on one bridged LAN.
+- **Large state tables:** `pfctl -ss -vv` is parsed as text every 10 seconds. Fine at home scale; with tens of thousands of states the parse cost needs measuring, and a binary interface (`/dev/pf` ioctls) may be needed.
+- **pfctl output format** is a text interface and could change between releases; the parser has tests, but a format change would stop byte counting.
+- **Long report periods:** reports up to 30 days scan the 5-minute table; at a full month of data, reports beyond 48 hours should read the hourly table.
+
+## Privacy
+
+Loupe records which device talked to which site name and how much — not page contents, URLs, or anything inside encrypted connections. In a workplace, people should be told that this is recorded; per-person browsing history is regulated in many places.
