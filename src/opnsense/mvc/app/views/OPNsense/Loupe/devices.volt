@@ -65,7 +65,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 return '<span class="text-muted" title="' + esc(row.vendor_note) + '">' + esc(row.vendor || row.vendor_note) + '</span>';
             },
             services: function (column, row) {
-                return (row.top || []).map(t => t ? esc(t) : dash).join(', ');
+                return (row.top || []).length ? row.top.map(esc).join(', ') : dash;
             },
             service: function (column, row) {
                 return (row.service && row.service !== 'Other' ? esc(row.service) : dash)
