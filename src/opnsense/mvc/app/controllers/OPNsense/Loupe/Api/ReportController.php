@@ -52,6 +52,7 @@ class ReportController extends ApiControllerBase
 
     public function deviceAction($id = '', $hours = 24)
     {
+        $id = rawurldecode($id);
         if (!preg_match('/^[0-9a-fA-F:.]{2,45}$/', $id)) {
             return ['error' => 'invalid device'];
         }
@@ -60,6 +61,7 @@ class ReportController extends ApiControllerBase
 
     public function lookupAction($text = '', $hours = 24)
     {
+        $text = rawurldecode($text);
         if (!preg_match('/^[a-zA-Z0-9.:_-]{1,253}$/', $text)) {
             return ['error' => 'enter a name or address'];
         }

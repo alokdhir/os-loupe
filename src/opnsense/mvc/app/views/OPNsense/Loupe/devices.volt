@@ -93,7 +93,10 @@ POSSIBILITY OF SUCH DAMAGE.
                     if (k === key) { asc = !asc; } else { key = k; asc = !cols.find(c => c.key === k).num; }
                     draw();
                 });
-                if (onClick) $el.find('tr.clickable').click(function () { onClick(rows[$(this).data('i')]); });
+                if (onClick) $el.find('tr.clickable').click(function (e) {
+                    if ($(e.target).closest('.loupe-edit, a').length) return;   // the edit button / links do their own thing
+                    onClick(rows[$(this).data('i')]);
+                });
             };
             draw();
         }
@@ -178,7 +181,7 @@ POSSIBILITY OF SUCH DAMAGE.
         function showDevice(id) {
             $('#loupe-list').hide();
             $('#loupe-detail').show();
-            ajaxGet('/api/loupe/report/device/' + encodeURIComponent(id) + '/' + hours, {}, function (data) {
+            ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
                 if (data.error) { $('#loupe-detail-title').text(data.error); return; }
                 const d = data.device || {};
                 $('#loupe-detail-title').html(loupe.esc(d.name || d.ip || id)

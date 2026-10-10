@@ -44,7 +44,7 @@ POSSIBILITY OF SUCH DAMAGE.
         };
         const esc = s => $('<span>').text(s == null ? '' : String(s)).html();
         const when = ts => ts ? new Date(ts * 1000).toLocaleString() : '';
-        const dev = r => '<a href="/ui/loupe/#device=' + encodeURIComponent(r.mac || r.ip) + '">' + esc(r.device) + '</a>'
+        const dev = r => '<a href="/ui/loupe/#device=' + (r.mac || r.ip) + '">' + esc(r.device) + '</a>'
             + (r.device !== r.ip ? ' <span class="loupe-muted">' + esc(r.ip) + '</span>' : '')
             + (r.type ? ' <span class="loupe-muted">· ' + esc(r.type) + '</span>' : '');
 
