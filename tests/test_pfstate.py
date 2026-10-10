@@ -148,5 +148,20 @@ class TestNetif(unittest.TestCase):
         self.assertIn("127.0.0.1/8", [str(i) for _, i in netif.addresses({"lo0"})])
 
 
+class TestBpfCompile(unittest.TestCase):
+    def setUp(self):
+        import ctypes.util
+        if not ctypes.util.find_library("pcap"):
+            self.skipTest("libpcap not installed")
+
+    def test_compile(self):
+        from lib import bpf
+        prog = bpf.compile_filter("udp src port 53")
+        self.assertGreater(len(prog), 3)
+        self.assertEqual(prog[-1][0] & 0x07, 0x06)          # ends in a return
+        with self.assertRaises(ValueError):
+            bpf.compile_filter("tcp and bogus(")
+
+
 if __name__ == "__main__":
     unittest.main()

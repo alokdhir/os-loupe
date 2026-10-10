@@ -24,13 +24,14 @@
 
 """Minimal FreeBSD BPF reader: open /dev/bpf, attach to an interface, install a filter, read frames.
 
-The filter is compiled by tcpdump (`tcpdump -ddd`), which is part of OPNsense, so we
-never hand-assemble BPF programs.
+The filter is compiled by libpcap (part of the base system, the same compiler tcpdump uses),
+so we never hand-assemble BPF programs.
 """
+import ctypes
+import ctypes.util
 import fcntl
 import os
 import struct
-import subprocess
 
 # ioctls (sys/net/bpf.h, amd64)
 BIOCGBLEN = 0x40044266      # _IOR('B', 102, u_int)
@@ -45,16 +46,49 @@ BUFSIZE = 4 * 1024 * 1024
 SNAPLEN = 2048
 
 
+class _Insn(ctypes.Structure):          # struct bpf_insn
+    _fields_ = [("code", ctypes.c_ushort), ("jt", ctypes.c_ubyte), ("jf", ctypes.c_ubyte), ("k", ctypes.c_uint32)]
+
+
+class _Program(ctypes.Structure):       # struct bpf_program
+    _fields_ = [("len", ctypes.c_uint), ("insns", ctypes.POINTER(_Insn))]
+
+
+DLT_EN10MB = 1
+PCAP_NETMASK_UNKNOWN = 0xFFFFFFFF
+_pcap = None
+
+
+def _libpcap():
+    global _pcap
+    if _pcap is None:
+        lib = ctypes.CDLL(ctypes.util.find_library("pcap") or "libpcap.so")
+        lib.pcap_open_dead.restype = ctypes.c_void_p
+        lib.pcap_open_dead.argtypes = [ctypes.c_int, ctypes.c_int]
+        lib.pcap_compile.argtypes = [ctypes.c_void_p, ctypes.POINTER(_Program), ctypes.c_char_p, ctypes.c_int,
+                                     ctypes.c_uint32]
+        lib.pcap_geterr.restype = ctypes.c_char_p
+        lib.pcap_geterr.argtypes = [ctypes.c_void_p]
+        lib.pcap_freecode.argtypes = [ctypes.POINTER(_Program)]
+        lib.pcap_close.argtypes = [ctypes.c_void_p]
+        _pcap = lib
+    return _pcap
+
+
 def compile_filter(expr, snaplen=SNAPLEN):
-    """Compile a tcpdump expression to a list of (code, jt, jf, k) instructions."""
-    out = subprocess.run(
-        ["tcpdump", "-s", str(snaplen), "-ddd", expr],
-        capture_output=True, text=True, check=True,
-    ).stdout.split("\n")
-    count = int(out[0])
-    insns = [tuple(int(x) for x in line.split()) for line in out[1:1 + count]]
-    if len(insns) != count:
-        raise ValueError("unexpected tcpdump -ddd output")
+    """Compile a tcpdump expression for Ethernet to a list of (code, jt, jf, k) instructions."""
+    lib = _libpcap()
+    handle = lib.pcap_open_dead(DLT_EN10MB, snaplen)
+    if not handle:
+        raise OSError("pcap_open_dead failed")
+    prog = _Program()
+    try:
+        if lib.pcap_compile(handle, ctypes.byref(prog), expr.encode(), 1, PCAP_NETMASK_UNKNOWN) != 0:
+            raise ValueError(f"bad filter: {lib.pcap_geterr(handle).decode(errors='replace')}")
+        insns = [(i.code, i.jt, i.jf, i.k) for i in prog.insns[:prog.len]]
+        lib.pcap_freecode(ctypes.byref(prog))
+    finally:
+        lib.pcap_close(handle)
     return insns
 
 
