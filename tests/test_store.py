@@ -82,6 +82,19 @@ class TestStore(unittest.TestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM flows_1h").fetchone(), (1,))
 
 
+class TestDhcp(unittest.TestCase):
+    def test_junk_hostname_ignored(self):
+        from lib import dhcp
+        base = bytearray(240)
+        base[0], base[2] = 1, 6
+        base[28:34] = bytes.fromhex("ac0000000001")
+        base[236:240] = dhcp.MAGIC
+        good = bytes(base) + bytes([12, 6]) + b"box-01" + b"\xff"
+        junk = bytes(base) + bytes([12, 8]) + b" &\t0\xef\xbf\x01\x10" + b"\xff"
+        self.assertEqual(dhcp.parse(good)["hostname"], "box-01")
+        self.assertNotIn("hostname", dhcp.parse(junk))
+
+
 if __name__ == "__main__":
     unittest.main()
 

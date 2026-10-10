@@ -47,6 +47,7 @@
   {"when": {"hostname": "(?i)^(EP|HS|KP|KS|P1)\\d\\d|kasa|smart-?plug"}, "type": "Smart plug", "example": {"hostname": "HS105"}},
   {"when": {"hostname": "(?i)^GEModule|^GE[-_]"}, "type": "GE appliance", "example": {"hostname": "GEModule1234"}},
   {"when": {"hostname": "(?i)^schlage"}, "type": "Smart lock", "note": "Schlage Encode (Wi-Fi) uses its brand as its DHCP name", "example": {"hostname": "Schlage", "info": {"dhcp_params": "1,3,6"}}},
+  {"when": {"hostname": "(?i)^HDHR-[0-9a-f]{8}$"}, "type": "TV tuner", "note": "SiliconDust HDHomeRun: HDHR- plus its device ID", "example": {"hostname": "HDHR-1A2B3C4D"}},
   {"when": {"hostname": "(?i)tuya|^wlan0$|^esp[-_]"}, "type": "Smart home device", "example": {"hostname": "esp_0a1b2c"}},
   {"when": {"mdns_model": "(?i)^(homebridge|scrypted)$"}, "tier": "role", "type": "Server", "note": "hosts HomeKit bridges", "example": {"info": {"mdns_services": ["_hap._tcp"], "mdns_models": ["md=homebridge"]}}},
   {"all": [{"mdns_service": "_hap._tcp"}, {"mdns_service": ["_smb._tcp", "_channels_dvr._tcp", "_plexmediasvr._tcp"]}], "tier": "role", "type": "Server", "note": "serves files or media next to HomeKit", "example": {"info": {"mdns_services": ["_hap._tcp", "_channels_dvr._tcp"]}}},
@@ -208,7 +209,8 @@
   "HP device": {"icon": "fa-solid fa-print"},
   "Alpine Linux": {"icon": "fa-brands fa-linux"},
   "Smart lock": {"icon": "fa-solid fa-lock"},
-  "Azure Sphere device": {"icon": "fa-solid fa-microchip"}
+  "Azure Sphere device": {"icon": "fa-solid fa-microchip"},
+  "TV tuner": {"icon": "fa-solid fa-tower-broadcast", "vendor": "SiliconDust"}
  },
  "apple_models": {
   "MacBookAir10,1": "MacBook Air 13″ (M1)",
