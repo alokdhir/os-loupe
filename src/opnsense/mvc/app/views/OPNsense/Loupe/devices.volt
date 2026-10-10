@@ -126,7 +126,8 @@ POSSIBILITY OF SUCH DAMAGE.
         function editButton(r) {
             if (!r.mac) return '';
             return '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Name this device") }}" data-mac="' + loupe.esc(r.mac)
-                + '" data-name="' + loupe.esc(r.name !== r.ip ? r.name : '') + '" data-type="' + loupe.esc(r.type || '') + '"></i>';
+                + '" data-name="' + loupe.esc(r.name !== r.ip ? r.name : '') + '" data-type="' + loupe.esc(r.type || '')
+                + '" data-custom="' + (r.custom ? '1' : '') + '"></i>';
         }
         $(document).on('click', '.loupe-edit', function (e) {
             e.stopPropagation();
@@ -137,6 +138,7 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-types').html(Array.from(new Set(commonTypes.concat(knownTypes))).sort()
                 .map(t => '<option value="' + loupe.esc(t) + '">').join(''));
             $('#loupe-edit-error').hide();
+            $('#loupe-edit-reset').toggle(!!$b.data('custom'));
             $('#loupe-edit-dialog').modal('show');
         });
         $('#loupe-edit-save, #loupe-edit-reset').click(function () {
@@ -185,7 +187,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 if (data.error) { $('#loupe-detail-title').text(data.error); return; }
                 const d = data.device || {};
                 $('#loupe-detail-title').html(loupe.esc(d.name || d.ip || id)
-                    + editButton({mac: d.mac, ip: d.ip, name: d.name || d.ip, type: d.type})
+                    + editButton({mac: d.mac, ip: d.ip, name: d.name || d.ip, type: d.type, custom: d.custom})
                     + ' <small>' + loupe.esc([d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>'
                     + (d.type_source ? ' <small class="loupe-muted">(' + loupe.esc(d.type_source) + ')</small>' : ''));
                 const tl = data.timeline;
