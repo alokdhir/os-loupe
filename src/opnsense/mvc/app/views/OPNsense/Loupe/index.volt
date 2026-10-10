@@ -32,6 +32,10 @@ POSSIBILITY OF SUCH DAMAGE.
     .tabulator-row:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
     @media (hover: none) { .loupe-edit { visibility: visible; } }
     .loupe-edit:hover { color: #337ab7; }
+    .loupe-copy { color: #999; cursor: pointer; visibility: hidden; padding-left: 6px; }
+    .tabulator-row:hover .loupe-copy { visibility: visible; }
+    @media (hover: none) { .loupe-copy { visibility: visible; } }
+    .loupe-copy:hover { color: #337ab7; }
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-bar { padding: 10px 15px; }
@@ -53,6 +57,23 @@ POSSIBILITY OF SUCH DAMAGE.
             return '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Name this device") }}" data-mac="' + esc(r.mac)
                 + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '"></i>';
         }
+
+        /* a copy icon at the end of a cell (shown on hover, like the pencil) */
+        const copyable = v => v ? esc(v) + '<i class="fa fa-clipboard loupe-copy" title="{{ lang._("Copy") }}" data-copy="' + esc(v) + '"></i>' : '';
+        $(document).on('click', '.loupe-copy', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const $i = $(this), text = String($i.data('copy'));
+            const done = () => { $i.removeClass('fa-clipboard').addClass('fa-check'); setTimeout(() => $i.removeClass('fa-check').addClass('fa-clipboard'), 1200); };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(done);
+            } else {                                        /* plain http: the older way */
+                const $t = $('<textarea>').val(text).css({position: 'fixed', opacity: 0}).appendTo('body').select();
+                document.execCommand('copy');
+                $t.remove();
+                done();
+            }
+        });
 
         /* formatters for the report grids (device list, device detail, lookup) */
         const formatters = {
@@ -78,7 +99,8 @@ POSSIBILITY OF SUCH DAMAGE.
                     + (row.names && row.names.length ? ' <span class="text-muted">' + esc(row.names.slice(0, 3).join(', ')) + '</span>' : '');
             },
             site: function (column, row) {
-                return '<a href="#q=' + encodeURIComponent(row.name) + '">' + esc(row.name) + '</a>';
+                return '<a href="#q=' + encodeURIComponent(row.name) + '">' + esc(row.name) + '</a>'
+                    + '<i class="fa fa-clipboard loupe-copy" title="{{ lang._("Copy") }}" data-copy="' + esc(row.name) + '"></i>';
             },
             sitesvc: function (column, row) {
                 return row.service && row.service !== 'Other' ? esc(row.service) : dash;
@@ -91,7 +113,10 @@ POSSIBILITY OF SUCH DAMAGE.
                     + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '');
             },
             lookupsite: function (column, row) {
-                return esc(row.name || (row.servers || []).join(', '));
+                return copyable(row.name || (row.servers || []).join(', '));
+            },
+            copy: function (column, row) {
+                return copyable(row[column.id]);
             },
             ruletype: function (column, row) {
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '') + esc(row.type);
@@ -396,10 +421,10 @@ POSSIBILITY OF SUCH DAMAGE.
                 <tr>
                     <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
                     <th data-column-id="name" data-formatter="device">{{ lang._('Device') }}</th>
-                    <th data-column-id="ip" data-width="9em">{{ lang._('Address') }}</th>
+                    <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
                     <th data-column-id="shown_type" data-formatter="devtype">{{ lang._('Type') }}</th>
                     <th data-column-id="vendor" data-formatter="vendor">{{ lang._('Vendor') }}</th>
-                    <th data-column-id="mac" data-visible="false">{{ lang._('MAC address') }}</th>
+                    <th data-column-id="mac" data-visible="false" data-formatter="copy">{{ lang._('MAC address') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
                     <th data-column-id="conns" data-visible="false" data-width="8em">{{ lang._('Connections') }}</th>
@@ -494,7 +519,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <table id="grid-traffic" class="table table-condensed table-hover table-striped table-responsive">
                         <thead><tr>
                             <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
-                            <th data-column-id="ip" data-width="9em">{{ lang._('Address') }}</th>
+                            <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
                             <th data-column-id="name" data-formatter="lookupsite">{{ lang._('Site') }}</th>
                             <th data-column-id="service" data-formatter="lookupservice">{{ lang._('Service') }}</th>
                             <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
@@ -510,8 +535,8 @@ POSSIBILITY OF SUCH DAMAGE.
                     <table id="grid-names" class="table table-condensed table-hover table-striped table-responsive">
                         <thead><tr>
                             <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
-                            <th data-column-id="ip" data-width="9em">{{ lang._('Address') }}</th>
-                            <th data-column-id="name">{{ lang._('Name') }}</th>
+                            <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
+                            <th data-column-id="name" data-formatter="copy">{{ lang._('Name') }}</th>
                             <th data-column-id="source" data-width="7em">{{ lang._('Seen in') }}</th>
                             <th data-column-id="count" data-width="7em">{{ lang._('Times') }}</th>
                             <th data-column-id="first" data-formatter="datetime">{{ lang._('First') }}</th>
