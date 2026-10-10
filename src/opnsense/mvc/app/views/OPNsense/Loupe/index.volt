@@ -425,8 +425,8 @@ POSSIBILITY OF SUCH DAMAGE.
                 <tr>
                     <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
                     <th data-column-id="name" data-formatter="device">{{ lang._('Device') }}</th>
-                    <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
                     <th data-column-id="shown_type" data-formatter="devtype">{{ lang._('Type') }}</th>
+                    <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
                     <th data-column-id="vendor" data-formatter="vendor">{{ lang._('Vendor') }}</th>
                     <th data-column-id="mac" data-visible="false" data-formatter="copy">{{ lang._('MAC address') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
