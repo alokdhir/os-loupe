@@ -500,7 +500,7 @@ POSSIBILITY OF SUCH DAMAGE.
             {{ partial('layout_partials/base_bootgrid_table', formGridServices) }}
         </div>
         <div id="page_overrides" class="loupe-page">
-            <p class="loupe-bar">{{ lang._('Your name or type for one device, matched by its MAC address. They win over everything Loupe detects; the pencil next to a device in the list edits the same entries.') }}</p>
+            <p class="loupe-bar">{{ lang._('Your name or type for one device, matched by its MAC address. They win over everything Loupe detects. The pencil next to a device on the main Devices tab does the same.') }}</p>
             {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
         </div>
     </div>
