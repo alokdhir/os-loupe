@@ -127,6 +127,9 @@ class Store:
             if "last" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN last INTEGER NOT NULL DEFAULT 0")
 
+    def close(self):
+        self.db.close()
+
     def write(self, flows, lookups, devices, now=None):
         """flows: {(bucket5m, ip, server, port, proto, name): [mac, source, inbound, up, down, pkts, conns]}
         lookups: {(day, ip, name, source): [count, first, last]}

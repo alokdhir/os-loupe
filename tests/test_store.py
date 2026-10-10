@@ -71,6 +71,8 @@ class TestStore(unittest.TestCase):
             s.write({k2: ["", "sni", 0, 1, 2, 1, 0]}, {(0, "10.9.1.20", "www.example", "sni"): [2, 6, 9]},
                     {"02:00:00:00:00:01": {"ts": 9, "info": {"mdns_models": ["model=Y"]}}})
             db = sqlite3.connect(path)
+            self.addCleanup(db.close)
+            self.addCleanup(s.close)
             self.assertEqual(db.execute("SELECT count(*), sum(down) FROM flows_5m").fetchone(), (2, 102))
             self.assertEqual(db.execute("SELECT bucket, mac, up, down, conns FROM flows_1h").fetchall(),
                              [(3600, "02:00:00:00:00:01", 11, 102, 1)])
