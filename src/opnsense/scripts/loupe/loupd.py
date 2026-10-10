@@ -134,7 +134,8 @@ class Loupe:
             o = self.overrides.get(mac, {})
             if o.get("type"):
                 t, src = o["type"], "set by you"
-            rows.append((o.get("name") or name, ven, t, src, mac))
+            name = o.get("name") or name or hostname or devid.mdns_name(info)
+            rows.append((name, ven, t, src, devid.model(info), mac))
         self.store.set_device_types(rows)
 
     def refresh_macs(self):

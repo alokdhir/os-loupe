@@ -113,7 +113,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
         function typeCell(r) {
             if (!r.type) return '<span class="loupe-muted">?</span>';
-            return '<span class="loupe-type" title="' + loupe.esc(r.type_source || '') + '">' + loupe.esc(r.type) + '</span>';
+            const tip = (r.model && r.type_source !== 'set by you' ? r.type + ' · ' : '') + (r.type_source || '');
+            const shown = r.type_source === 'set by you' ? r.type : (r.model || r.type);
+            return '<span class="loupe-type" title="' + loupe.esc(tip) + '">' + loupe.esc(shown) + '</span>';
         }
 
         const commonTypes = ['Computer', 'Mac', 'Windows PC', 'iPhone', 'iPad', 'Android phone', 'Phone/tablet/laptop',
@@ -189,7 +191,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 const d = data.device || {};
                 $('#loupe-detail-title').html(loupe.esc(d.name || d.ip || id)
                     + editButton({mac: d.mac, ip: d.ip, name: d.name || d.ip, type: d.type, custom: d.custom})
-                    + ' <small>' + loupe.esc([d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>'
+                    + ' <small>' + loupe.esc([d.model, d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>'
                     + (d.type_source ? ' <small class="loupe-muted">(' + loupe.esc(d.type_source) + ')</small>' : ''));
                 const tl = data.timeline;
                 if (chart) chart.destroy();

@@ -7,6 +7,8 @@ Each guess carries its source so the GUI can explain it.
 import csv
 import re
 
+from . import applemodels
+
 OUI_CSV = "/usr/local/opnsense/contrib/ieee/oui.csv"
 OUI_LEN = {"MA-L": 6, "MA-M": 7, "MA-S": 9}
 
@@ -173,6 +175,24 @@ def classify(mac, hostname=None, info=None, names=(), oui=None):
     if is_private(mac):
         return "Phone/tablet/laptop", "private MAC", None
     return None, None, ven
+
+
+def model(info):
+    """Marketing name of an Apple device from its announced model identifier, if known."""
+    for m in (info or {}).get("mdns_models", []):
+        hit = applemodels.name(m.split("=", 1)[1] if "=" in m else m)
+        if hit:
+            return hit
+    return None
+
+
+def mdns_name(info):
+    """The name a device announces over Bonjour ("midnight" from midnight.local)."""
+    for h in (info or {}).get("mdns_hosts", []):
+        if h.endswith(".local") and not h.startswith("_"):
+            return h[:-len(".local")]
+    names = (info or {}).get("mdns_names", [])
+    return names[0] if names else None
 
 
 def leases(path="/var/db/dnsmasq.leases"):

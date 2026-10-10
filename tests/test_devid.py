@@ -44,3 +44,14 @@ class TestVendorWords(unittest.TestCase):
         self.assertEqual(devid.classify("ac:bb:cc:00:00:01", None, {}, (), oui)[0], None)
         self.assertEqual(devid.classify("dd:ee:ff:00:00:01", None, {}, (), oui)[0], "TP-Link device")
         self.assertEqual(devid.classify("dd:ee:ff:00:00:02", "EP25", {}, (), oui)[0], "Smart plug")
+
+
+class TestModelAndName(unittest.TestCase):
+    def test_model(self):
+        self.assertEqual(devid.model({"mdns_models": ["model=Mac15,13"]}), "MacBook Air 15″ (M3)")
+        self.assertIsNone(devid.model({"mdns_models": ["model=Mac99,1"]}))
+
+    def test_mdns_name(self):
+        self.assertEqual(devid.mdns_name({"mdns_hosts": ["box.local"], "mdns_names": ["Other"]}), "box")
+        self.assertEqual(devid.mdns_name({"mdns_names": ["Living Room"]}), "Living Room")
+        self.assertIsNone(devid.mdns_name({}))

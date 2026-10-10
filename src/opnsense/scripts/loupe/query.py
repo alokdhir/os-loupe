@@ -44,15 +44,16 @@ def window(hours):
 
 def devices_info(db, overrides):
     out = {}
-    for mac, ip, name, hostname, vendor, dtype, src, first, last in db.execute(
-            "SELECT mac, ip, name, hostname, vendor, type, type_source, first_seen, last_seen FROM devices"):
+    for mac, ip, name, hostname, vendor, dtype, src, model, first, last in db.execute(
+            "SELECT mac, ip, name, hostname, vendor, type, type_source, model, first_seen, last_seen FROM devices"):
         o = overrides.get(mac, {})
         out[mac] = {"mac": mac, "ip": ip, "name": o.get("name") or name or hostname or "", "vendor": vendor or "",
+                    "model": model or "",
                     "type": o.get("type") or dtype or "", "type_source": "set by you" if o.get("type") else (src or ""),
                     "first_seen": first, "last_seen": last, "custom": bool(o)}
     for mac, o in overrides.items():   # named before loupe recorded the device
         out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "type": o.get("type") or "",
-                             "type_source": "set by you" if o.get("type") else "", "first_seen": 0, "last_seen": 0,
+                             "type_source": "set by you" if o.get("type") else "", "model": "", "first_seen": 0, "last_seen": 0,
                              "custom": True})
     return out
 
@@ -74,7 +75,7 @@ def cmd_devices(hours):
         r = rows.get(key)
         if r is None:
             d = info.get(mac, {})
-            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "type", "type_source")},
+            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "type", "type_source", "model")},
                              "custom": d.get("custom", False),
                              "mac": mac, "ip": ip, "down": 0, "up": 0, "conns": 0, "last": 0}
         r["down"] += down

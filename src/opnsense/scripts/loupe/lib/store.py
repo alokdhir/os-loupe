@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS devices (
     vendor TEXT,
     type TEXT,
     type_source TEXT,
+    model TEXT,                       -- e.g. "MacBook Air 15″ (M3)" when the device announces it
     info TEXT NOT NULL DEFAULT '{}',  -- JSON: dhcp, mdns, ... clues for device identification
     first_seen INTEGER NOT NULL,
     last_seen INTEGER NOT NULL
@@ -90,6 +91,10 @@ class Store:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA)
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(devices)")}
+        for col in ("name", "model"):      # added after the first release
+            if col not in cols:
+                self.db.execute(f"ALTER TABLE devices ADD COLUMN {col} TEXT")
 
     def write(self, flows, lookups, devices):
         """flows: {(bucket5m, ip, server, port, proto, name): [mac, source, inbound, up, down, pkts, conns]}
@@ -135,9 +140,10 @@ class Store:
                 for mac, ip, hn, info in self.db.execute("SELECT mac, ip, hostname, info FROM devices")]
 
     def set_device_types(self, rows):
-        """rows: [(name, vendor, type, type_source, mac)]"""
+        """rows: [(name, vendor, type, type_source, model, mac)]"""
         self.db.execute("BEGIN")
-        self.db.executemany("UPDATE devices SET name = ?, vendor = ?, type = ?, type_source = ? WHERE mac = ?", rows)
+        self.db.executemany("UPDATE devices SET name = ?, vendor = ?, type = ?, type_source = ?, model = ? WHERE mac = ?",
+                            rows)
         self.db.execute("COMMIT")
 
     def prune(self, now, days_5m=30, days_1h=365, days_lookups=30):
