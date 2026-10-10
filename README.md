@@ -75,7 +75,9 @@ ROUTER=user@192.168.1.1 tools/deploy.sh            # copy src/ into /usr/local, 
 ROUTER=user@192.168.1.1 tools/deploy.sh uninstall  # remove it again (data in /var/db/loupe is kept)
 ```
 
-The user needs passwordless `sudo` on the router. Then open **Reporting → Loupe → Settings ▾ → General**, tick *Enable*, choose the LAN interface(s) and press *Apply*.
+`deploy.sh` logs in over SSH as the account in `ROUTER` and installs with `sudo`, so that account needs SSH access and passwordless `sudo` on the router (an admin user in the `wheel` group, with *System → Settings → Administration → Sudo* set to allow it without a password).
+
+Then open **Reporting → Loupe → Settings**, tick *Enable* on the *General* page, choose the LAN interface(s) and press *Apply*.
 
 The layout follows a plugin directory in [opnsense/plugins](https://github.com/opnsense/plugins) (`Makefile`, `pkg-descr`, `src/` installed under `/usr/local`), so it can be built as a package from that tree.
 
