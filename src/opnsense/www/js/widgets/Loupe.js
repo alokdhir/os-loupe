@@ -123,7 +123,7 @@ export default class Loupe extends BaseWidget {
         this.chart.update();
 
         $('#loupe-w-top').html(`<div class="lw-title">${this.translations.top}</div>` + d.top.map(r => this.row(
-            this.link(r),
+            (r.icon ? `<i class="${Loupe.esc(r.icon)} fa-fw text-muted"></i> ` : '') + this.link(r),
             Loupe.esc(r.model || r.type || '') + ' · ' + (Loupe.esc((r.top || [])[0] || '') || '—'),
             `↓ ${Loupe.bytes(r.down)}<div class="lw-sub">↑ ${Loupe.bytes(r.up)}</div>`)).join(''));
     }

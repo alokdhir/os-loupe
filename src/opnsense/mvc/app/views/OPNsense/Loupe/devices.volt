@@ -57,7 +57,8 @@ POSSIBILITY OF SUCH DAMAGE.
             devtype: function (column, row) {
                 if (!row.shown_type) return dash;
                 const tip = (row.model && row.type_source !== 'set by you' ? row.type + ' · ' : '') + (row.type_source || '');
-                return '<span title="' + esc(tip) + '">' + esc(row.shown_type) + '</span>';
+                return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
+                    + '<span title="' + esc(tip) + '">' + esc(row.shown_type) + '</span>';
             },
             vendor: function (column, row) {
                 if (!row.vendor_note) return esc(row.vendor);
@@ -117,7 +118,8 @@ POSSIBILITY OF SUCH DAMAGE.
             ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
                 if (data.error) { $('#loupe-detail-title').text(data.error); return; }
                 const d = data.device || {};
-                $('#loupe-detail-title').html(esc(d.name || d.ip || id) + editButton(d)
+                $('#loupe-detail-title').html((d.icon ? '<i class="' + esc(d.icon) + ' fa-fw text-muted"></i> ' : '')
+                    + esc(d.name || d.ip || id) + editButton(d)
                     + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · '))
                     + (d.type_source ? ' (' + esc(d.type_source) + ')' : '') + '</small>');
                 const tl = data.timeline;

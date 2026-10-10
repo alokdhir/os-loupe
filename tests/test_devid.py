@@ -60,10 +60,10 @@ class TestDevid(unittest.TestCase):
 
     def test_homekit_host_is_server(self):
         info = {"mdns_services": ["_hap._tcp", "_smb._tcp"], "mdns_models": ["md=homebridge", "model=MacSamba"]}
-        self.assertEqual(devid.classify("02:00:00:00:00:10", info=info)[:2], ("Server", "mdns homebridge"))
+        self.assertEqual(devid.classify("02:00:00:00:00:10", info=info)[:2], ("Server", "mdns model homebridge"))
         info = {"mdns_services": ["_hap._tcp", "_channels_dvr._tcp"]}
         self.assertEqual(devid.classify("ac:00:00:00:00:11", info=info)[:2],
-                         ("Server", "mdns _hap._tcp + _channels_dvr._tcp"))
+                         ("Server", "mdns _hap._tcp + mdns _channels_dvr._tcp"))
         info = {"mdns_services": ["_hap._tcp"], "mdns_models": ["md=Smart Plug"]}
         self.assertEqual(devid.classify("ac:00:00:00:00:12", info=info)[0], "HomeKit accessory")
 

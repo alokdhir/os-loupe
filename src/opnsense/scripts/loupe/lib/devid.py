@@ -24,103 +24,121 @@
 
 """Guess what a device is from the clues loupe collects.
 
-Strongest first: a model the device announces over mDNS, its hostname, its DHCP
-fingerprint, the services it talks to, and the vendor of its MAC address.
-Each guess carries its source so the GUI can explain it.
+The rules are data (data/devices.json); this module only knows how to match them
+and in which order to trust the kinds of evidence. Each guess carries its source
+so the GUI can explain it.
 """
 import csv
+import json
+import os
 import re
-
-from . import applemodels
 
 OUI_CSV = "/usr/local/opnsense/contrib/ieee/oui.csv"
 OUI_LEN = {"MA-L": 6, "MA-M": 7, "MA-S": 9}
+RULES_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "devices.json")
 
-# mDNS TXT model values (model=, am=, md=, usb_mdl=, ty=) -> type
-MODELS = [
-    (r"^AppleTV", "Apple TV"),
-    (r"^AudioAccessory", "HomePod"),
-    (r"^(MacBook|Macmini|MacPro|iMac|Mac\d|MacStudio)", "Mac"),
-    (r"^iPhone", "iPhone"),
-    (r"^iPad", "iPad"),
-    (r"^Watch", "Apple Watch"),
-    (r"Chromecast|Google TV|Google Nest|Nest (Hub|Mini|Audio)|Google Home", "Google Cast device"),
-    (r"(?i)sonos", "Sonos speaker"),
-    (r"(?i)bravia|smart ?tv|^(LG|Samsung|Vizio|TCL|Hisense)", "TV"),
-    (r"(?i)roku", "Roku"),
-    (r"(?i)^(usb_mdl|ty)=|laserjet|officejet|deskjet|envy|pixma|ecotank|brother|epson", "Printer"),
-]
+# strongest evidence first; a rule's tier is its "tier", else the field of its first condition
+TIERS = ("mac_prefix", "mdns_model", "hostname", "role", "strong_service", "dhcp_vendor", "talks_to", "dhcp_params",
+         "mdns_service", "vendor", "private_mac")
 
-# mDNS services announced -> type (weaker than a model)
-SERVICES = [
-    ("_googlecast._tcp", "Google Cast device"),
-    ("_sonos._tcp", "Sonos speaker"),
-    ("_ipp._tcp", "Printer"), ("_ipps._tcp", "Printer"), ("_printer._tcp", "Printer"), ("_pdl-datastream._tcp", "Printer"),
-    ("_hap._tcp", "HomeKit accessory"), ("_hap._udp", "HomeKit accessory"),
-    ("_matter._tcp", "Matter device"),
-    ("_airplay._tcp", "AirPlay device"), ("_raop._tcp", "AirPlay device"),
-    ("_channels_dvr._tcp", "Media server"), ("_plexmediasvr._tcp", "Media server"),
-    ("_spotify-connect._tcp", "Speaker / streamer"),
-    ("_smb._tcp", "Computer"), ("_ssh._tcp", "Computer"),
-]
 
-HOSTNAMES = [
-    (r"(?i)^kvm-[0-9a-f]{4}$", "NanoKVM"), (r"(?i)^pikvm\b", "PiKVM"),     # their default names
-    (r"(?i)iphone", "iPhone"), (r"(?i)ipad", "iPad"), (r"(?i)macbook|imac|mac-?mini|mac-?studio|mac-?pro", "Mac"),
-    (r"(?i)apple-?tv", "Apple TV"), (r"(?i)homepod", "HomePod"), (r"(?i)watch", "Watch"),
-    (r"(?i)^(ps[345]|playstation)", "PlayStation"), (r"(?i)xbox", "Xbox"), (r"(?i)nintendo|switch", "Nintendo Switch"),
-    (r"(?i)galaxy|pixel|android|oneplus|moto", "Android phone"),
-    (r"(?i)desktop-|laptop-|^win", "Windows PC"),
-    (r"(?i)roku", "Roku"), (r"(?i)fire-?tv|amazon-", "Amazon device"), (r"(?i)echo", "Echo speaker"),
-    (r"(?i)chromecast|google-?(home|nest|tv)", "Google Cast device"),
-    (r"(?i)ecobee|thermostat|nest-?(learning|thermostat)", "Thermostat"),
-    (r"(?i)printer|^hp[0-9a-f]{6}|^brw|^epson|^canon", "Printer"),
-    (r"(?i)^(cam|camera)|reolink|ring-|wyze|arlo", "Camera"),
-    (r"(?i)tv$|-tv-|bravia|lgwebos|samsung", "TV"),
-    (r"(?i)raspberrypi|^rpi", "Raspberry Pi"),
-    (r"(?i)denon|marantz|onkyo|yamaha-?(rx|av)|avr", "AV receiver"),
-    (r"(?i)^(EP|HS|KP|KS|P1)\d\d|kasa|smart-?plug", "Smart plug"),
-    (r"(?i)^GEModule|^GE[-_]", "GE appliance"),
-    (r"(?i)tuya|^wlan0$|^esp[-_]", "Smart home device"),
-]
+class Rules:
+    def __init__(self, data, extra=()):
+        self.types = data.get("types", {})
+        self.apple_models = data.get("apple_models", {})
+        self.tiers = {t: [] for t in TIERS}
+        for r in list(extra) + data.get("rules", []):
+            conds = r["all"] if "all" in r else [r["when"]]
+            tier = r.get("tier") or next(iter(conds[0]))
+            self.tiers[tier].append((conds, r))
 
-# DHCP option 60 (vendor class) prefixes
-DHCP_VENDOR = [
-    ("MSFT", "Windows PC"),
-    ("android-dhcp", "Android device"),
-    ("dhcpcd", "Linux device"),
-    ("udhcp", "Embedded Linux device"),
-    ("Mfg=", "Printer"),
-]
-# Apple's DHCP parameter request list (iOS, iPadOS, macOS) starts like this, with no option 60
-APPLE_PARAMS = [1, 121, 3, 6, 15, 108, 114, 119, 252]
+    def icon(self, dtype):
+        return self.types.get(dtype, {}).get("icon", "")
 
-# Services a device talks to -> what it is (name suffixes, matched on looked-up names)
-TRAFFIC = [
-    ("playstation.net", "PlayStation"), ("playstation.com", "PlayStation"), ("sonyentertainmentnetwork.com", "PlayStation"),
-    ("xboxlive.com", "Xbox"), ("xbox.com", "Xbox"),
-    ("nintendo.net", "Nintendo Switch"), ("nintendo.com", "Nintendo Switch"),
-    ("roku.com", "Roku"), ("ring.com", "Ring device"), ("ecobee.com", "Thermostat"),
-    ("sonos.com", "Sonos speaker"), ("tuyaus.com", "Smart home device"), ("tuya.com", "Smart home device"),
-    ("wyzecam.com", "Camera"), ("reolink.com", "Camera"), ("meethue.com", "Hue bridge"),
-    ("amazon-dss.com", "Echo speaker"), ("alexa.amazon.com", "Echo speaker"),
-    ("tesla.services", "Tesla"), ("tesla.com", "Tesla"),
-]
+    def vendor(self, dtype):
+        return self.types.get(dtype, {}).get("vendor", "")
 
-VENDORS = [
-    ("Tuya", "Smart home device"), ("Espressif", "IoT device (ESP)"), ("Sonos", "Sonos speaker"),
-    ("Reolink", "Camera"), ("Roku", "Roku"), ("ecobee", "Thermostat"), ("Lutron", "Lutron hub"),
-    ("Ubiquiti", "Network gear"), ("eero", "Wi-Fi access point"), ("Raspberry Pi", "Raspberry Pi"),
-    ("Nintendo", "Nintendo Switch"), ("Sony Interactive", "PlayStation"), ("Nest Labs", "Nest device"),
-    ("Phaten", "Ceiling fan (fanSync)"), ("Signify", "Hue bridge"), ("Philips Lighting", "Hue bridge"),
-    ("Hon Hai", "Device (Foxconn module)"), ("Amazon Technologies", "Amazon device"), ("Google", "Google device"),
-    ("Apple", "Apple device"), ("Samsung", "Samsung device"), ("HP Inc", "Printer"), ("Hewlett Packard", "HP device"),
-    ("Intel", "Computer"), ("Synology", "NAS"), ("QNAP", "NAS"), ("TP-LINK", "TP-Link device"),
-    ("Aqara", "Smart home hub"), ("Lumi United", "Smart home hub"), ("D&M Holdings", "AV receiver"),
-    ("ASUSTek", "Computer"), ("Micro-Star", "Computer"), ("Dell", "Computer"), ("Lenovo", "Computer"),
-    ("General Electric", "GE appliance"), ("Magicjack", "VoIP adapter"), ("Globalscale", "Embedded device"),
-    ("Telit", "Cellular IoT module"), ("Wyze", "Camera"), ("Ring", "Ring device"),
-]
+
+_rules = None
+
+
+def rules():
+    global _rules
+    if _rules is None:
+        with open(RULES_JSON, encoding="utf-8") as f:
+            _rules = Rules(json.load(f))
+    return _rules
+
+
+def _params(info):
+    p = info.get("dhcp_params") or ""
+    return ",".join(str(x) for x in p) if isinstance(p, list) else str(p)
+
+
+def _check(field, want, ev):
+    """Evidence text if this one condition holds (may be ""), else None."""
+    if field == "mac_prefix":
+        return "mac" if ev["mac"].startswith(want.lower()) else None
+    if field == "mdns_model":
+        for m in ev["models"]:
+            val = m.split("=", 1)[1] if "=" in m else m
+            if re.search(want, val) or re.search(want, m):
+                return f"mdns model {val}"
+        return None
+    if field == "hostname":
+        for h in ev["hosts"]:
+            if h and re.search(want, h.removesuffix(".local")):
+                return f"hostname {h}"
+        return None
+    if field == "mdns_service":
+        return f"mdns {want}" if want in ev["services"] else None
+    if field == "dhcp_vendor":
+        return (f"dhcp vendor {ev['vc']}" if ev["vc"] else "") if re.search(want, ev["vc"]) else None
+    if field == "dhcp_params":
+        p = ev["params"]
+        return "dhcp fingerprint" if p == want or p.startswith(want + ",") else None
+    if field == "talks_to":
+        hit = any(n == want or n.endswith("." + want) for n in ev["names"])
+        return f"talks to {want}" if hit else None
+    if field == "vendor":
+        return f"vendor {ev['vendor']}" if ev["vendor"] and re.search(r"(?i)\b" + re.escape(want) + r"\b", ev["vendor"]) else None
+    if field == "private_mac":
+        return ("private MAC" if want else "") if ev["private"] == want else None
+    raise ValueError(f"unknown rule field {field}")
+
+
+def _match(conds, ev):
+    found = []
+    for cond in conds:
+        for field, want in cond.items():
+            hit = None
+            for w in (want if isinstance(want, list) else [want]):
+                hit = _check(field, w, ev)
+                if hit is not None:
+                    break
+            if hit is None:
+                return None
+            if hit:
+                found.append(hit)
+    return " + ".join(found)
+
+
+def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
+    """Return (type, source, vendor). `names` are server names the device looked up or connected to."""
+    info = info or {}
+    mac = mac.lower()
+    private = is_private(mac)
+    ven = vendor(mac, oui or {}) if not private else None
+    ev = {"mac": mac, "private": private, "vendor": ven or "", "names": list(names),
+          "models": info.get("mdns_models", []), "services": info.get("mdns_services", []),
+          "vc": info.get("dhcp_vendor_class") or "", "params": _params(info),
+          "hosts": [hostname or "", info.get("dhcp_hostname") or ""] + list(info.get("mdns_hosts", []))}
+    for tier in (table or rules()).tiers.values():
+        for conds, r in tier:
+            src = _match(conds, ev)
+            if src is not None:
+                return r["type"], src, r.get("vendor", ven)
+    return None, None, ven
 
 
 def load_oui(path=OUI_CSV):
@@ -152,82 +170,11 @@ def is_private(mac):
         return False
 
 
-def _match(rules, text):
-    for pat, t in rules:
-        if re.search(pat, text):
-            return t
-    return None
-
-
-def classify(mac, hostname=None, info=None, names=(), oui=None):
-    """Return (type, source, vendor). `names` are server names the device looked up or connected to."""
-    info = info or {}
-    ven = vendor(mac, oui or {}) if not is_private(mac) else None
-    if mac.lower().startswith("52:54:00"):
-        return "Virtual machine", "mac", "QEMU/KVM"
-
-    for m in info.get("mdns_models", []):
-        val = m.split("=", 1)[1] if "=" in m else m
-        t = _match(MODELS, val) or (_match(MODELS, m) if m.startswith(("usb_mdl=", "ty=")) else None)
-        if t:
-            return t, f"mdns model {val}", ven
-    candidates = [hostname or "", info.get("dhcp_hostname") or ""] + list(info.get("mdns_hosts", []))
-    for h in candidates:
-        t = h and _match(HOSTNAMES, h.removesuffix(".local"))
-        if t:
-            return t, f"hostname {h}", ven
-    hosted = server_role(info)
-    if hosted:
-        return "Server", hosted, ven
-    for svc, t in SERVICES[:6]:            # strong services (cast, sonos, printing)
-        if svc in info.get("mdns_services", []):
-            return t, f"mdns {svc}", ven
-    vc = info.get("dhcp_vendor_class") or ""
-    for prefix, t in DHCP_VENDOR:
-        if vc.startswith(prefix):
-            return t, f"dhcp vendor {vc}", ven
-    for n in names:
-        for suffix, t in TRAFFIC:
-            if n == suffix or n.endswith("." + suffix):
-                return t, f"talks to {suffix}", ven
-    params = info.get("dhcp_params") or []
-    if params[:len(APPLE_PARAMS)] == APPLE_PARAMS and not vc:
-        return ("Apple device" if not is_private(mac) else "iPhone/iPad/Mac"), "dhcp fingerprint", ven
-    for svc, t in SERVICES[6:]:
-        if svc in info.get("mdns_services", []):
-            return t, f"mdns {svc}", ven
-    if ven:
-        t = _match([(r"(?i)\b" + re.escape(k) + r"\b", v) for k, v in VENDORS], ven)
-        if t:
-            return t, f"vendor {ven}", ven
-    if is_private(mac):
-        return "Phone/tablet/laptop", "private MAC", None
-    return None, None, ven
-
-
-HOMEKIT_HOSTS = ("homebridge", "scrypted")
-SERVER_SERVICES = ("_smb._tcp", "_channels_dvr._tcp", "_plexmediasvr._tcp")
-
-
-def server_role(info):
-    """A machine hosting HomeKit bridges (Homebridge, Scrypted) or serving files/media next to HomeKit is a
-    server, not an accessory. Returns the evidence, or None."""
-    svcs = info.get("mdns_services", [])
-    hosts = sorted({m.split("=", 1)[1] for m in info.get("mdns_models", [])
-                    if m.startswith("md=") and m.split("=", 1)[1].lower() in HOMEKIT_HOSTS})
-    if hosts:
-        return "mdns " + " + ".join(hosts)
-    if "_hap._tcp" in svcs:
-        extra = [s for s in SERVER_SERVICES if s in svcs]
-        if extra:
-            return "mdns _hap._tcp + " + " + ".join(extra)
-    return None
-
-
 def model(info):
     """Marketing name of an Apple device from its announced model identifier, if known."""
+    names = rules().apple_models
     for m in (info or {}).get("mdns_models", []):
-        hit = applemodels.name(m.split("=", 1)[1] if "=" in m else m)
+        hit = names.get(m.split("=", 1)[1] if "=" in m else m)
         if hit:
             return hit
     return None

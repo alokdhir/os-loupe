@@ -32,6 +32,32 @@ OPNsense's NetFlow on a bridged LAN misses LAN→internet packets on ingress —
 
 Those are broader tools — deep packet inspection, alerts, policies, live flows — and they're good at it. Loupe does one narrower job: per-device history by site and service, with good device identification, built into OPNsense's own Reporting menu, free, and light enough to leave running on a small box.
 
+## Device rules
+
+How Loupe recognises devices is data, not code: [`data/devices.json`](src/opnsense/scripts/loupe/data/devices.json) (device rules, the icon and maker for each type, Apple model names) and [`data/services.json`](src/opnsense/scripts/loupe/data/services.json) (site and service names, address ranges, ports, VPN providers). One entry per line:
+
+```json
+{"when": {"hostname": "(?i)^kvm-[0-9a-f]{4}$"}, "type": "NanoKVM", "example": {"hostname": "kvm-0a1b"}}
+```
+
+A rule matches when all of its conditions do (`when`, or several in `all`); a list value means *any of*. Fields:
+
+| Field | Matches |
+|---|---|
+| `mac_prefix` | start of the MAC address |
+| `mdns_model` | a model the device announces over Bonjour (`model=`, `am=`, `md=`…), regex |
+| `hostname` | its DHCP or Bonjour host name, regex |
+| `mdns_service` | a Bonjour service it offers, exact (`_googlecast._tcp`) |
+| `dhcp_vendor` | DHCP vendor class (option 60), regex |
+| `dhcp_params` | start of the DHCP parameter request list (`1,121,3,6`) |
+| `talks_to` | a domain it looked up or connected to, and its subdomains |
+| `vendor` | a whole word in the maker's name for the MAC prefix |
+| `private_mac` | `true` for a randomized (private) MAC |
+
+Evidence is trusted in a fixed order — Bonjour model, host name, hosting role, strong Bonjour services, DHCP vendor, domains it talks to, DHCP fingerprint, other Bonjour services, MAC maker — and the first matching rule wins (file order within a tier). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
+
+**Adding a rule:** add it with an `example` — made-up evidence that should come out as your type (no real MACs or names) — then run the tests. They fail if the example lands on another type, or if your rule takes over another rule's example. `tools/fmtjson.py` keeps the files one entry per line.
+
 ## Footprint
 
 On a 5 Gbps home connection (Intel N150): about 0.5% of one CPU core idle, ~4% during a full-speed transfer, and 30–50 MB of memory.
@@ -56,7 +82,7 @@ The layout follows a plugin directory in [opnsense/plugins](https://github.com/o
 ## Tests
 
 ```sh
-cd tests && python3 -m unittest test_tls test_quic test_pfstate test_store test_devid test_services
+cd tests && python3 -m unittest test_tls test_quic test_pfstate test_store test_devid test_services test_rules
 ```
 
 All test data is synthetic.

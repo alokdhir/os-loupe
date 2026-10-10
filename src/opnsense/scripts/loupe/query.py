@@ -40,7 +40,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib.devid import is_private  # noqa: E402
+from lib.devid import is_private, rules  # noqa: E402
 from lib.services import PORTS, ServiceMap, vpn_provider  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
@@ -67,17 +67,14 @@ def window(hours):
     return ("flows_5m", start, 3600) if hours <= 24 * 30 else ("flows_1h", start, 86400 if hours > 24 * 90 else 3600)
 
 
-APPLE_TYPES = {"iPhone", "iPad", "Mac", "Watch", "Apple TV", "HomePod"}
-
-
 def vendor_of(mac, vendor, dtype):
     """(vendor, note). The MAC prefix names the maker unless the MAC is private (randomized) or newer than
-    OPNsense's copy of the IEEE list; then an Apple device type still tells us."""
+    OPNsense's copy of the IEEE list; then a type that only one maker makes (iPhone, PlayStation) still tells us."""
     if vendor:
         return vendor, ""
     why = "private MAC" if is_private(mac) else "MAC prefix not in the vendor list"
-    if dtype in APPLE_TYPES:
-        return "Apple", f"from device type ({why})"
+    if rules().vendor(dtype):
+        return rules().vendor(dtype), f"from device type ({why})"
     return "", why
 
 
@@ -88,12 +85,13 @@ def devices_info(db, overrides):
         o = overrides.get(mac, {})
         vendor, vnote = vendor_of(mac, vendor, o.get("type") or dtype)
         out[mac] = {"mac": mac, "ip": ip, "name": o.get("name") or name or hostname or "", "vendor": vendor,
-                    "vendor_note": vnote,
+                    "vendor_note": vnote, "icon": rules().icon(o.get("type") or dtype),
                     "model": model or "",
                     "type": o.get("type") or dtype or "", "type_source": "set by you" if o.get("type") else (src or ""),
                     "first_seen": first, "last_seen": last, "custom": bool(o)}
     for mac, o in overrides.items():   # named before loupe recorded the device
-        out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "vendor_note": "", "type": o.get("type") or "",
+        out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "vendor_note": "",
+                             "icon": rules().icon(o.get("type") or ""), "type": o.get("type") or "",
                              "type_source": "set by you" if o.get("type") else "", "model": "", "first_seen": 0, "last_seen": 0,
                              "custom": True})
     return out
@@ -154,7 +152,7 @@ def cmd_devices(hours):
         r = rows.get(key)
         if r is None:
             d = info.get(mac, {})
-            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "type", "type_source", "model")},
+            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "type", "type_source", "model")},
                              "custom": d.get("custom", False),
                              "mac": mac, "ip": ip, "down": 0, "up": 0, "conns": 0, "last": 0}
         r["down"] += down
