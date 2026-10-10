@@ -146,6 +146,10 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-edit-reset').toggle(!!$b.data('custom'));
             $('#loupe-edit-dialog').modal('show');
         });
+        $('#loupe-edit-name, #loupe-edit-type').on('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); $('#loupe-edit-save').click(); }
+        });
+        $('#loupe-edit-dialog').on('shown.bs.modal', function () { $('#loupe-edit-name').focus().select(); });
         $('#loupe-edit-save, #loupe-edit-reset').click(function () {
             const reset = this.id === 'loupe-edit-reset';
             ajaxCall('/api/loupe/settings/override', {
