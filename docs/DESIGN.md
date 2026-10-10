@@ -44,9 +44,9 @@ Everything Loupe knows comes from these. Required ones stop Loupe from working i
 |---|---|---|---|
 | pf state table (`pfctl -ss -vv`) | bytes and packets per connection, both directions, before NAT | every 10 s | required |
 | Packet capture (BPF) on the selected interfaces | TLS SNI and QUIC names, DNS answers sent to devices, DHCP requests (host name, vendor class, parameter list), mDNS (host names, models, services) | continuously | required |
-| ARP and IPv6 neighbour tables (`arp -an`, `ndp -an`) | IP → MAC, to tie traffic to a device | every 60 s | required |
-| Interface addresses (`ifconfig`) | which networks are local | at start, every 10 min | required |
-| Unbound cache (`unbound-control dump_cache`) | names for connections opened before Loupe started | at start | optional (Unbound) |
+| ARP and IPv6 neighbour tables (sysctl, as `arp -an` / `ndp -an` show them) | IP → MAC, to tie traffic to a device | every 60 s | required |
+| Interface addresses (`getifaddrs()`) | which networks are local | at start, every 10 min | required |
+| Unbound cache (`dump_cache` over Unbound's TLS control port) | names for connections opened before Loupe started | at start | optional (Unbound) |
 | dnsmasq leases and static hosts (`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`) | device names | every 10 min | optional (Kea and ISC DHCP not read yet: LOUPE-15) |
 | IEEE vendor list (`/usr/local/opnsense/contrib/ieee/oui.csv`, shipped with OPNsense) | MAC maker | at start | optional |
 | Settings (`/usr/local/etc/loupe.json`, from the OPNsense config via a template) | interfaces, retention, your service and device names | daemon: at start (Apply restarts it); reports: every query | required |
@@ -121,7 +121,7 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **IPv6** is implemented (filters, parsing) but has not seen real traffic yet.
 - **VLANs / several LAN interfaces:** supported by configuration, tested only on one bridged LAN.
 - **Large state tables:** `pfctl -ss -vv` is parsed as text every 10 seconds: ~15 µs per state on an N150 (`tools/bench_pfstate.py`), so ~0.2% of a core at 1,000 states but ~8% at 50,000. pf's binary interface (LOUPE-21) would remove the text step altogether.
-- **External commands:** Loupe still runs `pfctl`, `arp`, `ndp`, `ifconfig`, `tcpdump -ddd` and `unbound-control`; each has a native replacement planned (LOUPE-21, LOUPE-22).
+- **External commands:** the only one left is `pfctl -ss -vv` (LOUPE-21). The neighbour tables, interface addresses, filter compiler (libpcap) and Unbound's cache are read natively.
 - **pfctl output format** is a text interface and could change between releases; the parser has tests, but a format change would stop byte counting.
 - **Long report periods:** reports up to 30 days scan the 5-minute table; at a full month of data, reports beyond 48 hours should read the hourly table.
 

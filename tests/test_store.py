@@ -109,6 +109,19 @@ class TestMalformed(unittest.TestCase):
         self.assertIsNone(mdns.parse(msg))
 
 
+class TestUnboundConf(unittest.TestCase):
+    def test_remote_control_settings(self):
+        from lib import unbound
+        with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as f:
+            f.write("server:\n    interface: 0.0.0.0\n    control-port: 1\nremote-control:\n    control-enable: yes\n"
+                    "    control-interface: 127.0.0.1\n    control-port: 8953  # comment\n"
+                    "    server-cert-file: \"/x/s.pem\"\n    control-key-file: /x/c.key\n    control-cert-file: /x/c.pem\n")
+        try:
+            self.assertEqual(unbound.control_settings(f.name), ("127.0.0.1", 8953, "/x/s.pem", "/x/c.pem", "/x/c.key"))
+        finally:
+            os.unlink(f.name)
+
+
 if __name__ == "__main__":
     unittest.main()
 

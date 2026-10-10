@@ -31,6 +31,7 @@ import argparse
 import collections
 import json
 import signal
+import ssl
 import subprocess
 import sys
 import syslog
@@ -39,7 +40,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, names, neighbours, pfstate, store  # noqa: E402
+from lib import devid, names, neighbours, pfstate, store, unbound  # noqa: E402
 
 
 
@@ -69,9 +70,8 @@ class Loupe:
 
     def seed_names(self):
         try:
-            out = subprocess.run(["unbound-control", "-c", "/var/unbound/unbound.conf", "dump_cache"],
-                                 capture_output=True, text=True, timeout=30).stdout
-        except (subprocess.SubprocessError, OSError):
+            out = unbound.command("dump_cache", timeout=30)
+        except (OSError, ssl.SSLError):         # Unbound not running or not in use: no seed
             return
         self.names.seed_unbound(out, time.time())
 
