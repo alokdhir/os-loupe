@@ -13,6 +13,6 @@
         <id>device.type</id>
         <label>Type</label>
         <type>text</type>
-        <help>Overrides the detected device type.</help>
+        <help>Overrides the detected device type. Leave both Name and Type empty to go back to what Loupe detects.</help>
     </field>
 </form>

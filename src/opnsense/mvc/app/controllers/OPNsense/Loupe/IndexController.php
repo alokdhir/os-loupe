@@ -32,6 +32,7 @@ class IndexController extends \OPNsense\Base\IndexController
 {
     public function indexAction()
     {
+        $this->view->formDialogDevice = $this->getForm('dialogDevice');
         $this->view->pick('OPNsense/Loupe/devices');
     }
 

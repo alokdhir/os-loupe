@@ -72,4 +72,83 @@ class ReportController extends ApiControllerBase
     {
         return $this->query(['widget']);
     }
+
+    /* grid endpoints (UIBootgrid search): sort, search and paging via searchRecordsetBase() */
+
+    private function postHours()
+    {
+        return $this->hours($this->request->getPost('hours', null, 24));
+    }
+
+    private function postDevice()
+    {
+        $id = (string)$this->request->getPost('device', null, '');
+        return preg_match('/^[0-9a-fA-F:.]{2,45}$/', $id) ? $id : null;
+    }
+
+    private function grid(array $rows, string $defaultSort = 'down')
+    {
+        // newest/biggest first unless the user sorts otherwise
+        usort($rows, function ($a, $b) use ($defaultSort) {
+            return ($b[$defaultSort] ?? 0) <=> ($a[$defaultSort] ?? 0);
+        });
+        return $this->searchRecordsetBase($rows);
+    }
+
+    public function searchDevicesAction()
+    {
+        $data = $this->query(['devices', $this->postHours()]);
+        $rows = [];
+        foreach ($data['rows'] ?? [] as $r) {
+            $r['id'] = $r['mac'] ?: $r['ip'];
+            $r['shown_type'] = ($r['type_source'] ?? '') === 'set by you' ? $r['type'] : ($r['model'] ?: $r['type']);
+            $rows[] = $r;
+        }
+        return $this->grid($rows);
+    }
+
+    private function deviceSection($section, $sort = 'down')
+    {
+        $id = $this->postDevice();
+        if ($id === null) {
+            return $this->searchRecordsetBase([]);
+        }
+        $data = $this->query(['device', $id, $this->postHours()]);
+        return $this->grid($data[$section] ?? [], $sort);
+    }
+
+    public function searchServicesAction()
+    {
+        return $this->deviceSection('services');
+    }
+
+    public function searchSitesAction()
+    {
+        return $this->deviceSection('sites');
+    }
+
+    public function searchPortsAction()
+    {
+        return $this->deviceSection('ports');
+    }
+
+    private function lookupSection($section, $sort)
+    {
+        $text = (string)$this->request->getPost('q', null, '');
+        if (!preg_match('/^[a-zA-Z0-9.:_-]{1,253}$/', $text)) {
+            return $this->searchRecordsetBase([]);
+        }
+        $data = $this->query(['lookup', $text, $this->postHours()]);
+        return $this->grid($data[$section] ?? [], $sort);
+    }
+
+    public function searchLookupTrafficAction()
+    {
+        return $this->lookupSection('traffic', 'down');
+    }
+
+    public function searchLookupNamesAction()
+    {
+        return $this->lookupSection('lookups', 'last');
+    }
 }
