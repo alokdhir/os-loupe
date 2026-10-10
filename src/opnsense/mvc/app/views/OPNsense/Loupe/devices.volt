@@ -41,6 +41,8 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-section h3 { margin-top: 15px; font-size: 16px; }
     #loupe-chart-wrap { height: 220px; padding: 0 15px; }
     #loupe-empty { padding: 20px 15px; }
+    .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
+    .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-edit { color: #999; cursor: pointer; visibility: hidden; float: right; padding: 3px 0 0 8px; }
     #loupe-detail-title .loupe-edit { float: none; font-size: 16px; padding-left: 10px; }
     .loupe-table tr:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
@@ -274,7 +276,7 @@ POSSIBILITY OF SUCH DAMAGE.
     <div id="loupe-detail" style="display: none">
         <div class="loupe-section">
             <a href="#" id="loupe-back">&larr; {{ lang._('All devices') }}</a>
-            <h2 id="loupe-detail-title" style="font-size: 20px"></h2>
+            <h2 id="loupe-detail-title" class="loupe-detail-title"></h2>
         </div>
         <div id="loupe-chart-wrap"><canvas id="loupe-chart"></canvas></div>
         <div class="loupe-section"><h3>{{ lang._('Services') }}</h3>
