@@ -255,6 +255,12 @@ POSSIBILITY OF SUCH DAMAGE.
             const keep = (tab === 'services' && q) ? '#q=' + encodeURIComponent(q) : '#' + tab;
             if (window.location.hash === keep) { route(); } else { window.location.hash = keep; }
         });
+        /* the "Settings" label of the sub-tab dropdown opens its first page (the ▾ lists them all) */
+        $('#maintabs li.dropdown > a[data-toggle="tab"]:not([href])').on('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.location.hash === '#general') { route(); } else { window.location.hash = '#general'; }
+        });
         $(window).on('hashchange', route);
 
         $('.loupe-period .btn').click(function () {
