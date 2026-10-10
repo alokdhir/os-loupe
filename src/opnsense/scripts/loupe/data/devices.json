@@ -4,7 +4,7 @@
   "A rule matches when every condition in 'when' (or every entry of 'all') matches; a list value means any of.",
   "Fields: mac_prefix, mdns_model (regex), hostname (regex), mdns_service (exact), dhcp_vendor (regex),",
   "dhcp_params (prefix of the request list), talks_to (domain suffix), vendor (whole word), private_mac (bool).",
-  "Tiers run in a fixed order (strongest evidence first); a rule's tier defaults to its first field.",
+  "Tiers run in a fixed order (strongest evidence first, see TIERS in lib/devid.py); a rule's tier defaults to its first field.",
   "'example' is synthetic evidence that must classify as this rule's type (checked by the tests).",
   "Distro rules (Ubuntu, Debian...) match the update servers a machine checks; containers can blur them."
  ],
@@ -46,6 +46,7 @@
   {"when": {"hostname": "(?i)denon|marantz|onkyo|yamaha-?(rx|av)|avr"}, "type": "AV receiver", "example": {"hostname": "denon-avr-x1700h"}},
   {"when": {"hostname": "(?i)^(EP|HS|KP|KS|P1)\\d\\d|kasa|smart-?plug"}, "type": "Smart plug", "example": {"hostname": "HS105"}},
   {"when": {"hostname": "(?i)^GEModule|^GE[-_]"}, "type": "GE appliance", "example": {"hostname": "GEModule1234"}},
+  {"when": {"hostname": "(?i)^schlage"}, "type": "Smart lock", "note": "Schlage Encode (Wi-Fi) uses its brand as its DHCP name", "example": {"hostname": "Schlage", "info": {"dhcp_params": "1,3,6"}}},
   {"when": {"hostname": "(?i)tuya|^wlan0$|^esp[-_]"}, "type": "Smart home device", "example": {"hostname": "esp_0a1b2c"}},
   {"when": {"mdns_model": "(?i)^(homebridge|scrypted)$"}, "tier": "role", "type": "Server", "note": "hosts HomeKit bridges", "example": {"info": {"mdns_services": ["_hap._tcp"], "mdns_models": ["md=homebridge"]}}},
   {"all": [{"mdns_service": "_hap._tcp"}, {"mdns_service": ["_smb._tcp", "_channels_dvr._tcp", "_plexmediasvr._tcp"]}], "tier": "role", "type": "Server", "note": "serves files or media next to HomeKit", "example": {"info": {"mdns_services": ["_hap._tcp", "_channels_dvr._tcp"]}}},
@@ -204,7 +205,8 @@
   "Samsung device": {"icon": "fa-solid fa-microchip"},
   "TP-Link device": {"icon": "fa-solid fa-microchip"},
   "HP device": {"icon": "fa-solid fa-print"},
-  "Alpine Linux": {"icon": "fa-brands fa-linux"}
+  "Alpine Linux": {"icon": "fa-brands fa-linux"},
+  "Smart lock": {"icon": "fa-solid fa-lock"}
  },
  "apple_models": {
   "MacBookAir10,1": "MacBook Air 13″ (M1)",

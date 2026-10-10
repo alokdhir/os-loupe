@@ -75,6 +75,17 @@ class TestDevid(unittest.TestCase):
         self.assertNotEqual(devid.classify("ac:00:00:00:00:14", hostname="kvm-host-1")[0], "NanoKVM")
 
 
+    def test_app_traffic_does_not_beat_fingerprint(self):
+        info = {"dhcp_params": "1,121,3,6,15,108,114,119,162,252"}
+        self.assertEqual(devid.classify("02:00:00:00:00:20", info=info, names=["a1.tuyaus.com"])[0], "iPhone/iPad/Mac")
+
+    def test_mdns_name_skips_ids_and_relayed(self):
+        info = {"mdns_hosts": ["0a1b2c3d4e5f6a7b.local", "lock-plus.local", "den.local"],
+                "mdns_names": ["0a1b2c3d4e5f6a7b", "lock plus", "70-35-60-63.1 den", "den"]}
+        self.assertEqual(devid.mdns_name(info), "den")
+        self.assertEqual(devid.mdns_name({"mdns_hosts": ["0a1b2c3d4e5f.local", "box.local"]}), "box")
+
+
 if __name__ == "__main__":
     unittest.main()
 

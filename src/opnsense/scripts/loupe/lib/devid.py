@@ -38,7 +38,8 @@ OUI_LEN = {"MA-L": 6, "MA-M": 7, "MA-S": 9}
 RULES_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "devices.json")
 
 # strongest evidence first; a rule's tier is its "tier", else the field of its first condition
-TIERS = ("mac_prefix", "mdns_model", "hostname", "role", "strong_service", "dhcp_vendor", "talks_to", "dhcp_params",
+# (the DHCP fingerprint beats talks_to: a phone running a smart-home app talks to the same cloud as the device)
+TIERS = ("mac_prefix", "mdns_model", "hostname", "role", "strong_service", "dhcp_vendor", "dhcp_params", "talks_to",
          "mdns_service", "vendor", "private_mac")
 
 
@@ -180,13 +181,22 @@ def model(info):
     return None
 
 
+# random identifiers some devices announce as host names (UUIDs, 12-16 hex digits)
+ID_NAME = re.compile(r"(?i)^([0-9a-f]{12,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+
+
 def mdns_name(info):
-    """The name a device announces over Bonjour ("midnight" from midnight.local)."""
-    for h in (info or {}).get("mdns_hosts", []):
-        if h.endswith(".local") and not h.startswith("_"):
-            return h[:-len(".local")]
-    names = (info or {}).get("mdns_names", [])
-    return names[0] if names else None
+    """The name a device announces over Bonjour ("midnight" from midnight.local).
+
+    Apple TVs and HomePods also announce names for the Thread/Matter accessories they relay, so a
+    device's own name is preferred: the one that also appears as its AirPlay name ("70-35-60-63.1 kitchen").
+    """
+    hosts = [h[:-len(".local")] for h in (info or {}).get("mdns_hosts", [])
+             if h.endswith(".local") and not h.startswith("_") and not ID_NAME.match(h[:-len(".local")])]
+    names = [n for n in (info or {}).get("mdns_names", []) if not ID_NAME.match(n)]
+    airplay = {n.split(" ", 1)[1].replace(" ", "-").lower() for n in names if re.match(r"^[0-9-]+\.\d+ ", n)}
+    own = [h for h in hosts if h.lower() in airplay]
+    return (own or hosts or names or [None])[0]
 
 
 def leases(path="/var/db/dnsmasq.leases"):
