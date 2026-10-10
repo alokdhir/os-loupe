@@ -163,5 +163,29 @@ class TestBpfCompile(unittest.TestCase):
             bpf.compile_filter("tcp and bogus(")
 
 
+class TestNetlink(unittest.TestCase):
+    """Synthetic GETSTATES replies give the same states as the text parser does for TEXT's first two records."""
+
+    def msg(self, sid, origif, inbound, a0, p0, a1, p1, counts, age):
+        from lib import pfnl
+        A = pfnl._attr
+        key = (A(pfnl.STK_ADDR0, socket.inet_aton(a0)) + A(pfnl.STK_ADDR1, socket.inet_aton(a1))
+               + A(pfnl.STK_PORT0, struct.pack("!H", p0)) + A(pfnl.STK_PORT1, struct.pack("!H", p1)))
+        return (A(pfnl.ST_ID, struct.pack("Q", sid)) + A(pfnl.ST_CREATORID, struct.pack("I", 0xaaaa0001))
+                + A(3, b"all\0") + A(pfnl.ST_ORIG_IFNAME, origif.encode() + b"\0") + A(pfnl.ST_KEY_STACK, key)
+                + A(pfnl.ST_CREATION, struct.pack("I", age)) + A(pfnl.ST_PACKETS0, struct.pack("Q", counts[0]))
+                + A(pfnl.ST_PACKETS1, struct.pack("Q", counts[1])) + A(pfnl.ST_BYTES0, struct.pack("Q", counts[2]))
+                + A(pfnl.ST_BYTES1, struct.pack("Q", counts[3])) + A(pfnl.ST_PROTO, b"\x06")
+                + A(pfnl.ST_DIRECTION, bytes([pfnl.PF_IN if inbound else 2])) + A(40, b"label\0"))
+
+    def test_same_as_text(self):
+        from lib import pfnl
+        msgs = [self.msg(1, "bridge0", True, "10.9.1.20", 51000, "203.0.113.10", 443, (10, 20, 1000, 50000), 5),
+                self.msg(2, "ix1", False, "203.0.113.10", 443, "198.51.100.7", 40000, (10, 20, 1000, 50000), 5)]
+        got = pfstate.from_netlink(pfnl.parse_states(msgs, {"bridge0"}), LOCAL, {"bridge0"})
+        want = {k: v for k, v in pfstate.parse(TEXT, LOCAL, {"bridge0"}).items() if k[0] == "0000000000000001"}
+        self.assertEqual(list(got.values()), list(want.values()))
+
+
 if __name__ == "__main__":
     unittest.main()

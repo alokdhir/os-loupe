@@ -40,7 +40,7 @@ import ipaddress
 import re
 import subprocess
 
-from . import netif
+from . import netif, pfnl
 from typing import NamedTuple
 
 HEADER = re.compile(r"^\S+ (\S+) (.+?) (<-|->) (.+?)\s{2,}\S*\s*$")
@@ -95,6 +95,19 @@ def _cached(fn, cache):
     return get
 
 
+def _state(key, origif, proto, left, right, inbound, counts, age, local, group):
+    """One pf state as Loupe sees it, or None. `left`/`right` are (addr, port) as pfctl prints them
+    ("left <- right" for an inbound state); counts = (pkts0, pkts1, bytes0, bytes1), initiator first."""
+    (ia, ip_), (ra, rp) = (right, left) if inbound else (left, right)
+    il, rl = local(ia), local(ra)
+    if il == rl or group(ra if il else ia):
+        return None
+    p_init, p_resp, b_init, b_resp = counts
+    if il:
+        return State(key, origif, proto, ia, ip_, ra, rp, True, b_init, b_resp, p_init, p_resp, age)
+    return State(key, origif, proto, ra, rp, ia, ip_, False, b_resp, b_init, p_resp, p_init, age)
+
+
 def parse(text, is_local, ifaces=None):
     """Parse `pfctl -ss -vv` output. Keeps states with exactly one local endpoint
     (on `ifaces`, if given) and returns {key: State}.
@@ -121,21 +134,50 @@ def parse(text, is_local, ifaces=None):
         if not (m and c and i):
             continue
         proto, left, arrow, right = m.groups()
-        # "A <- B": created inbound on origif, B -> A is the first packet. "A -> B": outbound, A -> B.
-        (ia, ip_), (ra, rp) = (split_endpoint(right), split_endpoint(left)) if arrow == "<-" else \
-            (split_endpoint(left), split_endpoint(right))
-        il, rl = local(ia), local(ra)
-        if il == rl or group(ra if il else ia):
-            continue
-        p_init, p_resp, b_init, b_resp = (int(x) for x in c.groups())
         g = AGE.search(rec, nl)
         age = int(g.group(1)) * 3600 + int(g.group(2)) * 60 + int(g.group(3)) if g else 0
         key = (i.group(1), i.group(2))
-        if il:
-            out[key] = State(key, origif, proto, ia, ip_, ra, rp, True, b_init, b_resp, p_init, p_resp, age)
-        else:
-            out[key] = State(key, origif, proto, ra, rp, ia, ip_, False, b_resp, b_init, p_resp, p_init, age)
+        st = _state(key, origif, proto, split_endpoint(left), split_endpoint(right), arrow == "<-",
+                    tuple(int(x) for x in c.groups()), age, local, group)
+        if st:
+            out[key] = st
     return out
+
+
+def from_netlink(states, is_local, ifaces=None):
+    """The same as parse(), from pfnl.Client.states()."""
+    out = {}
+    local = _cached(is_local, {})
+    group = _cached(is_group, {})
+    names = protocol_names()
+    for s in states:
+        if ifaces is not None and s["origif"] not in ifaces:
+            continue
+        key = (f"{s['id']:016x}", f"{s['creatorid']:08x}")
+        st = _state(key, s["origif"], names.get(s["proto"], str(s["proto"])), (s["addr1"], s["port1"]),
+                    (s["addr0"], s["port0"]), s["inbound"], (*s["packets"], *s["bytes"]), s["age"], local, group)
+        if st:
+            out[key] = st
+    return out
+
+
+_protocols = None
+
+
+def protocol_names(path="/etc/protocols"):
+    """Protocol number -> name, as pfctl prints it (tcp, udp, icmp, ipv6-icmp, ...)."""
+    global _protocols
+    if _protocols is None:
+        _protocols = {6: "tcp", 17: "udp", 1: "icmp", 58: "ipv6-icmp"}
+        try:
+            with open(path) as f:
+                for line in f:
+                    p = line.split("#", 1)[0].split()
+                    if len(p) >= 2 and p[1].isdigit():
+                        _protocols.setdefault(int(p[1]), p[0])
+        except OSError:
+            pass
+    return _protocols
 
 
 def is_group(addr):
@@ -147,7 +189,25 @@ def is_group(addr):
     return a.is_multicast or a == ipaddress.IPv4Address("255.255.255.255")
 
 
+_client = None
+source = None           # "netlink" or "pfctl": where the last snapshot came from
+
+
 def snapshot(is_local, ifaces=None):
+    """Current states, from pf over netlink; `pfctl -ss -vv` text for this poll if netlink fails
+    (it is tried again next time)."""
+    global _client, source
+    try:
+        if _client is None:
+            _client = pfnl.Client()
+        states = from_netlink(_client.states(ifaces), is_local, ifaces)
+        source = "netlink"
+        return states
+    except OSError:
+        if _client is not None:
+            _client.close()
+        _client = None
+    source = "pfctl"
     text = subprocess.run(["pfctl", "-ss", "-vv"], capture_output=True, text=True, check=True).stdout
     return parse(text, is_local, ifaces)
 

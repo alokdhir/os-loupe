@@ -66,6 +66,7 @@ class Loupe:
         self.lookups = {}
         self.devices = collections.defaultdict(dict)
         self.live = set()
+        self.state_source = None
         self.seed_names()
 
     def seed_names(self):
@@ -168,6 +169,9 @@ class Loupe:
 
     def poll(self, now):
         states = pfstate.snapshot(self.is_local, self.ifaces)
+        if pfstate.source != self.state_source:
+            self.state_source = pfstate.source
+            syslog.syslog(syslog.LOG_NOTICE, f"loupe: reading pf states via {pfstate.source}")
         self.live = set(states)
         bucket = int(now // 300 * 300)
         for d in self.tracker.update(states):
