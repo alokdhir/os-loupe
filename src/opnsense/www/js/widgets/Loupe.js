@@ -110,7 +110,7 @@ export default class Loupe extends BaseWidget {
     async onWidgetTick() {
         const d = await this.ajaxCall('/api/loupe/report/widget');
         if (!d || d.error || !d.hours) {
-            $('#loupe-w-top').html(`<a href="/ui/loupe/index/settings">${this.translations.nodata}</a>`);
+            $('#loupe-w-top').html(`<a href="/ui/loupe/#general">${this.translations.nodata}</a>`);
             return;
         }
         if (!this.dataChanged('loupe', d)) {

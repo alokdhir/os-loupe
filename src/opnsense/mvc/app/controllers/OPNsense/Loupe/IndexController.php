@@ -30,22 +30,33 @@ namespace OPNsense\Loupe;
 
 class IndexController extends \OPNsense\Base\IndexController
 {
+    /**
+     * One page with tabs (like Reporting: Unbound DNS): Devices, Lookup, Settings (General, Service names,
+     * Device names). The old addresses open the matching tab.
+     */
+    private function page($activetab)
+    {
+        $this->view->activetab = $activetab;
+        $this->view->formSettings = $this->getForm('settings');
+        $this->view->formDialogService = $this->getForm('dialogService');
+        $this->view->formDialogDevice = $this->getForm('dialogDevice');
+        $this->view->formGridServices = $this->getFormGrid('dialogService', 'grid-servicenames');
+        $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'grid-devicenames');
+        $this->view->pick('OPNsense/Loupe/index');
+    }
+
     public function indexAction()
     {
-        $this->view->formDialogDevice = $this->getForm('dialogDevice');
-        $this->view->pick('OPNsense/Loupe/devices');
+        $this->page('devices');
     }
 
     public function lookupAction()
     {
-        $this->view->pick('OPNsense/Loupe/lookup');
+        $this->page('lookup');
     }
 
     public function settingsAction()
     {
-        $this->view->formSettings = $this->getForm('settings');
-        $this->view->formDialogService = $this->getForm('dialogService');
-        $this->view->formDialogDevice = $this->getForm('dialogDevice');
-        $this->view->pick('OPNsense/Loupe/settings');
+        $this->page('general');
     }
 }
