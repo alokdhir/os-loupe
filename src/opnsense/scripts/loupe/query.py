@@ -56,16 +56,24 @@ def load():
     except (OSError, ValueError):
         conf = {}
     db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
-    return db, ServiceMap(conf.get("services")), {k.lower(): v for k, v in conf.get("devices", {}).items()}
+    return db, ServiceMap(conf.get("services")), {k.lower().replace("-", ":"): v for k, v in conf.get("devices", {}).items()}
+
+
+def keep_5m_days():
+    try:
+        with open(CONF) as f:
+            return float(json.load(f).get("retention", {}).get("days_5m", 30))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 30.0
 
 
 def window(hours):
-    """(table, start, bucket size): 5-minute detail while it is kept, hourly beyond."""
+    """(table, start, bucket size): 5-minute detail while it is kept (the retention setting), hourly beyond."""
     now = time.time()
     start = int(now - hours * 3600)
-    if hours <= 48:
-        return "flows_5m", start, 300
-    return ("flows_5m", start, 3600) if hours <= 24 * 30 else ("flows_1h", start, 86400 if hours > 24 * 90 else 3600)
+    if hours > keep_5m_days() * 24:
+        return "flows_1h", start, 86400 if hours > 24 * 90 else 3600
+    return "flows_5m", start, 300 if hours <= 48 else 3600
 
 
 def vendor_of(mac, vendor, dtype):

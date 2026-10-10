@@ -131,15 +131,29 @@ class Loupe:
                 self.poll(now)
             except (subprocess.SubprocessError, OSError) as e:
                 syslog.syslog(syslog.LOG_ERR, f"loupe: pf poll failed: {e!r}")
+        # a database or system error is logged and retried later; it must not stop the daemon
+        # (flush keeps its buffered minute until a write succeeds)
         if now >= self.next_flush:
             self.next_flush = now + self.flush_every
-            self.flush(now)
+            self.guarded("flush", self.flush, now)
         if now >= self.next_classify:
             self.next_classify = now + 600
-            self.classify(now)
+            self.guarded("networks", self.refresh_networks)
+            self.guarded("classify", self.classify, now)
         if now >= self.next_prune:
             self.next_prune = now + 3600
-            self.store.prune(now, *self.retention)
+            self.guarded("prune", self.store.prune, now, *self.retention)
+
+    @staticmethod
+    def guarded(what, fn, *args):
+        try:
+            fn(*args)
+        except Exception as e:
+            syslog.syslog(syslog.LOG_ERR, f"loupe: {what} failed: {e!r}")
+
+    def refresh_networks(self):
+        """LAN networks can change while running (e.g. a delegated IPv6 prefix arrives)."""
+        self.is_local = pfstate.local_matcher(pfstate.interface_networks(self.ifaces))
 
     def classify(self, now):
         """Store what loupe detects. Names/types set in the GUI are layered on at report time

@@ -100,6 +100,15 @@ class TestDhcp(unittest.TestCase):
         self.assertNotIn("hostname", dhcp.parse(junk))
 
 
+class TestMalformed(unittest.TestCase):
+    def test_truncated_dns_is_valueerror(self):
+        from lib import dns, mdns
+        msg = bytes.fromhex("1234 8180 0001 0001 0000 0000".replace(" ", "")) + b"\x03foo\x00\x00"   # cut short
+        with self.assertRaises(ValueError):
+            dns.parse(msg)
+        self.assertIsNone(mdns.parse(msg))
+
+
 if __name__ == "__main__":
     unittest.main()
 

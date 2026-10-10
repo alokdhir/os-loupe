@@ -133,7 +133,7 @@ class ReportController extends ApiControllerBase
     }
 
     /* a service, site or address: letters, digits, spaces and the punctuation service names use */
-    private const TEXT = '/^[a-zA-Z0-9 .:_+&()\/-]{1,253}$/';
+    private const TEXT = '/^[^\p{C}"\\\\`]{1,253}$/u';     // printable, no quotes/backslash/backtick
 
     /* the services list; its search box matches services, sites and addresses (in query.py, not row text) */
     public function searchHouseAction()

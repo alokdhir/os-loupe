@@ -52,7 +52,15 @@ def _name(msg, off, depth=0):
 
 
 def parse(msg):
-    """Return (is_response, questions[(name, type)], records[(section, name, type, ttl, value)])."""
+    """Return (is_response, questions[(name, type)], records[(section, name, type, ttl, value)]).
+    Raises ValueError on a malformed or truncated message."""
+    try:
+        return _parse(msg)
+    except struct.error as e:
+        raise ValueError(f"truncated: {e}") from None
+
+
+def _parse(msg):
     if len(msg) < 12:
         raise ValueError("short")
     _id, flags, qd, an, ns, ar = struct.unpack_from("!HHHHHH", msg, 0)

@@ -52,8 +52,12 @@ QUIC6 = "(ip6 and udp dst port 443 and ip6[6] = 17 and ip6[48] & 0x80 != 0)"
 # record. Most bulk traffic is full-size and PSH-less, so few of these reach userland.
 PL4 = "(ip[2:2] - ((ip[0]&0xf)<<2) - ((tcp[12]&0xf0)>>2))"
 CONT4 = f"(ip and tcp dst port 443 and tcp[13] & 8 != 0 and {PL4} > 0 and {PL4} < 1400 and tcp[((tcp[12]&0xf0)>>2)] & 0xfc != 0x14)"
+# the same over IPv6 (TCP straight after the fixed header, as in TLS6)
+PL6 = "(ip6[4:2] - ((ip6[52]&0xf0)>>2))"
+CONT6 = (f"(ip6 and ip6[6] = 6 and ip6[42:2] = 443 and ip6[53] & 8 != 0 and {PL6} > 0 and {PL6} < 1400"
+         " and ip6[40+((ip6[52]&0xf0)>>2)] & 0xfc != 0x14)")
 OTHER = "(udp src port 53 or udp dst port 67 or udp port 5353)"
-FILTER = f"{TLS4} or {TLS6} or {QUIC4} or {QUIC6} or {CONT4} or {OTHER}"
+FILTER = f"{TLS4} or {TLS6} or {QUIC4} or {QUIC6} or {CONT4} or {CONT6} or {OTHER}"
 PARTIAL_TTL = 3.0
 MAX_PARTIAL = 4096
 
@@ -82,7 +86,7 @@ class Capture:
                     if p is not None:
                         try:
                             self.handle(p)
-                        except (ValueError, IndexError, UnicodeError) as e:
+                        except Exception as e:      # one bad packet from the LAN must never stop capture
                             self.emit({"ev": "error", "ts": ts, "err": repr(e), "src": p.src, "sport": p.sport})
 
     def emit_tls(self, p, h, joined=False):

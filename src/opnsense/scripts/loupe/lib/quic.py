@@ -195,6 +195,7 @@ class Reassembler:
             if hello and (hello.sni or len(stream) >= need):
                 del self.pending[key]
                 self.done[key] = now
+                self._expire(now)
                 return hello
         self._expire(now)
         return None

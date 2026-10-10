@@ -16,7 +16,7 @@
     "devices": {
 {% if helpers.exists('OPNsense.Loupe.devices.device') %}
 {%   for dev in helpers.toList('OPNsense.Loupe.devices.device') %}
-        {{ dev.mac | lower | tojson }}: {"name": {{ dev.name | default('') | tojson }}, "type": {{ dev.type | default('') | tojson }}}{{ "," if not loop.last }}
+        {{ dev.mac | lower | replace('-', ':') | tojson }}: {"name": {{ dev.name | default('') | tojson }}, "type": {{ dev.type | default('') | tojson }}}{{ "," if not loop.last }}
 {%   endfor %}
 {% endif %}
     }

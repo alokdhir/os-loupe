@@ -107,7 +107,7 @@ class SettingsController extends ApiMutableModelControllerBase
         $devices = $this->getModel()->devices->device;
         $found = null;
         foreach ($devices->iterateItems() as $uuid => $dev) {
-            if (strtolower((string)$dev->mac) === $mac) {
+            if (str_replace('-', ':', strtolower((string)$dev->mac)) === $mac) {
                 $found = $uuid;
                 break;
             }

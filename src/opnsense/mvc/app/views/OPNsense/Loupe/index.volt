@@ -43,7 +43,9 @@ POSSIBILITY OF SUCH DAMAGE.
         let hours = parseFloat(localStorage.getItem('loupe.hours') || '24');
         let chart = null, current = null, q = '';
         const grids = {};
-        const esc = s => $('<span>').text(s == null ? '' : String(s)).html();
+        /* values from the network (host names, vendor classes) also land in attributes: escape quotes too */
+        const ESC = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
+        const esc = s => (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ESC[c]);
         const ago = ts => ts ? moment(ts * 1000).fromNow() : '';
         const dash = '<span class="text-muted">&mdash;</span>';
         const dialog = '{{ formGridOverrides['edit_dialog_id'] }}';

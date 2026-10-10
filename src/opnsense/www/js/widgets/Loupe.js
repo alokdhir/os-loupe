@@ -71,7 +71,9 @@ export default class Loupe extends BaseWidget {
     }
 
     static esc(s) {
-        return $('<span>').text(s == null ? '' : String(s)).html();
+        // also used inside attributes, so quotes are escaped too
+        return (s == null ? '' : String(s)).replace(/[&<>"']/g,
+            c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
     }
 
     // one entry: name (and a grey second line) on the left, a value on the right; long text gets "..."
