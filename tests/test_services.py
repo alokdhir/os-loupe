@@ -61,6 +61,19 @@ class TestServices(unittest.TestCase):
         self.assertEqual(m.service("www.example.org", "198.51.100.1", 443, "tcp"), "Example")
         self.assertEqual(m.service("vps.amazonaws.com", "198.51.100.2", 443, "tcp"), "AWS")
 
+    def test_user_kinds(self):
+        m = services.ServiceMap([{"kind": "port", "pattern": "tcp/8443", "name": "Admin UI"},
+                                 {"kind": "port", "pattern": "udp/51820", "name": "Home VPN"},
+                                 {"kind": "vpn", "pattern": "myvpn.example", "name": "MyVPN"},
+                                 {"kind": "address", "pattern": "198.51.100.0/24", "name": "Lab"},
+                                 {"kind": "domain", "pattern": "example.net", "name": "Example"}])
+        self.assertEqual(m.service("", "203.0.113.9", 8443, "tcp"), "Admin UI")
+        self.assertEqual(m.service("", "203.0.113.9", 51820, "udp"), "Home VPN")                # beats the shipped port
+        self.assertEqual(m.service("", "198.51.100.3", 22, "tcp"), "Lab")
+        self.assertEqual(m.service("cdn.example.net", "203.0.113.9", 443, "tcp"), "Example")
+        self.assertEqual(m.vpn_provider("api.myvpn.example"), "MyVPN")
+        self.assertEqual(m.vpn_provider("api.nordvpn.com"), "NordVPN")
+
     def test_vpn_provider(self):
         self.assertEqual(services.vpn_provider("api.nordvpn.com"), "NordVPN")
         self.assertEqual(services.vpn_provider("nordvpn.com."), "NordVPN")

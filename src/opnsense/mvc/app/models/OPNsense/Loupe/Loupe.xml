@@ -36,10 +36,19 @@
         </general>
         <services>
             <service type="ArrayField">
+                <kind type="OptionField">
+                    <Default>domain</Default>
+                    <OptionValues>
+                        <domain>Domain</domain>
+                        <address>Address or range</address>
+                        <port>Port</port>
+                        <vpn>VPN app domain</vpn>
+                    </OptionValues>
+                </kind>
                 <suffix type="TextField">
                     <Required>Y</Required>
                     <Mask>/^[a-zA-Z0-9.\-_:\/]+$/</Mask>
-                    <ValidationMessage>Enter a domain (example.com), an IP address or a range (203.0.113.0/24).</ValidationMessage>
+                    <ValidationMessage>Enter a domain (example.com), an address or range (203.0.113.0/24) or a port (tcp/8443).</ValidationMessage>
                 </suffix>
                 <name type="TextField">
                     <Required>Y</Required>

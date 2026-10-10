@@ -37,9 +37,16 @@ class SettingsController extends ApiMutableModelControllerBase
     protected static $internalModelName = 'loupe';
     protected static $internalModelClass = 'OPNsense\Loupe\Loupe';
 
+    private const SERVICE_KINDS = ['domain' => 'Domain', 'address' => 'Address or range', 'port' => 'Port',
+                                   'vpn' => 'VPN app domain'];
+
     public function searchServiceAction()
     {
-        return $this->searchBase('services.service', ['suffix', 'name'], 'suffix');
+        $result = $this->searchBase('services.service', ['kind', 'suffix', 'name'], 'suffix');
+        foreach ($result['rows'] as &$row) {
+            $row['kind'] = gettext(self::SERVICE_KINDS[$row['kind']] ?? self::SERVICE_KINDS['domain']);
+        }
+        return $result;
     }
 
     public function getServiceAction($uuid = null)
@@ -48,26 +55,33 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /**
-     * A service entry is a domain, or an IP address / range: refuse addresses that don't parse
-     * (e.g. 300.1.1.1 or 10.0.0.0/40) while the dialog can still show it.
+     * Check a service entry for its kind while the dialog can still show what is wrong: a domain, a valid
+     * IP address or range, or tcp|udp/port.
      */
     private function checkService()
     {
         $svc = $this->request->getPost('service');
+        $kind = is_array($svc) ? (string)($svc['kind'] ?? 'domain') : 'domain';
         $text = is_array($svc) ? trim((string)($svc['suffix'] ?? '')) : '';
-        $looksLikeAddress = strpos($text, '/') !== false || strpos($text, ':') !== false
-            || preg_match('/^[0-9.]+$/', $text);
-        if ($text === '' || !$looksLikeAddress) {
-            return null;
+        if ($text === '') {
+            return null;                        // the model reports the empty field
         }
-        [$ip, $bits] = array_pad(explode('/', $text, 2), 2, null);
-        $v6 = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
-        $ok = filter_var($ip, FILTER_VALIDATE_IP) !== false
-            && ($bits === null || (ctype_digit($bits) && (int)$bits <= ($v6 ? 128 : 32)));
-        if (!$ok) {
-            return ['result' => 'failed', 'validations' => ['service.suffix' => gettext('Enter a valid IP address or range, e.g. 203.0.113.0/24.')]];
+        $error = null;
+        if ($kind === 'address') {
+            [$ip, $bits] = array_pad(explode('/', $text, 2), 2, null);
+            $v6 = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
+            if (filter_var($ip, FILTER_VALIDATE_IP) === false
+                || ($bits !== null && !(ctype_digit($bits) && (int)$bits <= ($v6 ? 128 : 32)))) {
+                $error = gettext('Enter a valid IP address or range, e.g. 192.0.2.10 or 203.0.113.0/24.');
+            }
+        } elseif ($kind === 'port') {
+            if (!preg_match('/^(tcp|udp)\/([0-9]{1,5})$/i', $text, $m) || (int)$m[2] < 1 || (int)$m[2] > 65535) {
+                $error = gettext('Enter a protocol and port, e.g. tcp/8443 or udp/51820.');
+            }
+        } elseif (!preg_match('/^(?=.{1,253}$)([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.)*[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.?$/i', $text)) {
+            $error = gettext('Enter a domain, e.g. example.com.');
         }
-        return null;
+        return $error === null ? null : ['result' => 'failed', 'validations' => ['service.suffix' => $error]];
     }
 
     public function addServiceAction()

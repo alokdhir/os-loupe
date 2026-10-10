@@ -42,7 +42,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from lib.devid import is_private, rules  # noqa: E402
-from lib.services import PORTS, ServiceMap, vpn_provider  # noqa: E402
+from lib.services import PORTS, ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
 CONF = "/usr/local/etc/loupe.json"
@@ -122,7 +122,7 @@ class Labels:
         counts = collections.defaultdict(collections.Counter)
         for ip, name, n in db.execute("SELECT ip, name, sum(count) FROM lookups WHERE day >= ? AND last_seen >= ? "
                                       "GROUP BY ip, name", (start - 86400, start - 86400)):
-            p = vpn_provider(name)
+            p = svc.vpn_provider(name)
             if p:
                 counts[ip][p] += n
         self.provider = {ip: c.most_common(1)[0][0] for ip, c in counts.items()}

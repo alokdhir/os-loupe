@@ -58,17 +58,39 @@ def as_network(text):
         return None
 
 
+def as_port(text):
+    """'tcp/8443' -> ('tcp', 8443), else None."""
+    proto, _, port = text.strip().lower().partition("/")
+    if proto in ("tcp", "udp") and port.isdigit() and 0 < int(port) < 65536:
+        return proto, int(port)
+    return None
+
+
 class ServiceMap:
     def __init__(self, extra=None):
-        """`extra`: the user's names - keys are domains, or IP addresses / ranges (checked before anything else)."""
+        """`extra`: the user's entries, the same kinds as the shipped file - a list of {"kind": domain | address |
+        port | vpn, "pattern", "name"} (an older {pattern: name} dict means domains and addresses). Addresses are
+        checked before any name; the user's domains, ports and VPN app domains win over the shipped ones."""
         self.suffixes = dict(SUFFIXES)
+        self.ports = dict(PORTS)
+        self.vpn = dict(VPN_PROVIDERS)
         mine = []
-        for k, v in (extra or {}).items():
-            net = as_network(k)
-            if net is not None:
-                mine.append((net, v))
-            else:
-                self.suffixes[k.lower().strip(".")] = v
+        if isinstance(extra, dict):
+            extra = [{"kind": "", "pattern": k, "name": v} for k, v in extra.items()]
+        for e in extra or []:
+            kind, pattern, name = e.get("kind") or "", str(e.get("pattern") or "").strip(), e.get("name") or ""
+            if not pattern or not name:
+                continue
+            if kind == "port":
+                p = as_port(pattern)
+                if p:
+                    self.ports[p] = name
+            elif kind == "vpn":
+                self.vpn[pattern.lower().strip(".")] = name
+            elif kind in ("address", "") and as_network(pattern) is not None:
+                mine.append((as_network(pattern), name))
+            elif kind in ("domain", ""):
+                self.suffixes[pattern.lower().strip(".")] = name
         self.mine = sorted(mine, key=lambda x: -x[0].prefixlen)       # most specific first
         self.ranges = [(ipaddress.ip_network(n), s) for n, s in RANGES]
         self._cache = {}
@@ -115,4 +137,13 @@ class ServiceMap:
         owner = self.by_address(server)
         if owner == "Apple" and proto == "udp" and port == 443:
             return "iCloud Private Relay"   # QUIC to Apple without a name we could see
-        return owner or PORTS.get((proto, port))
+        return owner or self.ports.get((proto, port))
+
+    def vpn_provider(self, name):
+        """The VPN provider whose app uses this domain (to name the provider behind a bare tunnel)."""
+        parts = (name or "").lower().rstrip(".").split(".")
+        for i in range(len(parts) - 1):
+            p = self.vpn.get(".".join(parts[i:]))
+            if p:
+                return p
+        return None
