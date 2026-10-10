@@ -101,7 +101,7 @@ Standard OPNsense MVC: one page with tabs (Devices, Services, Settings), UIBootg
 | **pflog** | Logs rule matches, not byte counts. |
 | **Suricata EVE flow records** | Heavy to run just for accounting; Suricata is optional and often off. |
 | **Zenarmor / ntopng** | Broader products with their own engines; Loupe aims to be small and native. |
-| **DuckDB instead of SQLite** | Built for large analytic scans; no concurrent reader while a writer has the file open, a large extra package, and Loupe's data is small. |
+| **DuckDB instead of SQLite** | Built for large analytic scans (OPNsense ships it for Unbound reporting); but no other process can read the file while loupd writes to it, and Loupe's data is small. |
 
 ## Footprint
 
