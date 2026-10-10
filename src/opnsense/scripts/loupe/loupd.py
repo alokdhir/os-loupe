@@ -184,7 +184,7 @@ class Loupe:
                 d.setdefault("ip", ip)
                 d["ts"] = max(d.get("ts", 0), now)
         devices = {m: d for m, d in self.devices.items() if "ts" in d}
-        self.store.write(self.flows, self.lookups, devices)
+        self.store.write(self.flows, self.lookups, devices, now)
         self.flows, self.lookups = {}, {}
         self.devices = collections.defaultdict(dict)
         self.names.expire(self.live, now)

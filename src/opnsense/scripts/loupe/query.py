@@ -147,7 +147,7 @@ def cmd_devices(hours):
     rows = {}
     tops = collections.defaultdict(collections.Counter)
     for ip, mac, name, server, port, proto, up, down, conns, last in db.execute(
-            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(bucket) FROM {table} "
+            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(max(bucket), max(last)) FROM {table} "
             f"WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
         key = mac or ip
         r = rows.get(key)
@@ -191,8 +191,8 @@ def cmd_device(arg, hours):
     sites = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "last": 0, "service": "", "servers": set()})
     ports = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0})
     timeline = collections.defaultdict(lambda: [0, 0])
-    for bucket, ip, name, server, port, proto, inbound, up, down, conns in db.execute(
-            f"SELECT bucket, ip, name, server, port, proto, inbound, up, down, conns FROM {table} "
+    for bucket, last, ip, name, server, port, proto, inbound, up, down, conns in db.execute(
+            f"SELECT bucket, last, ip, name, server, port, proto, inbound, up, down, conns FROM {table} "
             f"WHERE {col} = ? AND bucket >= ?", (val, start)):
         s = lab.service(ip, name, server, port, proto) or "Other"
         sv = services[s]
@@ -204,7 +204,7 @@ def cmd_device(arg, hours):
         site["down"] += down
         site["up"] += up
         site["conns"] += conns
-        site["last"] = max(site["last"], bucket)
+        site["last"] = max(site["last"], bucket, last)
         site["service"] = s
         site["servers"].add(server)
         p = ports[f"{proto}/{port}" + (" in" if inbound else "")]
@@ -245,7 +245,7 @@ def cmd_sites(hours, text=""):
     lab = Labels(db, svc, table, start)
     rows = {}
     for ip, mac, name, server, port, proto, up, down, conns, last in db.execute(
-            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(bucket) FROM {table} "
+            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(max(bucket), max(last)) FROM {table} "
             f"WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
         s = lab.service(ip, name, server, port, proto)
         hit = bool(text) and (matches(text, name, s) or server == text)
@@ -281,7 +281,7 @@ def cmd_lookup(text, hours, exact=False):
     text = text.strip().lower()
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
     for ip, mac, name, server, port, proto, up, down, conns, first, last in db.execute(
-            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), min(bucket), max(bucket) "
+            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), min(bucket), max(max(bucket), max(last)) "
             f"FROM {table} WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
         s = lab.service(ip, name, server, port, proto) or ""
         if exact:

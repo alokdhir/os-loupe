@@ -29,6 +29,7 @@ Both resolutions are written on every flush (no rollup job); old rows are pruned
 import json
 import os
 import sqlite3
+import time
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS flows_5m (
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS flows_5m (
     down INTEGER NOT NULL DEFAULT 0,
     pkts INTEGER NOT NULL DEFAULT 0,
     conns INTEGER NOT NULL DEFAULT 0,
+    last INTEGER NOT NULL DEFAULT 0,    -- when loupd last added to this row (0: before this was kept)
     PRIMARY KEY (bucket, ip, server, port, proto, name)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS flows_5m_ip ON flows_5m (ip, bucket);
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS flows_1h (
     down INTEGER NOT NULL DEFAULT 0,
     pkts INTEGER NOT NULL DEFAULT 0,
     conns INTEGER NOT NULL DEFAULT 0,
+    last INTEGER NOT NULL DEFAULT 0,    -- when loupd last added to this row (0: before this was kept)
     PRIMARY KEY (bucket, ip, server, port, proto, name)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS flows_1h_ip ON flows_1h (ip, bucket);
@@ -99,12 +102,13 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 UPSERT = """
-INSERT INTO {t} (bucket, ip, mac, server, port, proto, name, source, inbound, up, down, pkts, conns)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO {t} (bucket, ip, mac, server, port, proto, name, source, inbound, up, down, pkts, conns, last)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (bucket, ip, server, port, proto, name) DO UPDATE SET
     mac = CASE WHEN excluded.mac != '' THEN excluded.mac ELSE mac END,
     up = up + excluded.up, down = down + excluded.down,
-    pkts = pkts + excluded.pkts, conns = conns + excluded.conns
+    pkts = pkts + excluded.pkts, conns = conns + excluded.conns,
+    last = max(last, excluded.last)
 """
 
 
@@ -119,15 +123,19 @@ class Store:
         for col in ("name", "model"):      # added after the first release
             if col not in cols:
                 self.db.execute(f"ALTER TABLE devices ADD COLUMN {col} TEXT")
+        for table in ("flows_5m", "flows_1h"):
+            if "last" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
+                self.db.execute(f"ALTER TABLE {table} ADD COLUMN last INTEGER NOT NULL DEFAULT 0")
 
-    def write(self, flows, lookups, devices):
+    def write(self, flows, lookups, devices, now=None):
         """flows: {(bucket5m, ip, server, port, proto, name): [mac, source, inbound, up, down, pkts, conns]}
         lookups: {(day, ip, name, source): [count, first, last]}
         devices: {mac: {"ip", "ts", "hostname"?, "info"?: {...}}}"""
         db = self.db
         db.execute("BEGIN")
         try:
-            rows = [(b, ip, v[0], srv, port, proto, name, v[1], v[2], v[3], v[4], v[5], v[6])
+            now = int(now or time.time())
+            rows = [(b, ip, v[0], srv, port, proto, name, v[1], v[2], v[3], v[4], v[5], v[6], now)
                     for (b, ip, srv, port, proto, name), v in flows.items()]
             db.executemany(UPSERT.format(t="flows_5m"), rows)
             db.executemany(UPSERT.format(t="flows_1h"), [(r[0] - r[0] % 3600, *r[1:]) for r in rows])

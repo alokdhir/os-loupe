@@ -77,6 +77,11 @@ class TestStore(unittest.TestCase):
             self.assertEqual(db.execute("SELECT count, first_seen, last_seen FROM lookups").fetchone(), (3, 5, 9))
             row = db.execute("SELECT ip, hostname, info, first_seen, last_seen FROM devices").fetchone()
             self.assertEqual(row, ("10.9.1.20", "box", '{"mdns_models": ["model=X", "model=Y"]}', 5, 9))
+            k3 = (3600 + 900, *k[1:])
+            s.write({k3: ["", "sni", 0, 1, 1, 1, 0]}, {}, {}, now=4000)
+            s.write({k3: ["", "sni", 0, 1, 1, 1, 0]}, {}, {}, now=3990)      # never goes back
+            self.assertEqual(db.execute("SELECT last FROM flows_5m WHERE bucket = ?", (k3[0],)).fetchone(), (4000,))
+            self.assertGreater(db.execute("SELECT last FROM flows_5m WHERE bucket = ?", (k2[0],)).fetchone()[0], 4000)
             s.prune(3600 + 31 * 86400)
             self.assertEqual(db.execute("SELECT count(*) FROM flows_5m").fetchone(), (0,))
             self.assertEqual(db.execute("SELECT count(*) FROM flows_1h").fetchone(), (1,))
