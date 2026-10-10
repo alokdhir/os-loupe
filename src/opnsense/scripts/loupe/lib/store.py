@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS devices (
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
-KEEP_1M = 86400          # seconds of 1-minute detail
+KEEP_1M = 4 * 3600       # seconds of 1-minute detail (the short report periods use up to 3 hours)
 
 UPSERT = """
 INSERT INTO {t} (bucket, ip, mac, server, port, proto, name, source, inbound, up, down, pkts, conns, last)

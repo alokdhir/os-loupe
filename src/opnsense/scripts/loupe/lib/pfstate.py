@@ -38,7 +38,9 @@ UDP >= 30 s (udp.single), so every state is seen with its final counters.
 """
 import ipaddress
 import re
+import struct
 import subprocess
+import time
 
 from . import netif, pfnl
 from typing import NamedTuple
@@ -203,7 +205,7 @@ def snapshot(is_local, ifaces=None):
         states = from_netlink(_client.states(ifaces), is_local, ifaces)
         source = "netlink"
         return states
-    except OSError:
+    except (OSError, ValueError, KeyError, IndexError, struct.error):    # incl. replies we don't understand
         if _client is not None:
             _client.close()
         _client = None
@@ -249,8 +251,14 @@ class Tracker:
     def __init__(self, fresh=15):
         self.prev = None
         self.fresh = fresh
+        self.last = None
 
-    def update(self, states):
+    def update(self, states, now=None):
+        """`now` (monotonic seconds): a state first seen is new if it is younger than the time since the
+        last read (it began in between, even after a gap in polling); an older one is a baseline."""
+        now = time.monotonic() if now is None else now
+        gap = self.fresh if self.last is None else max(self.fresh, now - self.last) + self.fresh
+        self.last = now
         deltas = []
         first = self.prev is None
         prev = self.prev or {}
@@ -259,7 +267,7 @@ class Tracker:
             if old is not None and (st.up < old.up or st.down < old.down):
                 old = None   # id reused / counters reset
             if old is None:
-                if st.age > (self.fresh if first else 3 * self.fresh):
+                if st.age > (self.fresh if first else gap):
                     continue
                 d = Delta(st, st.up, st.down, st.pkts_up, st.pkts_down, True)
             else:

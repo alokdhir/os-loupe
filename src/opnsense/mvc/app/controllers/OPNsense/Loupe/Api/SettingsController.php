@@ -128,6 +128,13 @@ class SettingsController extends ApiMutableModelControllerBase
         $rule = $this->request->getPost('rule');
         $field = is_array($rule) ? ($rule['field'] ?? '') : '';
         $pattern = is_array($rule) ? (string)($rule['pattern'] ?? '') : '';
+        if ($field === 'mac_prefix' && $pattern !== '') {
+            foreach (explode(',', $pattern) as $prefix) {
+                if (!preg_match('/^[0-9a-f]{2}([:.-]?[0-9a-f]{2}){0,5}$/i', trim($prefix))) {
+                    return ['result' => 'failed', 'validations' => ['rule.pattern' => gettext('Enter MAC prefixes like 52:54:00, separated by commas.')]];
+                }
+            }
+        }
         if (in_array($field, ['hostname', 'mdns_model', 'dhcp_vendor']) && $pattern !== '') {
             if (@preg_match('/' . str_replace('/', '\\/', $pattern) . '/u', '') === false) {
                 return ['result' => 'failed', 'validations' => ['rule.pattern' => gettext('This is not a valid regular expression.')]];

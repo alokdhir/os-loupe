@@ -198,7 +198,7 @@ class Loupe:
             v[6] += d.new
 
     def flush(self, now):
-        self.refresh_macs()
+        self.guarded("neighbour table", self.refresh_macs)     # best effort: rows get their MAC next time
         for (_b, ip, *_rest), v in self.flows.items():
             if not v[0]:
                 v[0] = self.ip_mac.get(ip, "")

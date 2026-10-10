@@ -65,11 +65,10 @@ def window(hours):
     5-minute retention is set to)."""
     now = time.time()
     start = int(now - hours * 3600)
-    if hours <= 3:
-        return "flows_1m", start, 60
-    if hours <= 48:
-        return "flows_5m", start, 300
-    return "flows_1h", start, 86400 if hours > 24 * 90 else 3600
+    table, step = ("flows_1m", 60) if hours <= 3 else ("flows_5m", 300) if hours <= 48 else \
+        ("flows_1h", 86400 if hours > 24 * 90 else 3600)
+    bucket = 60 if table == "flows_1m" else 300 if table == "flows_5m" else 3600
+    return table, start - start % bucket, step      # whole buckets: the first one isn't cut short
 
 
 def vendor_of(mac, vendor, dtype):

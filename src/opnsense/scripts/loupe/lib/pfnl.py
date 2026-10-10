@@ -63,6 +63,7 @@ class Client:
     def __init__(self):
         self.sock = socket.socket(AF_NETLINK, socket.SOCK_RAW, NETLINK_GENERIC)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8 << 20)
+        self.sock.settimeout(5)          # a lost reply must not hang the daemon (raises OSError: fallback)
         self.seq = 0
         self.family = None
 

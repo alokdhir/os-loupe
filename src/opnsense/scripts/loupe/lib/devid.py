@@ -112,7 +112,16 @@ def _split_lists(r):
         return r
     when = {f: ([x.strip() for x in w.split(",") if x.strip()] if f in LISTABLE and isinstance(w, str) and "," in w else w)
             for f, w in r["when"].items()}
+    if "mac_prefix" in when:
+        prefixes = when["mac_prefix"] if isinstance(when["mac_prefix"], list) else [when["mac_prefix"]]
+        when["mac_prefix"] = [mac_prefix(p) for p in prefixes]
     return {**r, "when": when}
+
+
+def mac_prefix(text):
+    """52-54-00, 525400, 52:54:00 -> 52:54:00 (how MACs are compared)."""
+    hexdigits = re.sub(r"[^0-9a-fA-F]", "", text).lower()
+    return ":".join(hexdigits[i:i + 2] for i in range(0, len(hexdigits), 2))
 
 
 def set_user_rules(user):
@@ -313,7 +322,7 @@ def _isc_leases(text):
         body = block.group(1)
         mac = re.search(r"hardware ethernet ([0-9a-fA-F:]{17});", body)
         name = re.search(r'client-hostname "([^"]+)";', body)
-        if mac and name and "binding state free" not in body:
+        if mac and name and not re.search(r"^\s*binding state free;", body, re.M):   # not "next binding state"
             out[mac.group(1).lower()] = name.group(1)
     return out
 
@@ -359,12 +368,15 @@ def _kea_reservations(text):
 
 
 def _isc_hosts(text):
-    """host NAME { hardware ethernet MAC; fixed-address IP; } in dhcpd.conf."""
+    """host LABEL { ... fixed-address IP; option host-name "NAME"; } in dhcpd.conf. OPNsense labels the blocks
+    s_<interface>_<n>; the name is in the host-name option."""
     out = {}
     for block in re.finditer(r"host (\S+) \{(.*?)\}", text, re.S):
         ip = re.search(r"fixed-address ([0-9.]+);", block.group(2))
-        if ip:
-            out.setdefault(ip.group(1), block.group(1).strip('"'))
+        name = re.search(r'option host-name "([^"]+)";', block.group(2))
+        label = block.group(1).strip('"')
+        if ip and (name or not re.match(r"^s_\w+_\d+$", label)):
+            out.setdefault(ip.group(1), name.group(1) if name else label)
     return out
 
 

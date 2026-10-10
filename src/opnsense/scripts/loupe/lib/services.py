@@ -41,15 +41,6 @@ PORTS = {(proto, port): name for proto, port, name in _data["ports"]}   # (proto
 VPN_PROVIDERS = _data["vpn_providers"]                              # domains a VPN app uses -> provider
 
 
-def vpn_provider(name):
-    parts = (name or "").lower().rstrip(".").split(".")
-    for i in range(len(parts) - 1):
-        p = VPN_PROVIDERS.get(".".join(parts[i:]))
-        if p:
-            return p
-    return None
-
-
 def as_network(text):
     """An IP address or range from the settings, or None for a domain."""
     try:

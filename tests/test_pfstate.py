@@ -112,6 +112,13 @@ class TestTrackerUnseen(unittest.TestCase):
         deltas = t.update({old.key: old, new.key: new})
         self.assertEqual([(d.state.key, d.up, d.down) for d in deltas], [(("2", "c"), 100, 200)])
 
+    def test_download_started_during_a_gap_counts(self):
+        t = pfstate.Tracker(fresh=10)
+        t.update({}, now=1000)
+        st = pfstate.State(("3", "c"), "bridge0", "tcp", "10.9.1.20", 51001, "203.0.113.10", 443, True,
+                           1000, 2_000_000_000, 10, 10, 60)
+        self.assertEqual([d.down for d in t.update({st.key: st}, now=1070)], [2_000_000_000])      # 70 s gap, 60 s old
+
 
 class TestLargeTable(unittest.TestCase):
     def test_synthetic_dump(self):

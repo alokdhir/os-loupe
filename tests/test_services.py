@@ -75,10 +75,10 @@ class TestServices(unittest.TestCase):
         self.assertEqual(m.vpn_provider("api.nordvpn.com"), "NordVPN")
 
     def test_vpn_provider(self):
-        self.assertEqual(services.vpn_provider("api.nordvpn.com"), "NordVPN")
-        self.assertEqual(services.vpn_provider("nordvpn.com."), "NordVPN")
-        self.assertEqual(services.vpn_provider("notnordvpn.com"), None)
-        self.assertEqual(services.vpn_provider(""), None)
+        self.assertEqual(services.ServiceMap().vpn_provider("api.nordvpn.com"), "NordVPN")
+        self.assertEqual(services.ServiceMap().vpn_provider("nordvpn.com."), "NordVPN")
+        self.assertEqual(services.ServiceMap().vpn_provider("notnordvpn.com"), None)
+        self.assertEqual(services.ServiceMap().vpn_provider(""), None)
 
 
 class TestVpnLabels(unittest.TestCase):

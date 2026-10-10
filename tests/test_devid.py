@@ -130,6 +130,8 @@ ISC_LEASES = """# The format of this file is documented in the dhcpd.leases(5) m
 lease 10.9.1.30 {
   starts 4 2026/10/08 12:00:00;
   binding state active;
+  next binding state free;
+  rewind binding state free;
   hardware ethernet ac:00:00:00:00:04;
   client-hostname "printer";
 }
@@ -148,6 +150,15 @@ ISC_CONF = """host nas {
   hardware ethernet ac:00:00:00:00:07;
   fixed-address 10.9.10.20;
 }
+host s_lan_0 {
+  hardware ethernet ac:00:00:00:00:08;
+  fixed-address 10.9.10.21;
+  option host-name "printer";
+}
+host s_lan_1 {
+  hardware ethernet ac:00:00:00:00:09;
+  fixed-address 10.9.10.22;
+}
 """
 
 
@@ -156,7 +167,9 @@ class TestDhcpServers(unittest.TestCase):
         self.assertEqual(devid._kea_leases(KEA_CSV), {"ac:00:00:00:00:01": "laptop"})
         self.assertEqual(devid._isc_leases(ISC_LEASES), {"ac:00:00:00:00:04": "printer"})
         self.assertEqual(devid._kea_reservations(KEA_CONF), {"10.9.10.10": "server"})
-        self.assertEqual(devid._isc_hosts(ISC_CONF), {"10.9.10.20": "nas"})
+        self.assertEqual(devid._isc_hosts(ISC_CONF), {"10.9.10.20": "nas", "10.9.10.21": "printer"})
+        self.assertEqual(devid.mac_prefix("52-54-00"), "52:54:00")
+        self.assertEqual(devid.mac_prefix("525400"), "52:54:00")
 
     def test_only_servers_in_use(self):
         import os
