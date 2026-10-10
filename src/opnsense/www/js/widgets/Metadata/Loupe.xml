@@ -1,6 +1,7 @@
 <metadata>
     <loupe>
         <filename>Loupe.js</filename>
+        <link>/ui/loupe/</link>
         <endpoints>
             <endpoint>/api/loupe/report/widget</endpoint>
         </endpoints>
