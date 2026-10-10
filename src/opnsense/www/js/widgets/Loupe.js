@@ -31,15 +31,24 @@ export default class Loupe extends BaseWidget {
     }
 
     getGridOptions() {
-        return {sizeToContent: 650};
+        return {sizeToContent: 650, w: 4, minW: 2};
     }
 
     getMarkup() {
         return $(`
             <div class="loupe-widget" style="padding: 0 10px 10px">
-                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 5px">
+                <style>
+                    .loupe-widget .lw-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; margin-top: 5px; }
+                    .loupe-widget .lw-title { font-weight: bold; font-size: 12px; margin: 10px 0 2px; }
+                    .loupe-widget .lw-row { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; border-top: 1px solid rgba(128,128,128,0.2); font-size: 12px; }
+                    .loupe-widget .lw-main { flex: 1; min-width: 0; }
+                    .loupe-widget .lw-main > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .loupe-widget .lw-sub { color: #888; font-size: 11px; }
+                    .loupe-widget .lw-val { white-space: nowrap; text-align: right; }
+                </style>
+                <div class="lw-head">
                     <strong>${this.translations.last24}</strong>
-                    <span id="loupe-w-total" style="font-size: 12px"></span>
+                    <span id="loupe-w-total" style="font-size: 12px; white-space: nowrap"></span>
                 </div>
                 <div class="canvas-container-noaspectratio" style="height: 60px; margin: 4px 0 10px">
                     <canvas id="loupe-w-spark"></canvas>
@@ -71,8 +80,13 @@ export default class Loupe extends BaseWidget {
     }
 
     section(title, rows) {
-        return `<div style="margin-top: 8px"><strong style="font-size: 12px">${title}</strong>
-            <table class="table table-condensed" style="margin: 2px 0 0; font-size: 12px"><tbody>${rows}</tbody></table></div>`;
+        return `<div class="lw-title">${title}</div>${rows}`;
+    }
+
+    // one entry: name (and a grey second line) on the left, a value on the right; long text gets "..."
+    row(main, sub, val) {
+        return `<div class="lw-row"><div class="lw-main"><div>${main}</div>${sub ? `<div class="lw-sub">${sub}</div>` : ''}</div>`
+            + (val ? `<div class="lw-val">${val}</div>` : '') + `</div>`;
     }
 
     link(r) {
@@ -114,24 +128,25 @@ export default class Loupe extends BaseWidget {
         this.chart.data.datasets[1].data = d.hours.map(h => h[2]);
         this.chart.update();
 
-        $('#loupe-w-top').html(this.section(this.translations.top, d.top.map(r =>
-            `<tr><td>${this.link(r)} <span class="text-muted">${Loupe.esc(r.model || r.type || '')}</span></td>
-                 <td class="text-muted">${Loupe.esc((r.top || [])[0] || '')}</td>
-                 <td style="text-align: right; white-space: nowrap">↓ ${Loupe.bytes(r.down)}</td></tr>`).join('')));
+        $('#loupe-w-top').html(this.section(this.translations.top, d.top.map(r => this.row(
+            this.link(r),
+            Loupe.esc([r.model || r.type, (r.top || [])[0]].filter(Boolean).join(' · ')),
+            `↓ ${Loupe.bytes(r.down)}`)).join('')));
 
-        $('#loupe-w-now').html(this.section(this.translations.now, d.now.length ? d.now.map(r =>
-            `<tr><td>${this.link(r)}</td><td class="text-muted">${Loupe.esc(r.service)}</td>
-                 <td style="text-align: right; white-space: nowrap">↓ ${Loupe.rate(r.down_rate)} ↑ ${Loupe.rate(r.up_rate)}</td></tr>`).join('')
-            : `<tr><td class="text-muted">${this.translations.quiet}</td></tr>`));
+        $('#loupe-w-now').html(this.section(this.translations.now, d.now.length ? d.now.map(r => this.row(
+            this.link(r),
+            Loupe.esc(r.service),
+            `↓ ${Loupe.rate(r.down_rate)}<div class="lw-sub">↑ ${Loupe.rate(r.up_rate)}</div>`)).join('')
+            : this.row(`<span class="lw-sub">${this.translations.quiet}</span>`)));
 
         let newRows;
         if (d.since && Date.now() / 1000 - d.since < 86400) {
-            newRows = `<tr><td class="text-muted">${this.translations.learning} ${new Date(d.since * 1000).toLocaleString()}</td></tr>`;
+            newRows = this.row(`<span class="lw-sub" style="white-space: normal">${this.translations.learning} ${new Date(d.since * 1000).toLocaleString()}</span>`);
         } else if (d.new.length) {
-            newRows = d.new.map(r => `<tr><td>${this.link(r)} <span class="text-muted">${Loupe.esc(r.type || r.vendor || '')}</span></td>
-                <td style="text-align: right" class="text-muted">${new Date(r.first_seen * 1000).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</td></tr>`).join('');
+            newRows = d.new.map(r => this.row(this.link(r), Loupe.esc(r.model || r.type || r.vendor || ''),
+                `<span class="lw-sub">${new Date(r.first_seen * 1000).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</span>`)).join('');
         } else {
-            newRows = `<tr><td class="text-muted">${this.translations.nonew}</td></tr>`;
+            newRows = this.row(`<span class="lw-sub">${this.translations.nonew}</span>`);
         }
         $('#loupe-w-new').html(this.section(this.translations.new + (d.new_count > d.new.length ? ` (${d.new_count})` : ''), newRows));
     }
