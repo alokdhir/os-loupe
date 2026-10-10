@@ -103,10 +103,22 @@ def rules():
     return _rules
 
 
+LISTABLE = ("mac_prefix", "vendor", "mdns_service", "talks_to")     # a comma can't be part of these
+
+
+def _split_lists(r):
+    """GUI rules hold one pattern; for fields where a comma can't occur, "a, b" means a or b."""
+    if "when" not in r:
+        return r
+    when = {f: ([x.strip() for x in w.split(",") if x.strip()] if f in LISTABLE and isinstance(w, str) and "," in w else w)
+            for f, w in r["when"].items()}
+    return {**r, "when": when}
+
+
 def set_user_rules(user):
     """Use the user's rules (from loupe.json) from now on. Returns [(rule, problem)] for ones skipped."""
     global _rules, _user_rules
-    bad = [(r, check_rule(r)) for r in user]
+    bad = [(r, check_rule(r)) for r in (_split_lists(r) for r in user)]
     _user_rules = [r for r, problem in bad if problem is None]
     _rules = None
     return [(r, p) for r, p in bad if p]
@@ -120,7 +132,7 @@ def _params(info):
 def _check(field, want, ev):
     """Evidence text if this one condition holds (may be ""), else None."""
     if field == "mac_prefix":
-        return "mac" if ev["mac"].startswith(want.lower()) else None
+        return f"MAC prefix {want.lower()}" if ev["mac"].startswith(want.lower()) else None
     if field == "mdns_model":
         for m in ev["models"]:
             val = m.split("=", 1)[1] if "=" in m else m

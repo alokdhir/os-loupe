@@ -9,7 +9,7 @@
         <id>rule.pattern</id>
         <label>Pattern</label>
         <type>text</type>
-        <help>For example Tuya, ^kvm-[0-9a-f]{4}$, _hap._tcp, nordvpn.com or 52:54:00.</help>
+        <help>For example Tuya, ^kvm-[0-9a-f]{4}$, _hap._tcp, nordvpn.com or 52:54:00. For a MAC prefix, MAC vendor, Bonjour service or domain, separate several with commas: any of them matches.</help>
     </field>
     <field>
         <id>rule.type</id>

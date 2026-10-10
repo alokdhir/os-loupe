@@ -104,6 +104,13 @@ class TestUserRules(unittest.TestCase):
         t, src, ven = devid.classify("ac:00:00:00:00:01", names=["a1.tuyaus.com"], oui=oui)
         self.assertEqual((t, src, ven), ("Window shade", "your rule: vendor Tuya Smart Inc.", "Tuya Smart Inc."))
 
+    def test_comma_list(self):
+        devid.set_user_rules([{"when": {"mac_prefix": "ac:00:00:01, ac:00:00:02"}, "type": "Window shade"},
+                              {"when": {"hostname": "^a,b$"}, "type": "Comma host"}])       # regex: not split
+        self.assertEqual(devid.classify("ac:00:00:02:00:09")[0], "Window shade")
+        self.assertNotEqual(devid.classify("ac:00:00:03:00:09")[0], "Window shade")
+        self.assertEqual(devid.classify("ac:00:00:04:00:09", hostname="a,b")[0], "Comma host")
+
     def test_bad_rules_skipped(self):
         bad = devid.set_user_rules([{"when": {"hostname": "(unclosed"}, "type": "X"},
                                     {"when": {"nonsense": "x"}, "type": "Y"},
