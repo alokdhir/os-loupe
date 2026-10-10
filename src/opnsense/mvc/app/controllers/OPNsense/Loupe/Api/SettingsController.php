@@ -29,6 +29,8 @@
 namespace OPNsense\Loupe\Api;
 
 use OPNsense\Base\ApiMutableModelControllerBase;
+use OPNsense\Core\Backend;
+use OPNsense\Core\Config;
 
 class SettingsController extends ApiMutableModelControllerBase
 {
@@ -83,5 +85,48 @@ class SettingsController extends ApiMutableModelControllerBase
     public function delDeviceAction($uuid)
     {
         return $this->delBase('devices.device', $uuid);
+    }
+
+    /**
+     * Set (or clear, when name and type are both empty) the name/type for one MAC address,
+     * as used by the edit button on the report pages. Takes effect without a service restart.
+     */
+    public function overrideAction()
+    {
+        $result = ['result' => 'failed'];
+        if (!$this->request->isPost()) {
+            return $result;
+        }
+        $mac = strtolower(trim((string)$this->request->getPost('mac')));
+        $name = trim((string)$this->request->getPost('name'));
+        $type = trim((string)$this->request->getPost('type'));
+        if (!preg_match('/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/', $mac)) {
+            return ['result' => 'failed', 'message' => gettext('Invalid MAC address')];
+        }
+        Config::getInstance()->lock();
+        $devices = $this->getModel()->devices->device;
+        $found = null;
+        foreach ($devices->iterateItems() as $uuid => $dev) {
+            if (strtolower((string)$dev->mac) === $mac) {
+                $found = $uuid;
+                break;
+            }
+        }
+        if ($name === '' && $type === '') {
+            if ($found !== null) {
+                $devices->del($found);
+            }
+            $result = $this->save(false, true);
+        } else {
+            $node = $found !== null ? $devices->$found : $devices->Add();
+            $node->mac = $mac;
+            $node->name = $name;
+            $node->type = $type;
+            $result = $this->validateAndSave($node, 'device');
+        }
+        if (($result['result'] ?? '') === 'saved') {
+            (new Backend())->configdRun('template reload OPNsense/Loupe');
+        }
+        return $result;
     }
 }

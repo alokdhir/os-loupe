@@ -50,6 +50,9 @@ def devices_info(db, overrides):
         out[mac] = {"mac": mac, "ip": ip, "name": o.get("name") or name or hostname or "", "vendor": vendor or "",
                     "type": o.get("type") or dtype or "", "type_source": "set by you" if o.get("type") else (src or ""),
                     "first_seen": first, "last_seen": last}
+    for mac, o in overrides.items():   # named before loupe recorded the device
+        out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "type": o.get("type") or "",
+                             "type_source": "set by you" if o.get("type") else "", "first_seen": 0, "last_seen": 0})
     return out
 
 

@@ -40,6 +40,7 @@ class Loupe:
         self.next_classify = time.time() + 120
         self.oui = devid.load_oui()
         self.overrides = {m.lower(): o for m, o in (overrides or {}).items()}
+        self.config = None
         self.ip_mac = {}
         self.flows = {}
         self.lookups = {}
@@ -119,6 +120,12 @@ class Loupe:
             self.store.prune(now, *self.retention)
 
     def classify(self, now):
+        if self.config:
+            try:
+                with open(self.config) as f:   # pick up name/type edits made in the GUI
+                    self.overrides = {m.lower(): o for m, o in json.load(f).get("devices", {}).items()}
+            except (OSError, ValueError):
+                pass
         leases, hosts = devid.leases(), devid.static_hosts()
         rows = []
         for mac, ip, hostname, info, seen in self.store.devices_with_names(now - 7 * 86400):
@@ -188,6 +195,7 @@ def main():
     r = conf.get("retention", {})
     lp = Loupe(ifaces, args.db, args.poll, args.flush,
                (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_lookups", 30)), conf.get("devices"))
+    lp.config = args.config
     cap = Capture(lp.emit)
 
     def stop(*_):

@@ -41,6 +41,8 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-section h3 { margin-top: 15px; font-size: 16px; }
     #loupe-chart-wrap { height: 220px; padding: 0 15px; }
     #loupe-empty { padding: 20px 15px; }
+    .loupe-edit { color: #999; margin-left: 6px; cursor: pointer; }
+    .loupe-edit:hover { color: #337ab7; }
 </style>
 <script>
     const loupe = {
@@ -101,16 +103,57 @@ POSSIBILITY OF SUCH DAMAGE.
             return '<span class="loupe-type" title="' + loupe.esc(r.type_source || '') + '">' + loupe.esc(r.type) + '</span>';
         }
 
+        const commonTypes = ['Computer', 'Mac', 'Windows PC', 'iPhone', 'iPad', 'Android phone', 'Phone/tablet/laptop',
+            'Apple TV', 'HomePod', 'TV', 'Roku', 'Google Cast device', 'Sonos speaker', 'Speaker / streamer', 'AV receiver',
+            'PlayStation', 'Xbox', 'Nintendo Switch', 'Printer', 'Camera', 'Thermostat', 'Smart plug', 'Smart home device',
+            'Smart home hub', 'Ceiling fan', 'Media server', 'Server', 'NAS', 'Network gear', 'Wi-Fi access point',
+            'Appliance', 'Virtual machine', 'Watch', 'Car'];
+        let knownTypes = [];
+
+        // edit button: name + type for a MAC, stored in the plugin settings
+        function editButton(r) {
+            if (!r.mac) return '';
+            return '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Name this device") }}" data-mac="' + loupe.esc(r.mac)
+                + '" data-name="' + loupe.esc(r.name !== r.ip ? r.name : '') + '" data-type="' + loupe.esc(r.type || '') + '"></i>';
+        }
+        $(document).on('click', '.loupe-edit', function (e) {
+            e.stopPropagation();
+            const $b = $(this);
+            $('#loupe-edit-mac').text($b.data('mac'));
+            $('#loupe-edit-name').val($b.data('name'));
+            $('#loupe-edit-type').val($b.data('type'));
+            $('#loupe-types').html(Array.from(new Set(commonTypes.concat(knownTypes))).sort()
+                .map(t => '<option value="' + loupe.esc(t) + '">').join(''));
+            $('#loupe-edit-error').hide();
+            $('#loupe-edit-dialog').modal('show');
+        });
+        $('#loupe-edit-save, #loupe-edit-reset').click(function () {
+            const reset = this.id === 'loupe-edit-reset';
+            ajaxCall('/api/loupe/settings/override', {
+                mac: $('#loupe-edit-mac').text(),
+                name: reset ? '' : $('#loupe-edit-name').val(),
+                type: reset ? '' : $('#loupe-edit-type').val()
+            }, function (data) {
+                if (data.result === 'saved') {
+                    $('#loupe-edit-dialog').modal('hide');
+                    route();
+                } else {
+                    $('#loupe-edit-error').text(data.message || JSON.stringify(data.validations || data)).show();
+                }
+            });
+        });
+
         function showDevices() {
             $('#loupe-detail').hide();
             $('#loupe-list').show();
             ajaxGet('/api/loupe/report/devices/' + hours, {}, function (data) {
                 if (data.error) { $('#loupe-empty').text(data.error).show(); return; }
                 $('#loupe-empty').toggle(!data.rows.length);
+                knownTypes = data.rows.map(r => r.type).filter(Boolean);
                 const total = data.rows.reduce((a, r) => [a[0] + r.down, a[1] + r.up], [0, 0]);
                 $('#loupe-total').text(data.rows.length + ' {{ lang._("devices") }} · ' + loupe.bytes(total[0]) + ' {{ lang._("down") }} · ' + loupe.bytes(total[1]) + ' {{ lang._("up") }}');
                 loupe.table($('#loupe-devices'), [
-                    {key: 'name', label: '{{ lang._("Device") }}', fmt: r => loupe.esc(r.name) + (r.name !== r.ip ? ' <span class="loupe-muted">' + loupe.esc(r.ip) + '</span>' : '')},
+                    {key: 'name', label: '{{ lang._("Device") }}', fmt: r => loupe.esc(r.name) + (r.name !== r.ip ? ' <span class="loupe-muted">' + loupe.esc(r.ip) + '</span>' : '') + editButton(r)},
                     {key: 'type', label: '{{ lang._("Type") }}', fmt: typeCell},
                     {key: 'vendor', label: '{{ lang._("Vendor") }}'},
                     {key: 'down', label: '{{ lang._("Down") }}', num: true, fmt: r => loupe.bytes(r.down)},
@@ -129,7 +172,10 @@ POSSIBILITY OF SUCH DAMAGE.
             ajaxGet('/api/loupe/report/device/' + encodeURIComponent(id) + '/' + hours, {}, function (data) {
                 if (data.error) { $('#loupe-detail-title').text(data.error); return; }
                 const d = data.device || {};
-                $('#loupe-detail-title').html(loupe.esc(d.name || d.ip || id) + ' <small>' + loupe.esc([d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>');
+                $('#loupe-detail-title').html(loupe.esc(d.name || d.ip || id)
+                    + editButton({mac: d.mac, ip: d.ip, name: d.name || d.ip, type: d.type})
+                    + ' <small>' + loupe.esc([d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>'
+                    + (d.type_source ? ' <small class="loupe-muted">(' + loupe.esc(d.type_source) + ')</small>' : ''));
                 const tl = data.timeline;
                 if (chart) chart.destroy();
                 chart = new Chart(document.getElementById('loupe-chart'), {
@@ -220,5 +266,33 @@ POSSIBILITY OF SUCH DAMAGE.
             <table id="loupe-sites" class="table table-condensed table-striped loupe-table"></table></div>
         <div class="loupe-section"><h3>{{ lang._('Protocols and ports') }}</h3>
             <table id="loupe-ports" class="table table-condensed table-striped loupe-table"></table></div>
+    </div>
+</div>
+
+<div class="modal fade" id="loupe-edit-dialog" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4 class="modal-title">{{ lang._('Name this device') }} <small id="loupe-edit-mac"></small></h4>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="loupe-edit-name">{{ lang._('Name') }}</label>
+                    <input type="text" class="form-control" id="loupe-edit-name" placeholder="{{ lang._('e.g. Kitchen iPad') }}"/>
+                </div>
+                <div class="form-group">
+                    <label for="loupe-edit-type">{{ lang._('Type') }}</label>
+                    <input type="text" class="form-control" id="loupe-edit-type" list="loupe-types" placeholder="{{ lang._('Leave empty to keep the detected type') }}"/>
+                    <datalist id="loupe-types"></datalist>
+                </div>
+                <div id="loupe-edit-error" class="alert alert-danger" style="display: none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default pull-left" id="loupe-edit-reset">{{ lang._('Use detected') }}</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">{{ lang._('Cancel') }}</button>
+                <button type="button" class="btn btn-primary" id="loupe-edit-save">{{ lang._('Save') }}</button>
+            </div>
+        </div>
     </div>
 </div>
