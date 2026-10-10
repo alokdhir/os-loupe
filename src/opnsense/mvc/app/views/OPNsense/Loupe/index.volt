@@ -104,6 +104,13 @@ POSSIBILITY OF SUCH DAMAGE.
             }
         };
 
+        /* a clear (×) in the grids' search fields: the browser draws one in type=search fields (not Firefox);
+           the grid searches on keyup, so a click on it is passed on as one */
+        function clearable(id) {
+            $('#' + id + '-search-field').attr('type', 'search');
+        }
+        $(document).on('search', '.bootgrid-header .search-field', function () { $(this).trigger('keyup'); });
+
         function grid(id, endpoint, extra) {
             if (grids[id]) {
                 $('#' + id).bootgrid('reload');
@@ -121,6 +128,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     formatters: formatters
                 }
             });
+            clearable(id);
         }
 
         /* Devices tab: the list, or one device */
@@ -208,6 +216,8 @@ POSSIBILITY OF SUCH DAMAGE.
                 add: '/api/loupe/settings/add_device/',
                 del: '/api/loupe/settings/del_device/'
             });
+            clearable('{{ formGridServices['table_id'] }}');
+            clearable('{{ formGridOverrides['table_id'] }}');
         }
 
         /* tabs <-> address: #device=…, #q=…, #sites, #general, #servicenames, #devicenames */
