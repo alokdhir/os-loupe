@@ -160,7 +160,8 @@ def cmd_devices(hours):
         r["down"] += down
         r["up"] += up
         r["conns"] += conns
-        r["last"] = max(r["last"], last)
+        if last > r["last"]:
+            r["last"], r["ip"] = last, ip       # the address it used most recently
         tops[key][lab.service(ip, name, server, port, proto) or ""] += up + down   # "" = no name: shown as a grey dash
     for key, r in rows.items():
         r["top"] = [s for s, _ in tops[key].most_common(3)]
