@@ -188,19 +188,26 @@ POSSIBILITY OF SUCH DAMAGE.
                 const mbps = b => b * 8 / step / 1e6;          /* average rate over the bar */
                 if (chart) chart.destroy();
                 chart = new Chart(document.getElementById('loupe-chart'), {
-                    type: 'bar',
+                    type: 'line',
                     data: {
-                        labels: tl.map(p => p[0] * 1000),
+                        labels: tl.map(p => (p[0] + step / 2) * 1000),     /* each point at the middle of its bucket */
                         datasets: [
-                            {label: '{{ lang._("Down") }}', data: tl.map(p => mbps(p[1])), bytes: tl.map(p => p[1]), backgroundColor: 'rgba(54,162,235,0.7)', stack: 's'},
-                            {label: '{{ lang._("Up") }}', data: tl.map(p => mbps(p[2])), bytes: tl.map(p => p[2]), backgroundColor: 'rgba(255,159,64,0.7)', stack: 's'}
+                            {label: '{{ lang._("Down") }}', data: tl.map(p => mbps(p[1])), bytes: tl.map(p => p[1]),
+                             borderColor: 'rgba(54,162,235,1)', backgroundColor: 'rgba(54,162,235,0.25)', fill: 'origin'},
+                            {label: '{{ lang._("Up") }}', data: tl.map(p => mbps(p[2])), bytes: tl.map(p => p[2]),
+                             borderColor: 'rgba(255,159,64,1)', backgroundColor: 'rgba(255,159,64,0.25)', fill: 'origin'}
                         ]
                     },
                     options: {
                         maintainAspectRatio: false, animation: false,
+                        interaction: {mode: 'index', intersect: false},
+                        elements: {
+                            line: {borderWidth: 1.5, cubicInterpolationMode: 'monotone'},   /* smooth, never overshoots */
+                            point: {radius: 0, hoverRadius: 3}
+                        },
                         scales: {
-                            x: {type: 'time', stacked: true, time: {tooltipFormat: 'lll'}},
-                            y: {stacked: true, title: {display: true, text: 'Mbps'}, ticks: {callback: v => +v.toFixed(2)}}
+                            x: {type: 'time', time: {tooltipFormat: 'lll'}},
+                            y: {beginAtZero: true, title: {display: true, text: 'Mbps'}, ticks: {callback: v => +v.toFixed(2)}}
                         },
                         plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + c.raw.toFixed(c.raw < 10 ? 2 : 1)
                             + ' Mbps (' + byteFormat(c.dataset.bytes[c.dataIndex], 1) + ')'}}}
