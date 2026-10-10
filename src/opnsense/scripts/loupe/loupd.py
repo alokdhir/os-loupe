@@ -15,7 +15,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import names, pfstate, store  # noqa: E402
+from lib import devid, names, pfstate, store  # noqa: E402
 
 ARP = re.compile(r"\((\S+)\) at ([0-9a-f:]{17})")
 NDP = re.compile(r"^(\S+)\s+([0-9a-f:]{17})\s", re.M)
@@ -36,6 +36,8 @@ class Loupe:
         self.poll_every, self.flush_every, self.retention = poll, flush, retention
         self.next_poll = self.next_flush = 0
         self.next_prune = time.time() + 300
+        self.next_classify = time.time() + 120
+        self.oui = devid.load_oui()
         self.ip_mac = {}
         self.flows = {}
         self.lookups = {}
@@ -105,9 +107,21 @@ class Loupe:
         if now >= self.next_flush:
             self.next_flush = now + self.flush_every
             self.flush(now)
+        if now >= self.next_classify:
+            self.next_classify = now + 600
+            self.classify(now)
         if now >= self.next_prune:
             self.next_prune = now + 3600
             self.store.prune(now, *self.retention)
+
+    def classify(self, now):
+        leases, hosts = devid.leases(), devid.static_hosts()
+        rows = []
+        for mac, ip, hostname, info, seen in self.store.devices_with_names(now - 7 * 86400):
+            name = leases.get(mac) or hosts.get(ip)
+            t, src, ven = devid.classify(mac, name or hostname, info, seen, self.oui)
+            rows.append((name, ven, t, src, mac))
+        self.store.set_device_types(rows)
 
     def refresh_macs(self):
         out = subprocess.run(["arp", "-an"], capture_output=True, text=True).stdout

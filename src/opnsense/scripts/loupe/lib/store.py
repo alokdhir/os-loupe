@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS lookups (
 CREATE TABLE IF NOT EXISTS devices (
     mac TEXT PRIMARY KEY,
     ip TEXT,
-    hostname TEXT,
+    name TEXT,                        -- display name: DHCP lease / static host entry
+    hostname TEXT,                    -- what the device calls itself (DHCP option 12)
     vendor TEXT,
     type TEXT,
     type_source TEXT,
@@ -124,6 +125,20 @@ class Store:
         except BaseException:
             db.execute("ROLLBACK")
             raise
+
+    def devices_with_names(self, since):
+        """[(mac, ip, hostname, info dict, [names looked up since `since`])]"""
+        names = {}
+        for ip, name in self.db.execute("SELECT DISTINCT ip, name FROM lookups WHERE day >= ?", (since,)):
+            names.setdefault(ip, []).append(name)
+        return [(mac, ip, hn, json.loads(info), names.get(ip, []))
+                for mac, ip, hn, info in self.db.execute("SELECT mac, ip, hostname, info FROM devices")]
+
+    def set_device_types(self, rows):
+        """rows: [(name, vendor, type, type_source, mac)]"""
+        self.db.execute("BEGIN")
+        self.db.executemany("UPDATE devices SET name = ?, vendor = ?, type = ?, type_source = ? WHERE mac = ?", rows)
+        self.db.execute("COMMIT")
 
     def prune(self, now, days_5m=30, days_1h=365, days_lookups=30):
         db = self.db
