@@ -6,3 +6,10 @@ counts bytes per connection from pf's state table (exact, both directions,
 before NAT), and identifies devices from mDNS, DHCP, MAC vendor and the
 services they use. Results are kept in SQLite: 5-minute detail for 30 days,
 hourly for a year. Reports live under Reporting, with a dashboard widget.
+
+Plugin Changelog
+================
+
+0.1
+
+* Initial release
