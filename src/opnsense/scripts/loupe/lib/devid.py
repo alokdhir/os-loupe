@@ -43,15 +43,46 @@ TIERS = ("mac_prefix", "mdns_model", "hostname", "role", "strong_service", "dhcp
          "mdns_service", "vendor", "private_mac")
 
 
+REGEX_FIELDS = ("hostname", "mdns_model", "dhcp_vendor")
+
+
+def _tiers(rules):
+    tiers = {t: [] for t in TIERS}
+    for r in rules:
+        conds = r["all"] if "all" in r else [r["when"]]
+        tier = r.get("tier") or next(iter(conds[0]))
+        tiers[tier].append((conds, r))
+    return tiers
+
+
+def check_rule(r):
+    """None if a rule is usable, else what is wrong with it (user rules come from the GUI)."""
+    try:
+        conds = r["all"] if "all" in r else [r["when"]]
+        if not r.get("type"):
+            return "no type"
+        for cond in conds:
+            for field, want in cond.items():
+                if field not in TIERS or field in ("role", "strong_service"):
+                    return f"unknown field {field}"
+                for w in (want if isinstance(want, list) else [want]):
+                    if field in REGEX_FIELDS:
+                        re.compile(w)
+    except (KeyError, TypeError, StopIteration, AttributeError):
+        return "malformed"
+    except re.error as e:
+        return f"bad regular expression: {e}"
+    return None
+
+
 class Rules:
-    def __init__(self, data, extra=()):
+    """Shipped rules (data/devices.json) plus the user's own, which are all checked first."""
+
+    def __init__(self, data, user=()):
         self.types = data.get("types", {})
         self.apple_models = data.get("apple_models", {})
-        self.tiers = {t: [] for t in TIERS}
-        for r in list(extra) + data.get("rules", []):
-            conds = r["all"] if "all" in r else [r["when"]]
-            tier = r.get("tier") or next(iter(conds[0]))
-            self.tiers[tier].append((conds, r))
+        self.user = _tiers(user)
+        self.tiers = _tiers(data.get("rules", []))
 
     def icon(self, dtype):
         return self.types.get(dtype, {}).get("icon", "")
@@ -61,14 +92,24 @@ class Rules:
 
 
 _rules = None
+_user_rules = []
 
 
 def rules():
     global _rules
     if _rules is None:
         with open(RULES_JSON, encoding="utf-8") as f:
-            _rules = Rules(json.load(f))
+            _rules = Rules(json.load(f), _user_rules)
     return _rules
+
+
+def set_user_rules(user):
+    """Use the user's rules (from loupe.json) from now on. Returns [(rule, problem)] for ones skipped."""
+    global _rules, _user_rules
+    bad = [(r, check_rule(r)) for r in user]
+    _user_rules = [r for r, problem in bad if problem is None]
+    _rules = None
+    return [(r, p) for r, p in bad if p]
 
 
 def _params(info):
@@ -134,11 +175,13 @@ def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
           "models": info.get("mdns_models", []), "services": info.get("mdns_services", []),
           "vc": info.get("dhcp_vendor_class") or "", "params": _params(info),
           "hosts": [hostname or "", info.get("dhcp_hostname") or ""] + list(info.get("mdns_hosts", []))}
-    for tier in (table or rules()).tiers.values():
-        for conds, r in tier:
-            src = _match(conds, ev)
-            if src is not None:
-                return r["type"], src, r.get("vendor", ven)
+    t = table or rules()
+    for mine, tiers in ((True, t.user), (False, t.tiers)):
+        for tier in tiers.values():
+            for conds, r in tier:
+                src = _match(conds, ev)
+                if src is not None:
+                    return r["type"], (f"your rule: {src}" if mine else src), r.get("vendor", ven)
     return None, None, ven
 
 

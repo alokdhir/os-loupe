@@ -46,6 +46,30 @@
                 </name>
             </service>
         </services>
+        <rules>
+            <rule type="ArrayField">
+                <field type="OptionField">
+                    <Required>Y</Required>
+                    <Default>vendor</Default>
+                    <OptionValues>
+                        <vendor>MAC vendor (whole word)</vendor>
+                        <hostname>Host name (regular expression)</hostname>
+                        <mdns_model>Bonjour model (regular expression)</mdns_model>
+                        <mdns_service>Bonjour service (exact)</mdns_service>
+                        <dhcp_vendor>DHCP vendor class (regular expression)</dhcp_vendor>
+                        <talks_to>Talks to domain (and its subdomains)</talks_to>
+                        <mac_prefix>MAC address prefix</mac_prefix>
+                    </OptionValues>
+                </field>
+                <pattern type="TextField">
+                    <Required>Y</Required>
+                </pattern>
+                <type type="TextField">
+                    <Required>Y</Required>
+                </type>
+                <description type="TextField"/>
+            </rule>
+        </rules>
         <devices>
             <device type="ArrayField">
                 <mac type="MacAddressField">

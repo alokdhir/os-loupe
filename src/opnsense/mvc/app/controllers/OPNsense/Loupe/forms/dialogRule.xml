@@ -1,0 +1,25 @@
+<form>
+    <field>
+        <id>rule.field</id>
+        <label>Match</label>
+        <type>dropdown</type>
+        <help>Which clue about a device to test. Host names, Bonjour models and DHCP vendor classes are regular expressions; a MAC vendor matches a whole word of the maker's name (e.g. Tuya); a domain also matches its subdomains.</help>
+    </field>
+    <field>
+        <id>rule.pattern</id>
+        <label>Pattern</label>
+        <type>text</type>
+        <help>For example Tuya, ^kvm-[0-9a-f]{4}$, _hap._tcp, nordvpn.com or 52:54:00.</help>
+    </field>
+    <field>
+        <id>rule.type</id>
+        <label>Type</label>
+        <type>text</type>
+        <help>The device type to show, e.g. Window shade. Your rules are checked before the built-in ones; an override for one device still wins.</help>
+    </field>
+    <field>
+        <id>rule.description</id>
+        <label>Description</label>
+        <type>text</type>
+    </field>
+</form>

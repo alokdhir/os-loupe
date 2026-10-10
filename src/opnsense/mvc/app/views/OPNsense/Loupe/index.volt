@@ -94,6 +94,9 @@ POSSIBILITY OF SUCH DAMAGE.
             lookupsite: function (column, row) {
                 return esc(row.name || (row.servers || []).join(', '));
             },
+            ruletype: function (column, row) {
+                return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '') + esc(row.type);
+            },
             lookupservice: function (column, row) {
                 return row.service ? esc(row.service) : dash;
             },
@@ -223,6 +226,16 @@ POSSIBILITY OF SUCH DAMAGE.
                 });
                 clearable('{{ formGridServices['table_id'] }}');
             },
+            rules: function () {
+                $('#{{ formGridRules['table_id'] }}').UIBootgrid({
+                    search: '/api/loupe/settings/search_rule',
+                    get: '/api/loupe/settings/get_rule/',
+                    set: '/api/loupe/settings/set_rule/',
+                    add: '/api/loupe/settings/add_rule/',
+                    del: '/api/loupe/settings/del_rule/'
+                });
+                clearable('{{ formGridRules['table_id'] }}');
+            },
             overrides: function () {
                 $('#{{ formGridOverrides['table_id'] }}').UIBootgrid({
                     search: '/api/loupe/settings/search_device',
@@ -234,6 +247,29 @@ POSSIBILITY OF SUCH DAMAGE.
                 clearable('{{ formGridOverrides['table_id'] }}');
             }
         };
+        /* Yours | Built-in on Service names and Device rules: the shipped rules, read-only */
+        const builtin = {
+            'grid-builtin-services': '/api/loupe/report/search_builtin_services',
+            'grid-builtin-rules': '/api/loupe/report/search_builtin_rules'
+        };
+        $('.loupe-source .btn').click(function () {
+            const $page = $(this).closest('.loupe-page');
+            const which = $(this).data('source');
+            $(this).siblings().removeClass('active');
+            $(this).addClass('active');
+            $page.find('[data-source-pane]').hide().filter('[data-source-pane="' + which + '"]').show();
+            $page.find('.loupe-source-help').hide().filter('[data-for="' + which + '"]').show();
+            const $grid = $page.find('[data-source-pane="' + which + '"] table[id^="grid-builtin-"]');
+            if ($grid.length && !grids[$grid.attr('id')]) {
+                const id = $grid.attr('id');
+                grids[id] = $grid.UIBootgrid({
+                    search: builtin[id],
+                    options: {selection: false, multiSelect: false, formatters: formatters}
+                });
+                clearable(id);
+            }
+        });
+
         function showSettings(page) {
             $('.loupe-pages .btn').removeClass('active').filter('[data-page="' + page + '"]').addClass('active');
             $('.loupe-page').hide().filter('#page_' + page).show();
@@ -245,7 +281,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* tabs <-> address: #device=…, #q=…, #services, and the settings pages #general, #servicenames, #overrides */
         const TABS = {devices: '#tab_devices', services: '#tab_services', settings: '#tab_settings'};
-        const PAGES = ['general', 'servicenames', 'overrides'];
+        const PAGES = ['general', 'servicenames', 'rules', 'overrides'];
 
         function tabOf(hash) {
             if (/^#device=/.test(hash)) return 'devices';
@@ -489,6 +525,7 @@ POSSIBILITY OF SUCH DAMAGE.
             <div class="btn-group loupe-pages">
                 <button type="button" class="btn btn-default btn-sm" data-page="general">{{ lang._('General') }}</button>
                 <button type="button" class="btn btn-default btn-sm" data-page="servicenames">{{ lang._('Service names') }}</button>
+                <button type="button" class="btn btn-default btn-sm" data-page="rules">{{ lang._('Device rules') }}</button>
                 <button type="button" class="btn btn-default btn-sm" data-page="overrides">{{ lang._('Overrides') }}</button>
             </div>
         </div>
@@ -496,8 +533,51 @@ POSSIBILITY OF SUCH DAMAGE.
             {{ partial("layout_partials/base_form", ['fields': formSettings, 'id': 'frm_settings']) }}
         </div>
         <div id="page_servicenames" class="loupe-page">
-            <p class="loupe-bar">{{ lang._('Your own names for domains. They add to and override the built-in list, and apply to all history.') }}</p>
-            {{ partial('layout_partials/base_bootgrid_table', formGridServices) }}
+            <div class="loupe-bar">
+                <div class="btn-group btn-group-xs loupe-source">
+                    <button type="button" class="btn btn-default active" data-source="mine">{{ lang._('Yours') }}</button>
+                    <button type="button" class="btn btn-default" data-source="builtin">{{ lang._('Built-in') }}</button>
+                </div>
+                <p class="loupe-source-help" data-for="mine" style="margin: 8px 0 0">{{ lang._('Your own names for domains. They add to and override the built-in list, and apply to all history.') }}</p>
+                <p class="loupe-source-help" data-for="builtin" style="margin: 8px 0 0; display: none">{{ lang._('The names Loupe ships with: domains (a domain also covers its subdomains), address ranges and ports for traffic with no name, and the domains VPN apps use. Add your own under Yours to change one.') }}</p>
+            </div>
+            <div data-source-pane="mine">
+                {{ partial('layout_partials/base_bootgrid_table', formGridServices) }}
+            </div>
+            <div data-source-pane="builtin" style="display: none">
+                <table id="grid-builtin-services" class="table table-condensed table-hover table-striped table-responsive">
+                    <thead><tr>
+                        <th data-column-id="pattern" data-identifier="true">{{ lang._('Domain, range or port') }}</th>
+                        <th data-column-id="name">{{ lang._('Service') }}</th>
+                        <th data-column-id="kind">{{ lang._('Kind') }}</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div id="page_rules" class="loupe-page">
+            <div class="loupe-bar">
+                <div class="btn-group btn-group-xs loupe-source">
+                    <button type="button" class="btn btn-default active" data-source="mine">{{ lang._('Yours') }}</button>
+                    <button type="button" class="btn btn-default" data-source="builtin">{{ lang._('Built-in') }}</button>
+                </div>
+                <p class="loupe-source-help" data-for="mine" style="margin: 8px 0 0">{{ lang._('Set the type of every device that matches, e.g. all devices whose MAC vendor is Tuya are Window shades. Your rules are checked before the built-in ones; an override for one device still wins. Apply to use them: devices are reclassified within a minute.') }}</p>
+                <p class="loupe-source-help" data-for="builtin" style="margin: 8px 0 0; display: none">{{ lang._('The rules Loupe ships with, in the order they are tried within each kind of evidence (Bonjour model, host name, DHCP, domains it talks to, MAC vendor). The first one that matches decides the type.') }}</p>
+            </div>
+            <div data-source-pane="mine">
+                {{ partial('layout_partials/base_bootgrid_table', formGridRules) }}
+            </div>
+            <div data-source-pane="builtin" style="display: none">
+                <table id="grid-builtin-rules" class="table table-condensed table-hover table-striped table-responsive">
+                    <thead><tr>
+                        <th data-column-id="order" data-identifier="true" data-type="numeric" data-width="5em">#</th>
+                        <th data-column-id="match">{{ lang._('Matches') }}</th>
+                        <th data-column-id="type" data-formatter="ruletype">{{ lang._('Type') }}</th>
+                        <th data-column-id="note" data-visible="false">{{ lang._('Note') }}</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
         <div id="page_overrides" class="loupe-page">
             <p class="loupe-bar">{{ lang._('Your name or type for one device, matched by its MAC address. They win over everything Loupe detects. The pencil next to a device on the main Devices tab does the same.') }}</p>
@@ -512,3 +592,4 @@ POSSIBILITY OF SUCH DAMAGE.
 
 {{ partial("layout_partials/base_dialog", ['fields': formDialogService, 'id': formGridServices['edit_dialog_id'], 'label': lang._('Service name')]) }}
 {{ partial("layout_partials/base_dialog", ['fields': formDialogDevice, 'id': formGridOverrides['edit_dialog_id'], 'label': lang._('Device')]) }}
+{{ partial("layout_partials/base_dialog", ['fields': formDialogRule, 'id': formGridRules['edit_dialog_id'], 'label': lang._('Device rule')]) }}

@@ -9,7 +9,7 @@ Loupe answers questions like *"what was the PlayStation doing at 2 a.m.?"*, *"wh
 - **Reporting → Loupe, Devices tab**: every device with its name, type (e.g. *MacBook Air 15″ (M3)*, *Apple TV 4K*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and top services, for the last hour, day, week, month or year.
 - **Device detail**: a traffic chart over time, and what it talked to — by service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (WireGuard)*…), by site name, and by protocol/port.
 - **Services**: every service the house used in the period, with the devices that used it; search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`) to see which devices used it, how much, first and last seen — including names that were only looked up in DNS.
-- **Your own names**: rename any device or correct its type from the report pages; it follows the device by MAC address.
+- **Your own names and rules**: rename any device or correct its type from the report pages (it follows the device by MAC address), or add rules that type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*. *Settings → Service names / Device rules → Built-in* shows the names and rules Loupe ships with.
 - **Dashboard widget**: the last 24 hours at a glance — totals, an hourly chart and the top devices.
 
 ## How it works
@@ -56,7 +56,9 @@ A rule matches when all of its conditions do (`when`, or several in `all`); a li
 
 Evidence is trusted in a fixed order — Bonjour model, host name, hosting role, strong Bonjour services, DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker — and the first matching rule wins (file order within a tier). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
 
-**Adding a rule:** add it with an `example` — made-up evidence that should come out as your type (no real MACs or names) — then run the tests. They fail if the example lands on another type, or if your rule takes over another rule's example. `tools/fmtjson.py` keeps the files one entry per line.
+**For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones), and *Settings → Service names* takes your own names.
+
+**Adding a rule to the shipped file:** add it with an `example` — made-up evidence that should come out as your type (no real MACs or names) — then run the tests. They fail if the example lands on another type, or if your rule takes over another rule's example. `tools/fmtjson.py` keeps the files one entry per line.
 
 ## Footprint
 

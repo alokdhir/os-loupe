@@ -32,7 +32,7 @@ class IndexController extends \OPNsense\Base\IndexController
 {
     /**
      * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Settings (General, Service names,
-     * Device names). The old addresses open the matching tab.
+     * Device rules, Overrides). The old addresses open the matching tab.
      */
     private function page($activetab)
     {
@@ -42,6 +42,8 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->view->formDialogDevice = $this->getForm('dialogDevice');
         $this->view->formGridServices = $this->getFormGrid('dialogService', 'grid-servicenames');
         $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'grid-overrides');
+        $this->view->formDialogRule = $this->getForm('dialogRule');
+        $this->view->formGridRules = $this->getFormGrid('dialogRule', 'grid-rules');
         $this->view->pick('OPNsense/Loupe/index');
     }
 

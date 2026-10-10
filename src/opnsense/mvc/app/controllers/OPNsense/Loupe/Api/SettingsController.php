@@ -62,6 +62,58 @@ class SettingsController extends ApiMutableModelControllerBase
         return $this->delBase('services.service', $uuid);
     }
 
+    private const RULE_FIELDS = [
+        'vendor' => 'MAC vendor', 'hostname' => 'Host name', 'mdns_model' => 'Bonjour model',
+        'mdns_service' => 'Bonjour service', 'dhcp_vendor' => 'DHCP vendor class', 'talks_to' => 'Talks to',
+        'mac_prefix' => 'MAC prefix',
+    ];
+
+    public function searchRuleAction()
+    {
+        $result = $this->searchBase('rules.rule', ['field', 'pattern', 'type', 'description'], 'type');
+        foreach ($result['rows'] as &$row) {
+            $row['field'] = gettext(self::RULE_FIELDS[$row['field']] ?? $row['field']);
+        }
+        return $result;
+    }
+
+    public function getRuleAction($uuid = null)
+    {
+        return $this->getBase('rule', 'rules.rule', $uuid);
+    }
+
+    /**
+     * Host name, Bonjour model and DHCP vendor patterns are regular expressions: refuse ones that don't
+     * compile here, where the dialog can show it, instead of loupd skipping them later.
+     */
+    private function checkRule()
+    {
+        $rule = $this->request->getPost('rule');
+        $field = is_array($rule) ? ($rule['field'] ?? '') : '';
+        $pattern = is_array($rule) ? (string)($rule['pattern'] ?? '') : '';
+        if (in_array($field, ['hostname', 'mdns_model', 'dhcp_vendor']) && $pattern !== '') {
+            if (@preg_match('/' . str_replace('/', '\\/', $pattern) . '/u', '') === false) {
+                return ['result' => 'failed', 'validations' => ['rule.pattern' => gettext('This is not a valid regular expression.')]];
+            }
+        }
+        return null;
+    }
+
+    public function addRuleAction()
+    {
+        return $this->checkRule() ?? $this->addBase('rule', 'rules.rule');
+    }
+
+    public function setRuleAction($uuid)
+    {
+        return $this->checkRule() ?? $this->setBase('rule', 'rules.rule', $uuid);
+    }
+
+    public function delRuleAction($uuid)
+    {
+        return $this->delBase('rules.rule', $uuid);
+    }
+
     public function searchDeviceAction()
     {
         return $this->searchBase('devices.device', ['mac', 'name', 'type'], 'name');

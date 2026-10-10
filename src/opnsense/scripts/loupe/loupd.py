@@ -219,6 +219,8 @@ def main():
     if not ifaces:
         syslog.syslog(syslog.LOG_ERR, "loupe: no interfaces configured")
         sys.exit(1)
+    for rule, problem in devid.set_user_rules(conf.get("rules", [])):
+        syslog.syslog(syslog.LOG_WARNING, f"loupe: skipping device rule {json.dumps(rule)}: {problem}")
     r = conf.get("retention", {})
     lp = Loupe(ifaces, args.db, args.poll, args.flush,
                (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_lookups", 30)))

@@ -92,6 +92,27 @@ class TestDevid(unittest.TestCase):
         self.assertEqual(devid.display_name("office-pc", "x", "y"), "office-pc")
 
 
+class TestUserRules(unittest.TestCase):
+    def tearDown(self):
+        devid.set_user_rules([])
+
+    def test_user_rule_wins_over_builtin(self):
+        oui = {"AC0000": "Tuya Smart Inc."}
+        before = devid.classify("ac:00:00:00:00:01", names=["a1.tuyaus.com"], oui=oui)
+        self.assertEqual(before[0], "Smart home device")                 # built-in: talks to tuyaus.com
+        self.assertEqual(devid.set_user_rules([{"when": {"vendor": "Tuya"}, "type": "Window shade"}]), [])
+        t, src, ven = devid.classify("ac:00:00:00:00:01", names=["a1.tuyaus.com"], oui=oui)
+        self.assertEqual((t, src, ven), ("Window shade", "your rule: vendor Tuya Smart Inc.", "Tuya Smart Inc."))
+
+    def test_bad_rules_skipped(self):
+        bad = devid.set_user_rules([{"when": {"hostname": "(unclosed"}, "type": "X"},
+                                    {"when": {"nonsense": "x"}, "type": "Y"},
+                                    {"when": {"hostname": "^ok-"}, "type": ""},
+                                    {"when": {"hostname": "^ok-"}, "type": "Good"}])
+        self.assertEqual([p.split(":")[0] for _, p in bad], ["bad regular expression", "unknown field nonsense", "no type"])
+        self.assertEqual(devid.classify("ac:00:00:00:00:02", hostname="ok-1")[0], "Good")
+
+
 if __name__ == "__main__":
     unittest.main()
 

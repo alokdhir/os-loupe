@@ -170,6 +170,72 @@ class ReportController extends ApiControllerBase
         return $this->grid($data[$section] ?? [], $sort, null, self::SEARCH[$section]);
     }
 
+    /* the shipped rule files, read-only (Settings: Built-in) */
+
+    private const DATA = '/usr/local/opnsense/scripts/loupe/data/';
+
+    private const FIELDS = [
+        'vendor' => 'MAC vendor', 'hostname' => 'Host name', 'mdns_model' => 'Bonjour model',
+        'mdns_service' => 'Bonjour service', 'dhcp_vendor' => 'DHCP vendor class', 'dhcp_params' => 'DHCP request list',
+        'talks_to' => 'Talks to', 'mac_prefix' => 'MAC prefix', 'private_mac' => 'Private MAC',
+    ];
+
+    private function dataFile($name)
+    {
+        $data = json_decode((string)@file_get_contents(self::DATA . $name), true);
+        return is_array($data) ? $data : [];
+    }
+
+    public function searchBuiltinServicesAction()
+    {
+        $data = $this->dataFile('services.json');
+        $rows = [];
+        foreach ($data['suffixes'] ?? [] as $suffix => $name) {
+            $rows[] = ['pattern' => $suffix, 'name' => $name, 'kind' => gettext('Domain')];
+        }
+        foreach ($data['ranges'] ?? [] as $r) {
+            $rows[] = ['pattern' => $r[0], 'name' => $r[1], 'kind' => gettext('Address range')];
+        }
+        foreach ($data['ports'] ?? [] as $p) {
+            $rows[] = ['pattern' => "{$p[0]}/{$p[1]}", 'name' => $p[2], 'kind' => gettext('Port, when nothing else names it')];
+        }
+        foreach ($data['vpn_providers'] ?? [] as $domain => $provider) {
+            $rows[] = ['pattern' => $domain, 'name' => "VPN ({$provider})", 'kind' => gettext('VPN app domain')];
+        }
+        return $this->searchRecordsetBase($rows, ['pattern', 'name', 'kind'], 'pattern');
+    }
+
+    private function describeCondition(array $cond)
+    {
+        $parts = [];
+        foreach ($cond as $field => $want) {
+            $label = self::FIELDS[$field] ?? $field;
+            if (is_bool($want)) {
+                $parts[] = $want ? $label : "not {$label}";
+            } else {
+                $parts[] = $label . ' ' . implode(' or ', (array)$want);
+            }
+        }
+        return implode(' and ', $parts);
+    }
+
+    public function searchBuiltinRulesAction()
+    {
+        $data = $this->dataFile('devices.json');
+        $rows = [];
+        foreach ($data['rules'] ?? [] as $i => $rule) {
+            $conds = isset($rule['all']) ? $rule['all'] : [$rule['when'] ?? []];
+            $rows[] = [
+                'order' => $i + 1,
+                'match' => implode(' and ', array_map([$this, 'describeCondition'], $conds)),
+                'type' => $rule['type'] ?? '',
+                'icon' => $data['types'][$rule['type'] ?? '']['icon'] ?? '',
+                'note' => $rule['note'] ?? '',
+            ];
+        }
+        return $this->searchRecordsetBase($rows, ['match', 'type', 'note'], 'order', null, SORT_NUMERIC);
+    }
+
     public function searchLookupTrafficAction()
     {
         return $this->lookupSection('traffic', 'down');

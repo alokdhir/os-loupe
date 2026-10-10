@@ -13,6 +13,13 @@
 {%   endfor %}
 {% endif %}
     },
+    "rules": [
+{% if helpers.exists('OPNsense.Loupe.rules.rule') %}
+{%   for rule in helpers.toList('OPNsense.Loupe.rules.rule') %}
+        {"when": { {{ rule.field | tojson }}: {{ rule.pattern | tojson }} }, "type": {{ rule.type | tojson }}}{{ "," if not loop.last }}
+{%   endfor %}
+{% endif %}
+    ],
     "devices": {
 {% if helpers.exists('OPNsense.Loupe.devices.device') %}
 {%   for dev in helpers.toList('OPNsense.Loupe.devices.device') %}
