@@ -24,6 +24,201 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 #}
 
-<div class="content-box" style="padding: 20px">
-    <p>{{ lang._('Reports are not built yet.') }} <a href="/ui/loupe/index/settings">{{ lang._('Settings') }}</a></p>
+<script src="{{ cache_safe('/ui/js/chart.umd.min.js') }}"></script>
+<script src="{{ cache_safe('/ui/js/moment-with-locales.min.js') }}"></script>
+<script src="{{ cache_safe('/ui/js/chartjs-adapter-moment.min.js') }}"></script>
+<style>
+    .loupe-bar { padding: 10px 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .loupe-bar .btn-group .btn.active { font-weight: bold; }
+    .loupe-table th { cursor: pointer; white-space: nowrap; user-select: none; }
+    .loupe-table th.sorted:after { content: " \25BE"; }
+    .loupe-table th.sorted.asc:after { content: " \25B4"; }
+    .loupe-table td.num, .loupe-table th.num { text-align: right; white-space: nowrap; }
+    .loupe-table tr.clickable { cursor: pointer; }
+    .loupe-muted { color: #888; }
+    .loupe-type { cursor: help; border-bottom: 1px dotted #999; }
+    .loupe-section { padding: 0 15px 15px; }
+    .loupe-section h3 { margin-top: 15px; font-size: 16px; }
+    #loupe-chart-wrap { height: 220px; padding: 0 15px; }
+    #loupe-empty { padding: 20px 15px; }
+</style>
+<script>
+    const loupe = {
+        bytes: function (b) {
+            if (!b) return '0';
+            const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let i = Math.min(u.length - 1, Math.floor(Math.log(b) / Math.log(1000)));
+            return (b / Math.pow(1000, i)).toFixed(i ? 1 : 0) + ' ' + u[i];
+        },
+        ago: function (ts) {
+            if (!ts) return '';
+            const s = Date.now() / 1000 - ts;
+            if (s < 600) return '{{ lang._("now") }}';
+            if (s < 3600) return Math.round(s / 60) + ' min';
+            if (s < 86400) return Math.round(s / 3600) + ' h';
+            return Math.round(s / 86400) + ' d';
+        },
+        esc: function (s) { return $('<span>').text(s == null ? '' : String(s)).html(); },
+        // sortable table: cols = [{key, label, num, fmt(row)}]
+        table: function ($el, cols, rows, sortKey, onClick) {
+            let key = sortKey, asc = false;
+            const draw = function () {
+                const sorted = rows.slice().sort(function (a, b) {
+                    const x = a[key], y = b[key];
+                    const c = (typeof x === 'number' && typeof y === 'number') ? x - y : String(x).localeCompare(String(y));
+                    return asc ? c : -c;
+                });
+                let h = '<thead><tr>' + cols.map(function (c) {
+                    return '<th data-key="' + c.key + '" class="' + (c.num ? 'num ' : '') + (c.key === key ? 'sorted' + (asc ? ' asc' : '') : '') + '">' + c.label + '</th>';
+                }).join('') + '</tr></thead><tbody>';
+                sorted.forEach(function (r, i) {
+                    h += '<tr' + (onClick ? ' class="clickable" data-i="' + rows.indexOf(r) + '"' : '') + '>' + cols.map(function (c) {
+                        return '<td' + (c.num ? ' class="num"' : '') + '>' + (c.fmt ? c.fmt(r) : loupe.esc(r[c.key])) + '</td>';
+                    }).join('') + '</tr>';
+                });
+                $el.html(h + '</tbody>');
+                $el.find('th').click(function () {
+                    const k = $(this).data('key');
+                    if (k === key) { asc = !asc; } else { key = k; asc = !cols.find(c => c.key === k).num; }
+                    draw();
+                });
+                if (onClick) $el.find('tr.clickable').click(function () { onClick(rows[$(this).data('i')]); });
+            };
+            draw();
+        }
+    };
+
+    $(document).ready(function () {
+        let hours = parseFloat(localStorage.getItem('loupe.hours') || '24');
+        let chart = null;
+
+        function periodButtons() {
+            $('#loupe-period .btn').removeClass('active').filter('[data-hours="' + hours + '"]').addClass('active');
+        }
+
+        function typeCell(r) {
+            if (!r.type) return '<span class="loupe-muted">?</span>';
+            return '<span class="loupe-type" title="' + loupe.esc(r.type_source || '') + '">' + loupe.esc(r.type) + '</span>';
+        }
+
+        function showDevices() {
+            $('#loupe-detail').hide();
+            $('#loupe-list').show();
+            ajaxGet('/api/loupe/report/devices/' + hours, {}, function (data) {
+                if (data.error) { $('#loupe-empty').text(data.error).show(); return; }
+                $('#loupe-empty').toggle(!data.rows.length);
+                const total = data.rows.reduce((a, r) => [a[0] + r.down, a[1] + r.up], [0, 0]);
+                $('#loupe-total').text(data.rows.length + ' {{ lang._("devices") }} · ' + loupe.bytes(total[0]) + ' {{ lang._("down") }} · ' + loupe.bytes(total[1]) + ' {{ lang._("up") }}');
+                loupe.table($('#loupe-devices'), [
+                    {key: 'name', label: '{{ lang._("Device") }}', fmt: r => loupe.esc(r.name) + (r.name !== r.ip ? ' <span class="loupe-muted">' + loupe.esc(r.ip) + '</span>' : '')},
+                    {key: 'type', label: '{{ lang._("Type") }}', fmt: typeCell},
+                    {key: 'vendor', label: '{{ lang._("Vendor") }}'},
+                    {key: 'down', label: '{{ lang._("Down") }}', num: true, fmt: r => loupe.bytes(r.down)},
+                    {key: 'up', label: '{{ lang._("Up") }}', num: true, fmt: r => loupe.bytes(r.up)},
+                    {key: 'top', label: '{{ lang._("Top services") }}', fmt: r => loupe.esc(r.top.join(', '))},
+                    {key: 'last', label: '{{ lang._("Last seen") }}', num: true, fmt: r => loupe.ago(r.last)}
+                ], data.rows, 'down', function (r) {
+                    window.location.hash = 'device=' + (r.mac || r.ip);
+                });
+            });
+        }
+
+        function showDevice(id) {
+            $('#loupe-list').hide();
+            $('#loupe-detail').show();
+            ajaxGet('/api/loupe/report/device/' + encodeURIComponent(id) + '/' + hours, {}, function (data) {
+                if (data.error) { $('#loupe-detail-title').text(data.error); return; }
+                const d = data.device || {};
+                $('#loupe-detail-title').html(loupe.esc(d.name || d.ip || id) + ' <small>' + loupe.esc([d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>');
+                const tl = data.timeline;
+                if (chart) chart.destroy();
+                chart = new Chart(document.getElementById('loupe-chart'), {
+                    type: 'bar',
+                    data: {
+                        labels: tl.map(p => p[0] * 1000),
+                        datasets: [
+                            {label: '{{ lang._("Down") }}', data: tl.map(p => p[1]), backgroundColor: 'rgba(54,162,235,0.7)', stack: 's'},
+                            {label: '{{ lang._("Up") }}', data: tl.map(p => p[2]), backgroundColor: 'rgba(255,159,64,0.7)', stack: 's'}
+                        ]
+                    },
+                    options: {
+                        maintainAspectRatio: false, animation: false,
+                        scales: {
+                            x: {type: 'time', stacked: true, time: {tooltipFormat: 'lll'}},
+                            y: {stacked: true, ticks: {callback: v => loupe.bytes(v)}}
+                        },
+                        plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + loupe.bytes(c.raw)}}}
+                    }
+                });
+                loupe.table($('#loupe-services'), [
+                    {key: 'service', label: '{{ lang._("Service") }}', fmt: r => loupe.esc(r.service) + ' <span class="loupe-muted">' + loupe.esc(r.names.slice(0, 3).join(', ')) + '</span>'},
+                    {key: 'down', label: '{{ lang._("Down") }}', num: true, fmt: r => loupe.bytes(r.down)},
+                    {key: 'up', label: '{{ lang._("Up") }}', num: true, fmt: r => loupe.bytes(r.up)},
+                    {key: 'conns', label: '{{ lang._("Connections") }}', num: true}
+                ], data.services, 'down');
+                loupe.table($('#loupe-sites'), [
+                    {key: 'name', label: '{{ lang._("Site") }}', fmt: r => '<a href="/ui/loupe/index/lookup#q=' + encodeURIComponent(r.name) + '">' + loupe.esc(r.name) + '</a>'},
+                    {key: 'service', label: '{{ lang._("Service") }}'},
+                    {key: 'down', label: '{{ lang._("Down") }}', num: true, fmt: r => loupe.bytes(r.down)},
+                    {key: 'up', label: '{{ lang._("Up") }}', num: true, fmt: r => loupe.bytes(r.up)},
+                    {key: 'conns', label: '{{ lang._("Connections") }}', num: true},
+                    {key: 'last', label: '{{ lang._("Last seen") }}', num: true, fmt: r => loupe.ago(r.last)}
+                ], data.sites, 'down');
+                loupe.table($('#loupe-ports'), [
+                    {key: 'port', label: '{{ lang._("Protocol / port") }}'},
+                    {key: 'down', label: '{{ lang._("Down") }}', num: true, fmt: r => loupe.bytes(r.down)},
+                    {key: 'up', label: '{{ lang._("Up") }}', num: true, fmt: r => loupe.bytes(r.up)},
+                    {key: 'conns', label: '{{ lang._("Connections") }}', num: true}
+                ], data.ports, 'down');
+            });
+        }
+
+        function route() {
+            const m = window.location.hash.match(/device=([^&]+)/);
+            if (m) { showDevice(decodeURIComponent(m[1])); } else { showDevices(); }
+        }
+
+        $('#loupe-period .btn').click(function () {
+            hours = parseFloat($(this).data('hours'));
+            localStorage.setItem('loupe.hours', hours);
+            periodButtons();
+            route();
+        });
+        $('#loupe-back').click(function (e) { e.preventDefault(); window.location.hash = ''; });
+        $(window).on('hashchange', route);
+        periodButtons();
+        route();
+    });
+</script>
+
+<div class="content-box">
+    <div class="loupe-bar">
+        <div class="btn-group" id="loupe-period">
+            <button class="btn btn-default btn-sm" data-hours="1">{{ lang._('1 hour') }}</button>
+            <button class="btn btn-default btn-sm" data-hours="24">{{ lang._('24 hours') }}</button>
+            <button class="btn btn-default btn-sm" data-hours="168">{{ lang._('7 days') }}</button>
+            <button class="btn btn-default btn-sm" data-hours="720">{{ lang._('30 days') }}</button>
+            <button class="btn btn-default btn-sm" data-hours="8760">{{ lang._('1 year') }}</button>
+        </div>
+        <span id="loupe-total" class="loupe-muted"></span>
+    </div>
+
+    <div id="loupe-list">
+        <div id="loupe-empty" style="display: none">{{ lang._('No traffic recorded in this period yet. Data appears a minute after Loupe starts.') }}</div>
+        <table id="loupe-devices" class="table table-condensed table-hover table-striped loupe-table"></table>
+    </div>
+
+    <div id="loupe-detail" style="display: none">
+        <div class="loupe-section">
+            <a href="#" id="loupe-back">&larr; {{ lang._('All devices') }}</a>
+            <h2 id="loupe-detail-title" style="font-size: 20px"></h2>
+        </div>
+        <div id="loupe-chart-wrap"><canvas id="loupe-chart"></canvas></div>
+        <div class="loupe-section"><h3>{{ lang._('Services') }}</h3>
+            <table id="loupe-services" class="table table-condensed table-striped loupe-table"></table></div>
+        <div class="loupe-section"><h3>{{ lang._('Sites') }}</h3>
+            <table id="loupe-sites" class="table table-condensed table-striped loupe-table"></table></div>
+        <div class="loupe-section"><h3>{{ lang._('Protocols and ports') }}</h3>
+            <table id="loupe-ports" class="table table-condensed table-striped loupe-table"></table></div>
+    </div>
 </div>

@@ -80,7 +80,9 @@ class Loupe:
                     info[f"dhcp_{k}"] = ev[k]
         elif kind == "mdns":
             d = self.devices[ev["mac"]]
-            d["ts"], d["ip"] = ev["ts"], ev["client"]
+            d["ts"] = ev["ts"]
+            if ":" not in ev["client"]:
+                d["ip"] = ev["client"]    # mDNS often comes from the IPv6 link-local address
             info = d.setdefault("info", {})
             for k in ("models", "names", "services"):
                 if ev.get(k):
