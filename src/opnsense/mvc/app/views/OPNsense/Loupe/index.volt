@@ -437,11 +437,11 @@ POSSIBILITY OF SUCH DAMAGE.
         {{ partial("layout_partials/base_form", ['fields': formSettings, 'id': 'frm_settings']) }}
     </div>
     <div id="subtab_servicenames" class="tab-pane fade in">
-        <p class="loupe-bar">{{ lang._('Your own names for domains. They add to and override the built-in list, and apply to all history.') }}</p>
+        <p class="loupe-bar"><strong>{{ lang._('Service names') }}</strong><br/>{{ lang._('Your own names for domains. They add to and override the built-in list, and apply to all history.') }}</p>
         {{ partial('layout_partials/base_bootgrid_table', formGridServices) }}
     </div>
     <div id="subtab_devicenames" class="tab-pane fade in">
-        <p class="loupe-bar">{{ lang._('Name a device or correct its detected type. Matched by MAC address; the pencil next to a device does the same.') }}</p>
+        <p class="loupe-bar"><strong>{{ lang._('Device names') }}</strong><br/>{{ lang._('Name a device or correct its detected type. Matched by MAC address; the pencil next to a device does the same.') }}</p>
         {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
     </div>
 </div>
