@@ -23,10 +23,9 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Install, update or remove Loupe on the OPNsense box itself, from a copy of this repository.
-# Run as root:
-#   sh tools/install.sh              install or update
-#   sh tools/install.sh uninstall    remove (traffic data in /var/db/loupe and the settings are kept)
+# Install or update Loupe on the OPNsense box itself, from a copy of this repository. Run as root:
+#   sh tools/install.sh
+# (tools/uninstall.sh removes it.)
 #
 # Files go where the package would put them (src/ -> /usr/local). The list of installed files is kept
 # in /usr/local/etc/loupe.files, so an update removes files that are gone from the new version.
@@ -63,16 +62,6 @@ remove_listed() {
         rmdir -p "$PREFIX/$d" 2>/dev/null || true
     done
 }
-
-if [ "$1" = "uninstall" ]; then
-    [ -x $PREFIX/etc/rc.d/loupe ] && $PREFIX/etc/rc.d/loupe onestop >/dev/null 2>&1 || true
-    remove_listed "$MANIFEST"
-    rm -rf $PREFIX/opnsense/scripts/loupe
-    rm -f "$MANIFEST" /etc/rc.conf.d/loupe $PREFIX/etc/loupe.json
-    refresh_gui
-    echo "Loupe removed. Traffic data is still in /var/db/loupe; delete it to start over."
-    exit 0
-fi
 
 NEW=$(mktemp)
 (cd "$SRC" && find . -type f ! -name .DS_Store ! -path '*/__pycache__/*' | sed 's#^\./##' | sort) > "$NEW"

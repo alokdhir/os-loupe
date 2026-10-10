@@ -23,20 +23,38 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Development: install this working tree on a router over SSH (runs tools/install.sh there).
-#   ROUTER=admin@192.168.1.1 tools/deploy.sh              install or update
-#   ROUTER=admin@192.168.1.1 tools/deploy.sh uninstall    remove (runs tools/uninstall.sh)
-# Runs the installer with sudo (it asks for the password as usual) unless ROUTER is root@.
-# Extra ssh options: LOUPE_SSH="ssh -i ~/.ssh/key".
+# Remove Loupe from the OPNsense box. Run as root:
+#   sh tools/uninstall.sh
+# Removes the files listed in /usr/local/etc/loupe.files (written by install.sh). The settings in the
+# OPNsense configuration and the traffic data in /var/db/loupe are kept, so a reinstall picks up again.
 
 set -e
-cd "$(dirname "$0")/.."
-: "${ROUTER:?set ROUTER=user@router}"
-SSH=${LOUPE_SSH:-ssh}
-case "$ROUTER" in root@*) SUDO= ;; *) SUDO=sudo ;; esac
-[ -t 0 ] && TTY=-t || TTY=
 
-DIR=$($SSH "$ROUTER" mktemp -d /tmp/loupe.XXXXXX)
-COPYFILE_DISABLE=1 tar --exclude .DS_Store --exclude __pycache__ -cf - src tools/install.sh tools/uninstall.sh | $SSH "$ROUTER" tar -C "$DIR" -xf -
-[ "$1" = uninstall ] && SCRIPT=uninstall.sh || SCRIPT=install.sh
-$SSH $TTY "$ROUTER" "$SUDO sh $DIR/tools/$SCRIPT; rc=\$?; rm -rf $DIR; exit \$rc"
+PREFIX=/usr/local
+MANIFEST=$PREFIX/etc/loupe.files
+
+if [ "$(id -u)" != 0 ]; then
+    echo "run as root (or with sudo)" >&2
+    exit 1
+fi
+if [ ! -f "$MANIFEST" ]; then
+    echo "Loupe is not installed (no $MANIFEST)" >&2
+    exit 1
+fi
+
+[ -x $PREFIX/etc/rc.d/loupe ] && $PREFIX/etc/rc.d/loupe onestop >/dev/null 2>&1 || true
+
+while read -r f; do
+    rm -f "$PREFIX/$f"
+done < "$MANIFEST"
+sed 's#/[^/]*$##' "$MANIFEST" | sort -ru | while read -r d; do
+    rmdir -p "$PREFIX/$d" 2>/dev/null || true          # directories left empty
+done
+rm -rf $PREFIX/opnsense/scripts/loupe
+rm -f "$MANIFEST" /etc/rc.conf.d/loupe $PREFIX/etc/loupe.json
+
+rm -f /var/lib/php/tmp/opnsense_menu_cache.xml /var/lib/php/tmp/opnsense_acl_cache.json
+rm -f /var/lib/php/cache/*opnsense_loupe*
+service configd restart >/dev/null
+
+echo "Loupe removed. Traffic data is still in /var/db/loupe; delete it to start over."

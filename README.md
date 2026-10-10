@@ -85,7 +85,7 @@ cd /root/os-loupe && git pull && sh tools/install.sh                 # update
 
 Then open **Reporting → Loupe → Settings**, tick *Enable* on the *General* page, choose the LAN interface(s) and press *Apply*.
 
-`sh tools/install.sh uninstall` removes it again; the traffic data in `/var/db/loupe` is kept until you delete it. Requires OPNsense 26.x (Python 3 with `cryptography` and `sqlite3`, both present by default).
+`sh tools/uninstall.sh` removes it again; the traffic data in `/var/db/loupe` is kept until you delete it. Requires OPNsense 26.x (Python 3 with `cryptography` and `sqlite3`, both present by default).
 
 For development, `ROUTER=user@router tools/deploy.sh` copies your working tree to a router over SSH and runs the same installer there.
 
