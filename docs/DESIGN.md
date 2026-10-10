@@ -120,7 +120,7 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **DHCP servers other than dnsmasq:** lease-file names are read from dnsmasq only; Kea and ISC DHCP installs lose that clue.
 - **IPv6** is implemented (filters, parsing) but has not seen real traffic yet.
 - **VLANs / several LAN interfaces:** supported by configuration, tested only on one bridged LAN.
-- **Large state tables:** `pfctl -ss -vv` is parsed as text every 10 seconds: ~40 µs per state, so ~0.5% of a core at 1,000 states but ~20% at 50,000. A faster text parser (LOUPE-20) and then pf's binary interface (LOUPE-21) address it.
+- **Large state tables:** `pfctl -ss -vv` is parsed as text every 10 seconds: ~15 µs per state on an N150 (`tools/bench_pfstate.py`), so ~0.2% of a core at 1,000 states but ~8% at 50,000. pf's binary interface (LOUPE-21) would remove the text step altogether.
 - **External commands:** Loupe still runs `pfctl`, `arp`, `ndp`, `ifconfig`, `tcpdump -ddd` and `unbound-control`; each has a native replacement planned (LOUPE-21, LOUPE-22).
 - **pfctl output format** is a text interface and could change between releases; the parser has tests, but a format change would stop byte counting.
 - **Long report periods:** reports up to 30 days scan the 5-minute table; at a full month of data, reports beyond 48 hours should read the hourly table.

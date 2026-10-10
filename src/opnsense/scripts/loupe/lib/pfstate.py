@@ -66,59 +66,74 @@ class State(NamedTuple):
 
 def split_endpoint(tok):
     """'1.2.3.4:443', '2001:db8::1[443]', 'a (b)' -> (addr, port). Prefers the pre-NAT address in parens."""
-    m = re.match(r"^(\S+) \((\S+)\)$", tok)
-    if m:
-        tok = m.group(2)
-    if tok.endswith("]") and "[" in tok:
-        addr, port = tok[:-1].split("[", 1)
-    elif tok.count(":") == 1:
+    if tok.endswith(")"):
+        i = tok.find(" (")
+        if i >= 0:
+            tok = tok[i + 2:-1]
+    if tok.endswith("]"):
+        i = tok.find("[")
+        if i >= 0:
+            return tok[:i], int(tok[i + 1:-1])
+    if tok.count(":") == 1:
         addr, port = tok.split(":")
-    else:
-        addr, port = tok, "0"
-    return addr, int(port)
+        return addr, int(port)
+    return tok, 0
+
+
+RECORD = re.compile(r"\n(?=\S)")      # a state starts on an unindented line
+
+
+def _cached(fn, cache):
+    def get(addr):
+        hit = cache.get(addr)
+        if hit is None:
+            if len(cache) > 200000:
+                cache.clear()
+            hit = cache[addr] = fn(addr)
+        return hit
+    return get
 
 
 def parse(text, is_local, ifaces=None):
     """Parse `pfctl -ss -vv` output. Keeps states with exactly one local endpoint
-    (on `ifaces`, if given) and returns {key: State}."""
-    out = {}
-    block = []
+    (on `ifaces`, if given) and returns {key: State}.
 
-    def flush():
-        if not block:
-            return
-        m = HEADER.match(block[0])
-        rest = "\n".join(block[1:])
-        c, i, o = COUNTS.search(rest), IDLINE.search(rest), ORIGIF.search(rest)
-        if not (m and c and i and o):
-            return
-        if ifaces is not None and o.group(1) not in ifaces:
-            return
+    Hot path (every 10 s, ~half the records are the WAN-side twin): the interface is
+    checked before anything else is parsed, and address checks are cached per call."""
+    out = {}
+    local = _cached(is_local, {})
+    group = _cached(is_group, {})
+    for rec in RECORD.split(text):
+        o = rec.find("origif: ")
+        if o < 0:
+            continue
+        e = rec.find("\n", o)
+        origif = rec[o + 8:e if e >= 0 else len(rec)].strip()
+        if ifaces is not None and origif not in ifaces:
+            continue
+        nl = rec.find("\n")
+        if nl < 0:
+            continue
+        m = HEADER.match(rec[:nl])
+        c = COUNTS.search(rec, nl)
+        i = IDLINE.search(rec, nl)
+        if not (m and c and i):
+            continue
         proto, left, arrow, right = m.groups()
         # "A <- B": created inbound on origif, B -> A is the first packet. "A -> B": outbound, A -> B.
         (ia, ip_), (ra, rp) = (split_endpoint(right), split_endpoint(left)) if arrow == "<-" else \
             (split_endpoint(left), split_endpoint(right))
-        il, rl = is_local(ia), is_local(ra)
-        if il == rl or is_group(ra if il else ia):
-            return
+        il, rl = local(ia), local(ra)
+        if il == rl or group(ra if il else ia):
+            continue
         p_init, p_resp, b_init, b_resp = (int(x) for x in c.groups())
-        g = AGE.search(rest)
+        g = AGE.search(rec, nl)
         age = int(g.group(1)) * 3600 + int(g.group(2)) * 60 + int(g.group(3)) if g else 0
+        key = (i.group(1), i.group(2))
         if il:
-            st = State((i.group(1), i.group(2)), o.group(1), proto, ia, ip_, ra, rp, True,
-                       b_init, b_resp, p_init, p_resp, age)
+            out[key] = State(key, origif, proto, ia, ip_, ra, rp, True, b_init, b_resp, p_init, p_resp, age)
         else:
-            st = State((i.group(1), i.group(2)), o.group(1), proto, ra, rp, ia, ip_, False,
-                       b_resp, b_init, p_resp, p_init, age)
-        out[st.key] = st
-
-    for line in text.splitlines():
-        if line and not line[0].isspace():
-            flush()
-            block = [line]
-        elif block:
-            block.append(line)
-    flush()
+            out[key] = State(key, origif, proto, ra, rp, ia, ip_, False, b_resp, b_init, p_resp, p_init, age)
     return out
 
 

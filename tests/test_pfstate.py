@@ -98,5 +98,19 @@ class TestPfState(unittest.TestCase):
         self.assertNotIn("3", d)                             # unchanged
 
 
+class TestLargeTable(unittest.TestCase):
+    def test_synthetic_dump(self):
+        """The benchmark's dump: every connection kept once, from its LAN-side state, with the right direction."""
+        import os
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+        import bench_pfstate
+        states = pfstate.parse(bench_pfstate.synthetic(300), LOCAL, {"bridge0"})
+        self.assertEqual(len(states), 300)
+        self.assertTrue(all(st.origif == "bridge0" for st in states.values()))
+        st = states[("0000000000000000", "aaaa0001")]
+        self.assertEqual((st.local, st.remote, st.rport, st.outbound, st.up, st.down), ("10.9.0.1", "203.0.113.1", 443, True, 0, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
