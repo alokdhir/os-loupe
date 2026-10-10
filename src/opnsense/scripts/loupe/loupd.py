@@ -30,7 +30,6 @@ usage: loupd.py [--config /usr/local/etc/loupe.json] [--db PATH] [--poll S] [--f
 import argparse
 import collections
 import json
-import re
 import signal
 import subprocess
 import sys
@@ -40,10 +39,8 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, names, pfstate, store  # noqa: E402
+from lib import devid, names, neighbours, pfstate, store  # noqa: E402
 
-ARP = re.compile(r"\((\S+)\) at ([0-9a-f:]{17})")
-NDP = re.compile(r"^(\S+)\s+([0-9a-f:]{17})\s", re.M)
 
 
 def local_day(ts):
@@ -167,10 +164,7 @@ class Loupe:
         self.store.set_device_types(rows)
 
     def refresh_macs(self):
-        out = subprocess.run(["arp", "-an"], capture_output=True, text=True).stdout
-        self.ip_mac.update((ip, mac) for ip, mac in ARP.findall(out))
-        out = subprocess.run(["ndp", "-an"], capture_output=True, text=True).stdout
-        self.ip_mac.update((ip.split("%")[0], mac) for ip, mac in NDP.findall(out))
+        self.ip_mac.update(neighbours.table())
 
     def poll(self, now):
         states = pfstate.snapshot(self.is_local, self.ifaces)

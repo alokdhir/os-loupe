@@ -22,6 +22,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import socket
+import struct
 import unittest
 
 import helpers  # noqa: F401  (sets sys.path)
@@ -110,6 +112,26 @@ class TestLargeTable(unittest.TestCase):
         self.assertTrue(all(st.origif == "bridge0" for st in states.values()))
         st = states[("0000000000000000", "aaaa0001")]
         self.assertEqual((st.local, st.remote, st.rport, st.outbound, st.up, st.down), ("10.9.0.1", "203.0.113.1", 443, True, 0, 0))
+
+
+class TestNeighbours(unittest.TestCase):
+    def record(self, sa_dst, mac):
+        from lib import neighbours
+        dl = bytes([20, neighbours.AF_LINK, 1, 0, 6, 0, 6, 0]) + bytes.fromhex(mac.replace(":", "")) + b"\0" * 6
+        body = sa_dst + b"\0" * (-len(sa_dst) % neighbours.ALIGN) + dl + b"\0" * (-len(dl) % neighbours.ALIGN)
+        hdr = bytearray(neighbours.HDR)
+        struct.pack_into("H", hdr, 0, neighbours.HDR + len(body))
+        struct.pack_into("i", hdr, neighbours.ADDRS, neighbours.RTA_DST | neighbours.RTA_GATEWAY)
+        return bytes(hdr) + body
+
+    def test_parse(self):
+        from lib import neighbours
+        v4 = bytes([16, socket.AF_INET, 0, 0]) + socket.inet_aton("10.9.1.20") + b"\0" * 8
+        ll = bytearray(socket.inet_pton(socket.AF_INET6, "fe80::1"))
+        ll[3] = 5                                                   # embedded scope id
+        v6 = bytes([28, socket.AF_INET6, 0, 0, 0, 0, 0, 0]) + bytes(ll) + b"\0" * 4
+        got = neighbours.parse(self.record(v4, "02:00:00:00:00:01") + self.record(v6, "02:00:00:00:00:02"))
+        self.assertEqual(got, {"10.9.1.20": "02:00:00:00:00:01", "fe80::1": "02:00:00:00:00:02"})
 
 
 if __name__ == "__main__":
