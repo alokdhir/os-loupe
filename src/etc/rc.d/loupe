@@ -1,0 +1,20 @@
+#!/bin/sh
+# PROVIDE: loupe
+# REQUIRE: SERVERS
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name=loupe
+rcvar=loupe_enable
+load_rc_config $name
+
+: ${loupe_enable:=NO}
+: ${loupe_config:=/usr/local/etc/loupe.json}
+
+pidfile="/var/run/${name}.pid"
+procname="daemon"
+command="/usr/sbin/daemon"
+command_args="-f -r -R 5 -P ${pidfile} -T loupe /usr/local/opnsense/scripts/loupe/loupd.py --config ${loupe_config}"
+
+run_rc_command "$1"

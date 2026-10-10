@@ -1,0 +1,18 @@
+<form>
+    <field>
+        <id>device.mac</id>
+        <label>MAC address</label>
+        <type>text</type>
+    </field>
+    <field>
+        <id>device.name</id>
+        <label>Name</label>
+        <type>text</type>
+    </field>
+    <field>
+        <id>device.type</id>
+        <label>Type</label>
+        <type>text</type>
+        <help>Overrides the detected device type.</help>
+    </field>
+</form>

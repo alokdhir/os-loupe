@@ -1,0 +1,30 @@
+<form>
+    <field>
+        <id>loupe.general.enabled</id>
+        <label>Enable</label>
+        <type>checkbox</type>
+        <help>Watch the selected interfaces and record per-device traffic.</help>
+    </field>
+    <field>
+        <id>loupe.general.interfaces</id>
+        <label>Interfaces</label>
+        <type>select_multiple</type>
+        <help>The LAN-side interfaces your devices are on. Traffic is attributed to addresses in these interfaces' networks.</help>
+    </field>
+    <field>
+        <id>loupe.general.retention_5m</id>
+        <label>Keep 5-minute detail (days)</label>
+        <type>text</type>
+    </field>
+    <field>
+        <id>loupe.general.retention_1h</id>
+        <label>Keep hourly totals (days)</label>
+        <type>text</type>
+    </field>
+    <field>
+        <id>loupe.general.retention_lookups</id>
+        <label>Keep site lookups (days)</label>
+        <type>text</type>
+        <help>Names each device looked up or connected to, including ones that moved no data.</help>
+    </field>
+</form>

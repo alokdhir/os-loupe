@@ -1,0 +1,59 @@
+<model>
+    <mount>//OPNsense/Loupe</mount>
+    <version>0.1.0</version>
+    <description>Loupe per-device traffic monitor</description>
+    <items>
+        <general>
+            <enabled type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+            </enabled>
+            <interfaces type="InterfaceField">
+                <Multiple>Y</Multiple>
+                <Default>lan</Default>
+                <filters>
+                    <enable>/^(?!0).*$/</enable>
+                </filters>
+            </interfaces>
+            <retention_5m type="IntegerField">
+                <Default>30</Default>
+                <Required>Y</Required>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>365</MaximumValue>
+            </retention_5m>
+            <retention_1h type="IntegerField">
+                <Default>365</Default>
+                <Required>Y</Required>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>3650</MaximumValue>
+            </retention_1h>
+            <retention_lookups type="IntegerField">
+                <Default>30</Default>
+                <Required>Y</Required>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>365</MaximumValue>
+            </retention_lookups>
+        </general>
+        <services>
+            <service type="ArrayField">
+                <suffix type="TextField">
+                    <Required>Y</Required>
+                    <Mask>/^[a-zA-Z0-9.\-_]+$/</Mask>
+                    <ValidationMessage>Enter a domain or domain suffix, e.g. example.com.</ValidationMessage>
+                </suffix>
+                <name type="TextField">
+                    <Required>Y</Required>
+                </name>
+            </service>
+        </services>
+        <devices>
+            <device type="ArrayField">
+                <mac type="MacAddressField">
+                    <Required>Y</Required>
+                </mac>
+                <name type="TextField"/>
+                <type type="TextField"/>
+            </device>
+        </devices>
+    </items>
+</model>

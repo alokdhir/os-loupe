@@ -1,0 +1,9 @@
+<acl>
+    <page-reporting-loupe>
+        <name>Reporting: Loupe</name>
+        <patterns>
+            <pattern>ui/loupe/*</pattern>
+            <pattern>api/loupe/*</pattern>
+        </patterns>
+    </page-reporting-loupe>
+</acl>

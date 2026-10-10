@@ -1,0 +1,23 @@
+{
+    "interfaces": [{% if not helpers.empty('OPNsense.Loupe.general.interfaces') %}{%
+        for intf in OPNsense.Loupe.general.interfaces.split(',') %}{{ helpers.physical_interface(intf) | tojson }}{{ "," if not loop.last }}{% endfor %}{% endif %}],
+    "retention": {
+        "days_5m": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_5m') or '30' }},
+        "days_1h": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_1h') or '365' }},
+        "days_lookups": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_lookups') or '30' }}
+    },
+    "services": {
+{% if helpers.exists('OPNsense.Loupe.services.service') %}
+{%   for svc in helpers.toList('OPNsense.Loupe.services.service') %}
+        {{ svc.suffix | tojson }}: {{ svc.name | tojson }}{{ "," if not loop.last }}
+{%   endfor %}
+{% endif %}
+    },
+    "devices": {
+{% if helpers.exists('OPNsense.Loupe.devices.device') %}
+{%   for dev in helpers.toList('OPNsense.Loupe.devices.device') %}
+        {{ dev.mac | lower | tojson }}: {"name": {{ dev.name | default('') | tojson }}, "type": {{ dev.type | default('') | tojson }}}{{ "," if not loop.last }}
+{%   endfor %}
+{% endif %}
+    }
+}

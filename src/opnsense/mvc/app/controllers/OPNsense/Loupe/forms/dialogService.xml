@@ -1,0 +1,13 @@
+<form>
+    <field>
+        <id>service.suffix</id>
+        <label>Domain</label>
+        <type>text</type>
+        <help>Matches this domain and everything under it, e.g. example.com also matches cdn.example.com.</help>
+    </field>
+    <field>
+        <id>service.name</id>
+        <label>Service</label>
+        <type>text</type>
+    </field>
+</form>

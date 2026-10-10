@@ -1,10 +1,11 @@
 #!/usr/local/bin/python3
 """loupe daemon: capture names, poll pf byte counters, write per-device traffic to SQLite.
 
-usage: loupd.py [--db PATH] [--poll S] [--flush S] IFACE [IFACE ...]
+usage: loupd.py [--config /usr/local/etc/loupe.json] [--db PATH] [--poll S] [--flush S] [IFACE ...]
 """
 import argparse
 import collections
+import json
 import re
 import signal
 import subprocess
@@ -27,7 +28,7 @@ def local_day(ts):
 
 
 class Loupe:
-    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30)):
+    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), overrides=None):
         self.ifaces = set(ifaces)
         self.is_local = pfstate.local_matcher(pfstate.interface_networks(ifaces))
         self.store = store.Store(db)
@@ -38,6 +39,7 @@ class Loupe:
         self.next_prune = time.time() + 300
         self.next_classify = time.time() + 120
         self.oui = devid.load_oui()
+        self.overrides = {m.lower(): o for m, o in (overrides or {}).items()}
         self.ip_mac = {}
         self.flows = {}
         self.lookups = {}
@@ -120,7 +122,10 @@ class Loupe:
         for mac, ip, hostname, info, seen in self.store.devices_with_names(now - 7 * 86400):
             name = leases.get(mac) or hosts.get(ip)
             t, src, ven = devid.classify(mac, name or hostname, info, seen, self.oui)
-            rows.append((name, ven, t, src, mac))
+            o = self.overrides.get(mac, {})
+            if o.get("type"):
+                t, src = o["type"], "set by you"
+            rows.append((o.get("name") or name, ven, t, src, mac))
         self.store.set_device_types(rows)
 
     def refresh_macs(self):
@@ -163,13 +168,24 @@ class Loupe:
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--config", help="JSON written by the OPNsense template")
     ap.add_argument("--db", default="/var/db/loupe/loupe.db")
     ap.add_argument("--poll", type=float, default=10)
     ap.add_argument("--flush", type=float, default=60)
-    ap.add_argument("ifaces", nargs="+")
+    ap.add_argument("ifaces", nargs="*")
     args = ap.parse_args()
     syslog.openlog("loupe", syslog.LOG_PID, syslog.LOG_DAEMON)
-    lp = Loupe(args.ifaces, args.db, args.poll, args.flush)
+    conf = {}
+    if args.config:
+        with open(args.config) as f:
+            conf = json.load(f)
+    ifaces = args.ifaces or [i for i in conf.get("interfaces", []) if i]
+    if not ifaces:
+        syslog.syslog(syslog.LOG_ERR, "loupe: no interfaces configured")
+        sys.exit(1)
+    r = conf.get("retention", {})
+    lp = Loupe(ifaces, args.db, args.poll, args.flush,
+               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_lookups", 30)), conf.get("devices"))
     cap = Capture(lp.emit)
 
     def stop(*_):
@@ -177,8 +193,8 @@ def main():
         sys.exit(0)
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    syslog.syslog(syslog.LOG_NOTICE, f"loupe: started on {' '.join(args.ifaces)}")
-    cap.run(args.ifaces, tick=lp.tick)
+    syslog.syslog(syslog.LOG_NOTICE, f"loupe: started on {' '.join(ifaces)}")
+    cap.run(ifaces, tick=lp.tick)
 
 
 if __name__ == "__main__":

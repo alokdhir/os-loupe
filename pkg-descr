@@ -1,0 +1,8 @@
+Loupe shows which device on your network talked to which site or service,
+how much data moved each way, and when.
+
+It names connections from TLS and QUIC ClientHellos (SNI) and DNS answers,
+counts bytes per connection from pf's state table (exact, both directions,
+before NAT), and identifies devices from mDNS, DHCP, MAC vendor and the
+services they use. Results are kept in SQLite: 5-minute detail for 30 days,
+hourly for a year. Reports live under Reporting, with a dashboard widget.
