@@ -1,0 +1,168 @@
+"""Per-connection byte counts from pf's state table.
+
+Every connection through the router has a pf state with byte counters for both
+directions, and the LAN-side state names the device before NAT. Polling
+`pfctl -ss -vv` and diffing counters gives exact per-device up/down bytes per
+server in small time slices.
+
+Why not the flow log: OPNsense's netflow on a LAN bridge misses LAN->internet
+packets on ingress (uploads only appear post-NAT on the WAN, with the public
+address), and long connections are only exported every 30 minutes.
+
+Poll at most every 10 s: pf keeps closed TCP states >= 45 s (finwait) and idle
+UDP >= 30 s (udp.single), so every state is seen with its final counters.
+"""
+import ipaddress
+import re
+import subprocess
+from typing import NamedTuple
+
+HEADER = re.compile(r"^\S+ (\S+) (.+?) (<-|->) (.+?)\s{2,}\S*\s*$")
+COUNTS = re.compile(r"(\d+):(\d+) pkts, (\d+):(\d+) bytes")
+IDLINE = re.compile(r"id: ([0-9a-f]+) creatorid: ([0-9a-f]+)")
+ORIGIF = re.compile(r"origif: (\S+)")
+AGE = re.compile(r"age (\d+):(\d+):(\d+)")
+
+
+class State(NamedTuple):
+    key: tuple          # (id, creatorid)
+    origif: str
+    proto: str
+    local: str          # LAN device address (pre-NAT)
+    lport: int
+    remote: str
+    rport: int
+    outbound: bool      # True: the LAN device opened the connection
+    up: int             # bytes sent by the device
+    down: int           # bytes received by the device
+    pkts_up: int
+    pkts_down: int
+    age: int            # seconds since the state was created
+
+
+def split_endpoint(tok):
+    """'1.2.3.4:443', '2001:db8::1[443]', 'a (b)' -> (addr, port). Prefers the pre-NAT address in parens."""
+    m = re.match(r"^(\S+) \((\S+)\)$", tok)
+    if m:
+        tok = m.group(2)
+    if tok.endswith("]") and "[" in tok:
+        addr, port = tok[:-1].split("[", 1)
+    elif tok.count(":") == 1:
+        addr, port = tok.split(":")
+    else:
+        addr, port = tok, "0"
+    return addr, int(port)
+
+
+def parse(text, is_local, ifaces=None):
+    """Parse `pfctl -ss -vv` output. Keeps states with exactly one local endpoint
+    (on `ifaces`, if given) and returns {key: State}."""
+    out = {}
+    block = []
+
+    def flush():
+        if not block:
+            return
+        m = HEADER.match(block[0])
+        rest = "\n".join(block[1:])
+        c, i, o = COUNTS.search(rest), IDLINE.search(rest), ORIGIF.search(rest)
+        if not (m and c and i and o):
+            return
+        if ifaces is not None and o.group(1) not in ifaces:
+            return
+        proto, left, arrow, right = m.groups()
+        # "A <- B": created inbound on origif, B -> A is the first packet. "A -> B": outbound, A -> B.
+        (ia, ip_), (ra, rp) = (split_endpoint(right), split_endpoint(left)) if arrow == "<-" else \
+            (split_endpoint(left), split_endpoint(right))
+        il, rl = is_local(ia), is_local(ra)
+        if il == rl:
+            return
+        p_init, p_resp, b_init, b_resp = (int(x) for x in c.groups())
+        g = AGE.search(rest)
+        age = int(g.group(1)) * 3600 + int(g.group(2)) * 60 + int(g.group(3)) if g else 0
+        if il:
+            st = State((i.group(1), i.group(2)), o.group(1), proto, ia, ip_, ra, rp, True,
+                       b_init, b_resp, p_init, p_resp, age)
+        else:
+            st = State((i.group(1), i.group(2)), o.group(1), proto, ra, rp, ia, ip_, False,
+                       b_resp, b_init, p_resp, p_init, age)
+        out[st.key] = st
+
+    for line in text.splitlines():
+        if line and not line[0].isspace():
+            flush()
+            block = [line]
+        elif block:
+            block.append(line)
+    flush()
+    return out
+
+
+def snapshot(is_local, ifaces=None):
+    text = subprocess.run(["pfctl", "-ss", "-vv"], capture_output=True, text=True, check=True).stdout
+    return parse(text, is_local, ifaces)
+
+
+def local_matcher(networks):
+    nets = [ipaddress.ip_network(n, strict=False) for n in networks]
+
+    def is_local(addr):
+        try:
+            a = ipaddress.ip_address(addr.split("%")[0])
+        except ValueError:
+            return False
+        return any(a in n for n in nets if n.version == a.version)
+    return is_local
+
+
+def interface_networks(ifaces):
+    """IPv4/IPv6 networks configured on the given interfaces (link-local excluded)."""
+    nets = []
+    for iface in ifaces:
+        out = subprocess.run(["ifconfig", iface], capture_output=True, text=True).stdout
+        for m in re.finditer(r"inet (\S+) netmask (0x[0-9a-f]+)", out):
+            nets.append(f"{m.group(1)}/{bin(int(m.group(2), 16)).count('1')}")
+        for m in re.finditer(r"inet6 (\S+) prefixlen (\d+)", out):
+            if not m.group(1).lower().startswith("fe80"):
+                nets.append(f"{m.group(1).split('%')[0]}/{m.group(2)}")
+    return nets
+
+
+class Delta(NamedTuple):
+    state: State
+    up: int
+    down: int
+    pkts_up: int
+    pkts_down: int
+    new: bool           # first time this connection is counted
+
+
+class Tracker:
+    """Turns successive snapshots into byte deltas. The first snapshot is a baseline:
+    bytes moved before loupe started are not counted, except for states younger than
+    `fresh` seconds (they began just now)."""
+
+    def __init__(self, fresh=15):
+        self.prev = None
+        self.fresh = fresh
+
+    def update(self, states):
+        deltas = []
+        first = self.prev is None
+        prev = self.prev or {}
+        for key, st in states.items():
+            old = prev.get(key)
+            if old is not None and (st.up < old.up or st.down < old.down):
+                old = None   # id reused / counters reset
+            if old is None:
+                if first and st.age > self.fresh:
+                    continue
+                d = Delta(st, st.up, st.down, st.pkts_up, st.pkts_down, True)
+            else:
+                d = Delta(st, st.up - old.up, st.down - old.down,
+                          st.pkts_up - old.pkts_up, st.pkts_down - old.pkts_down, False)
+                if not (d.up or d.down):
+                    continue
+            deltas.append(d)
+        self.prev = states
+        return deltas
