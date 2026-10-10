@@ -35,6 +35,21 @@ def state(key="1", local="10.9.1.20", lport=51000, remote="203.0.113.10", rport=
     return pfstate.State((key, "c"), "bridge0", "tcp", local, lport, remote, rport, True, 0, 0, 0, 0, 0)
 
 
+class TestRollup(unittest.TestCase):
+    def test_minutes_roll_up(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            self.addCleanup(s.close)
+            key = ("10.9.1.20", "203.0.113.10", 443, "tcp", "www.example")
+            s.write({(7260, *key): ["", "sni", 0, 1, 100, 1, 1], (7320, *key): ["", "sni", 0, 2, 200, 1, 0]}, {}, {})
+            db = sqlite3.connect(path)
+            self.addCleanup(db.close)
+            self.assertEqual(db.execute("SELECT bucket, down FROM flows_1m ORDER BY bucket").fetchall(), [(7260, 100), (7320, 200)])
+            self.assertEqual(db.execute("SELECT bucket, down, conns FROM flows_5m").fetchall(), [(7200, 300, 1)])
+            self.assertEqual(db.execute("SELECT bucket, down FROM flows_1h").fetchall(), [(7200, 300)])
+
+
 class TestNames(unittest.TestCase):
     def test_priority(self):
         n = names.Names()
@@ -84,7 +99,9 @@ class TestStore(unittest.TestCase):
             s.write({k3: ["", "sni", 0, 1, 1, 1, 0]}, {}, {}, now=3990)      # never goes back
             self.assertEqual(db.execute("SELECT last FROM flows_5m WHERE bucket = ?", (k3[0],)).fetchone(), (4000,))
             self.assertGreater(db.execute("SELECT last FROM flows_5m WHERE bucket = ?", (k2[0],)).fetchone()[0], 4000)
+            self.assertEqual(db.execute("SELECT count(*), sum(down) FROM flows_1m").fetchone()[0], 3)
             s.prune(3600 + 31 * 86400)
+            self.assertEqual(db.execute("SELECT count(*) FROM flows_1m").fetchone(), (0,))
             self.assertEqual(db.execute("SELECT count(*) FROM flows_5m").fetchone(), (0,))
             self.assertEqual(db.execute("SELECT count(*) FROM flows_1h").fetchone(), (1,))
 

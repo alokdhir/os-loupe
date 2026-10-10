@@ -162,24 +162,26 @@ POSSIBILITY OF SUCH DAMAGE.
                     + esc(d.name || d.ip || id) + editButton(d)
                     + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · '))
                     + (d.type_source ? ' (' + esc(d.type_source) + ')' : '') + '</small>');
-                const tl = data.timeline;
+                const tl = data.timeline, step = data.step || 300;
+                const mbps = b => b * 8 / step / 1e6;          /* average rate over the bar */
                 if (chart) chart.destroy();
                 chart = new Chart(document.getElementById('loupe-chart'), {
                     type: 'bar',
                     data: {
                         labels: tl.map(p => p[0] * 1000),
                         datasets: [
-                            {label: '{{ lang._("Down") }}', data: tl.map(p => p[1]), backgroundColor: 'rgba(54,162,235,0.7)', stack: 's'},
-                            {label: '{{ lang._("Up") }}', data: tl.map(p => p[2]), backgroundColor: 'rgba(255,159,64,0.7)', stack: 's'}
+                            {label: '{{ lang._("Down") }}', data: tl.map(p => mbps(p[1])), bytes: tl.map(p => p[1]), backgroundColor: 'rgba(54,162,235,0.7)', stack: 's'},
+                            {label: '{{ lang._("Up") }}', data: tl.map(p => mbps(p[2])), bytes: tl.map(p => p[2]), backgroundColor: 'rgba(255,159,64,0.7)', stack: 's'}
                         ]
                     },
                     options: {
                         maintainAspectRatio: false, animation: false,
                         scales: {
                             x: {type: 'time', stacked: true, time: {tooltipFormat: 'lll'}},
-                            y: {stacked: true, ticks: {callback: v => byteFormat(v, 1)}}
+                            y: {stacked: true, title: {display: true, text: 'Mbps'}, ticks: {callback: v => +v.toFixed(2)}}
                         },
-                        plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + byteFormat(c.raw, 2)}}}
+                        plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + c.raw.toFixed(c.raw < 10 ? 2 : 1)
+                            + ' Mbps (' + byteFormat(c.dataset.bytes[c.dataIndex], 1) + ')'}}}
                     }
                 });
             });
@@ -369,7 +371,7 @@ POSSIBILITY OF SUCH DAMAGE.
     });
 </script>
 
-{% set periods = [['1', lang._('1 hour')], ['24', lang._('24 hours')], ['168', lang._('7 days')], ['720', lang._('30 days')], ['8760', lang._('1 year')]] %}
+{% set periods = [['1', lang._('1 hour')], ['3', lang._('3 hours')], ['24', lang._('24 hours')], ['168', lang._('7 days')], ['720', lang._('30 days')], ['8760', lang._('1 year')]] %}
 
 <ul class="nav nav-tabs" data-tabs="tabs" id="maintabs">
     {{ partial("layout_partials/base_tabs_header", ['formData': [

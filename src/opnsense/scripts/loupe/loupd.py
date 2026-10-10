@@ -173,7 +173,7 @@ class Loupe:
             self.state_source = pfstate.source
             syslog.syslog(syslog.LOG_NOTICE, f"loupe: reading pf states via {pfstate.source}")
         self.live = set(states)
-        bucket = int(now // 300 * 300)
+        bucket = int(now // 60 * 60)          # minute; the store derives 5-minute and hourly rows
         for d in self.tracker.update(states):
             st = d.state
             name, source = self.names.name_for(st, now)

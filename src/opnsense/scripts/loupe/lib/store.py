@@ -32,6 +32,26 @@ import sqlite3
 import time
 
 SCHEMA = """
+-- 1-minute detail for the last day (short report periods)
+CREATE TABLE IF NOT EXISTS flows_1m (
+    bucket INTEGER NOT NULL,        -- unix time, start of the minute
+    ip TEXT NOT NULL,               -- LAN device address
+    mac TEXT NOT NULL DEFAULT '',
+    server TEXT NOT NULL,           -- remote address
+    port INTEGER NOT NULL,          -- remote port
+    proto TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',  -- server name ('' = unknown)
+    source TEXT NOT NULL DEFAULT '',-- sni | quic | dns | dns*
+    inbound INTEGER NOT NULL DEFAULT 0, -- 1: the remote side opened the connection
+    up INTEGER NOT NULL DEFAULT 0,
+    down INTEGER NOT NULL DEFAULT 0,
+    pkts INTEGER NOT NULL DEFAULT 0,
+    conns INTEGER NOT NULL DEFAULT 0,
+    last INTEGER NOT NULL DEFAULT 0,    -- when loupd last added to this row (0: before this was kept)
+    PRIMARY KEY (bucket, ip, server, port, proto, name)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS flows_1m_ip ON flows_1m (ip, bucket);
+
 CREATE TABLE IF NOT EXISTS flows_5m (
     bucket INTEGER NOT NULL,        -- unix time, start of the 5-minute slot
     ip TEXT NOT NULL,               -- LAN device address
@@ -101,6 +121,8 @@ CREATE TABLE IF NOT EXISTS devices (
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
+KEEP_1M = 86400          # seconds of 1-minute detail
+
 UPSERT = """
 INSERT INTO {t} (bucket, ip, mac, server, port, proto, name, source, inbound, up, down, pkts, conns, last)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -123,7 +145,7 @@ class Store:
         for col in ("name", "model"):      # added after the first release
             if col not in cols:
                 self.db.execute(f"ALTER TABLE devices ADD COLUMN {col} TEXT")
-        for table in ("flows_5m", "flows_1h"):
+        for table in ("flows_1m", "flows_5m", "flows_1h"):
             if "last" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN last INTEGER NOT NULL DEFAULT 0")
 
@@ -131,7 +153,8 @@ class Store:
         self.db.close()
 
     def write(self, flows, lookups, devices, now=None):
-        """flows: {(bucket5m, ip, server, port, proto, name): [mac, source, inbound, up, down, pkts, conns]}
+        """flows: {(bucket1m, ip, server, port, proto, name): [mac, source, inbound, up, down, pkts, conns]}
+        (minute buckets; the 5-minute and hourly rows are derived)
         lookups: {(day, ip, name, source): [count, first, last]}
         devices: {mac: {"ip", "ts", "hostname"?, "info"?: {...}}}"""
         db = self.db
@@ -140,7 +163,8 @@ class Store:
             now = int(now or time.time())
             rows = [(b, ip, v[0], srv, port, proto, name, v[1], v[2], v[3], v[4], v[5], v[6], now)
                     for (b, ip, srv, port, proto, name), v in flows.items()]
-            db.executemany(UPSERT.format(t="flows_5m"), rows)
+            db.executemany(UPSERT.format(t="flows_1m"), rows)
+            db.executemany(UPSERT.format(t="flows_5m"), [(r[0] - r[0] % 300, *r[1:]) for r in rows])
             db.executemany(UPSERT.format(t="flows_1h"), [(r[0] - r[0] % 3600, *r[1:]) for r in rows])
             db.executemany(
                 "INSERT INTO lookups (day, ip, name, source, count, first_seen, last_seen) VALUES (?,?,?,?,?,?,?) "
@@ -183,6 +207,7 @@ class Store:
 
     def prune(self, now, days_5m=30, days_1h=365, days_lookups=30):
         db = self.db
+        db.execute("DELETE FROM flows_1m WHERE bucket < ?", (now - KEEP_1M,))
         db.execute("DELETE FROM flows_5m WHERE bucket < ?", (now - days_5m * 86400,))
         db.execute("DELETE FROM flows_1h WHERE bucket < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM lookups WHERE day < ?", (now - days_lookups * 86400,))

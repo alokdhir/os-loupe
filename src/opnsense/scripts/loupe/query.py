@@ -68,9 +68,12 @@ def keep_5m_days():
 
 
 def window(hours):
-    """(table, start, bucket size): 5-minute detail while it is kept (the retention setting), hourly beyond."""
+    """(table, start, bucket size): minutes for the last 3 hours, 5-minute detail while it is kept (the
+    retention setting), hourly beyond."""
     now = time.time()
     start = int(now - hours * 3600)
+    if hours <= 3:
+        return "flows_1m", start, 60
     if hours > keep_5m_days() * 24:
         return "flows_1h", start, 86400 if hours > 24 * 90 else 3600
     return "flows_5m", start, 300 if hours <= 48 else 3600
