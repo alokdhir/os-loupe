@@ -28,8 +28,8 @@
 usage:
   query.py devices HOURS
   query.py device IP HOURS
-  query.py sites HOURS
-  query.py lookup TEXT HOURS
+  query.py sites HOURS [TEXT]
+  query.py lookup TEXT HOURS [exact]
   query.py widget
 """
 import collections
@@ -232,8 +232,11 @@ def matches(text, *fields):
     return any(text in (f or "").lower() for f in fields)
 
 
-def cmd_sites(hours):
-    """Every named service the house used in the period, biggest first, with the devices that used it."""
+def cmd_sites(hours, text=""):
+    """Every named service the house used in the period, biggest first, with the devices that used it.
+
+    With TEXT, only services where the service, a site name or an address matches; traffic with no
+    service that matches is listed under its site name or address."""
     db, svc, ov = load()
     table, start, _ = window(hours)
     info = devices_info(db, ov)
@@ -243,9 +246,14 @@ def cmd_sites(hours):
             f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(bucket) FROM {table} "
             f"WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
         s = lab.service(ip, name, server, port, proto)
+        hit = bool(text) and (matches(text, name, s) or server == text)
         if not s:
-            continue
-        r = rows.setdefault(s, {"service": s, "down": 0, "up": 0, "conns": 0, "last": 0, "by": collections.Counter()})
+            if not hit:
+                continue
+            s = name or server
+        r = rows.setdefault(s, {"service": s, "down": 0, "up": 0, "conns": 0, "last": 0, "by": collections.Counter(),
+                                "hit": False})
+        r["hit"] = r["hit"] or hit
         r["down"] += down
         r["up"] += up
         r["conns"] += conns
@@ -253,13 +261,17 @@ def cmd_sites(hours):
         r["by"][label(info.get(mac) or next((d for d in info.values() if d["ip"] == ip), None), ip)] += up + down
     out = []
     for r in rows.values():
-        by = r.pop("by")
+        by, hit = r.pop("by"), r.pop("hit")
+        if text and not hit:
+            continue
         out.append({**r, "devices": len(by), "names": [n for n, _ in by.most_common(3)]})
     return {"hours": hours, "rows": sorted(out, key=lambda r: -(r["down"] + r["up"]))}
 
 
-def cmd_lookup(text, hours):
-    """Traffic and lookups matching a site name, a service name (YouTube also finds googlevideo.com) or an address."""
+def cmd_lookup(text, hours, exact=False):
+    """Traffic and lookups matching a site name, a service name (YouTube also finds googlevideo.com) or an address.
+
+    exact: one row of the services list - its service, or for nameless traffic its site name or address."""
     db, svc, ov = load()
     table, start, _ = window(hours)
     info = devices_info(db, ov)
@@ -270,7 +282,10 @@ def cmd_lookup(text, hours):
             f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), min(bucket), max(bucket) "
             f"FROM {table} WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
         s = lab.service(ip, name, server, port, proto) or ""
-        if not (matches(text, name, s) or server == text):
+        if exact:
+            if (s or name or server).lower() != text:
+                continue
+        elif not (matches(text, name, s) or server == text):
             continue
         r = rows[(mac or ip, name or (s and "\0" + s) or server)]     # nameless traffic: one row per service
         r.update(ip=ip, mac=mac, name=name, service=s)
@@ -285,7 +300,10 @@ def cmd_lookup(text, hours):
     for ip, name, source, count, first, last in db.execute(
             "SELECT ip, name, source, sum(count), min(first_seen), max(last_seen) FROM lookups "
             "WHERE day >= ? AND last_seen >= ? GROUP BY ip, name, source", (day0, start)):
-        if not matches(text, name, svc.by_name(name)):
+        if exact:
+            if (svc.by_name(name) or name).lower() != text:
+                continue
+        elif not matches(text, name, svc.by_name(name)):
             continue
         dev = next((d for d in info.values() if d["ip"] == ip), None)
         looked.append({"ip": ip, "device": label(dev, ip), "type": (dev or {}).get("type", ""), "name": name,
@@ -328,9 +346,9 @@ def main(argv):
         elif cmd == "device":
             out = cmd_device(argv[2], hours_arg(argv[3]))
         elif cmd == "sites":
-            out = cmd_sites(hours_arg(argv[2]))
+            out = cmd_sites(hours_arg(argv[2]), (argv[3] if len(argv) > 3 else "").strip().lower())
         elif cmd == "lookup":
-            out = cmd_lookup(argv[2], hours_arg(argv[3]))
+            out = cmd_lookup(argv[2], hours_arg(argv[3]), len(argv) > 4 and argv[4] == "exact")
         elif cmd == "widget":
             out = cmd_widget()
         else:

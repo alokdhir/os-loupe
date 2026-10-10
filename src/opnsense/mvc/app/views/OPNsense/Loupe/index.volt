@@ -35,6 +35,8 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-bar { padding: 10px 15px; }
+    /* the theme's Bootstrap reset hides the browser's clear (×) in search fields; bring it back in our grids */
+    .bootgrid-header input[type=search]::-webkit-search-cancel-button { -webkit-appearance: searchfield-cancel-button; cursor: pointer; }
 </style>
 <script>
     $(document).ready(function () {
@@ -178,8 +180,6 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* Services tab: every service the house used, or what matches the search */
         function showServices() {
-            $('#loupe-q').val(q);
-            $('#loupe-q-clear').toggle(q !== '');
             if (!q) {
                 $('#loupe-results').hide();
                 $('#loupe-overview').show();
@@ -188,6 +188,7 @@ POSSIBILITY OF SUCH DAMAGE.
             }
             $('#loupe-overview').hide();
             $('#loupe-results').show();
+            $('#loupe-service-title').text(q);
             const query = () => ({q: q});
             grid('grid-traffic', '/api/loupe/report/search_lookup_traffic', query);
             grid('grid-names', '/api/loupe/report/search_lookup_names', query);
@@ -263,16 +264,6 @@ POSSIBILITY OF SUCH DAMAGE.
             route();
         });
         $('.loupe-period .btn').filter('[data-hours="' + hours + '"]').addClass('active');
-        $('#loupe-form').submit(function (e) {
-            e.preventDefault();
-            const v = $('#loupe-q').val().trim();
-            window.location.hash = v ? '#q=' + encodeURIComponent(v) : '#services';
-        });
-        $('#loupe-q').on('input', function () { $('#loupe-q-clear').toggle($(this).val() !== ''); });
-        $('#loupe-q-clear').click(function () {
-            $('#loupe-q').val('').focus();
-            window.location.hash = '#services';
-        });
 
         /* the pencil opens the same standard dialog as the Device names grid, saved per MAC */
         $(document).on('click', '.loupe-edit', function (e) {
@@ -412,18 +403,9 @@ POSSIBILITY OF SUCH DAMAGE.
 
     <div id="tab_services" class="tab-pane fade in">
         <div class="loupe-bar">
-            <form id="loupe-form" class="form-inline">
-                <div class="input-group" style="width: 380px; display: inline-table; vertical-align: middle">
-                    <input id="loupe-q" type="text" class="form-control" placeholder="{{ lang._('Service, site or address, e.g. YouTube, netflix.com, 17.250.96.102') }}"/>
-                    <span class="input-group-btn">
-                        <button id="loupe-q-clear" class="btn btn-default" type="button" title="{{ lang._('Clear') }}" style="display: none"><i class="fa fa-times"></i></button>
-                        <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i> {{ lang._('Search') }}</button>
-                    </span>
-                </div>
-                <div class="btn-group loupe-period" style="margin-left: 10px">
-                    {% for p in periods %}<button type="button" class="btn btn-default btn-sm" data-hours="{{ p[0] }}">{{ p[1] }}</button>{% endfor %}
-                </div>
-            </form>
+            <div class="btn-group loupe-period">
+                {% for p in periods %}<button type="button" class="btn btn-default btn-sm" data-hours="{{ p[0] }}">{{ p[1] }}</button>{% endfor %}
+            </div>
         </div>
         <div id="loupe-overview" style="display: none">
             <table id="grid-house" class="table table-condensed table-hover table-striped table-responsive">
@@ -439,7 +421,10 @@ POSSIBILITY OF SUCH DAMAGE.
             </table>
         </div>
         <div id="loupe-results" style="display: none">
-            <div style="padding: 0 15px 8px"><a href="#services">&larr; {{ lang._('All services') }}</a></div>
+            <div style="padding: 0 15px 8px">
+                <a href="#services">&larr; {{ lang._('All services') }}</a>
+                <h2 id="loupe-service-title" class="loupe-detail-title"></h2>
+            </div>
             <ul class="nav nav-tabs" data-tabs="tabs">
                 <li class="active"><a data-toggle="tab" href="#tab-traffic">{{ lang._('Traffic') }}</a></li>
                 <li><a data-toggle="tab" href="#tab-names">{{ lang._('Looked up or connected to') }}</a></li>

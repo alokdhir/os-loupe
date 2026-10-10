@@ -86,13 +86,13 @@ class ReportController extends ApiControllerBase
         return preg_match('/^[0-9a-fA-F:.]{2,45}$/', $id) ? $id : null;
     }
 
-    private function grid(array $rows, string $defaultSort = 'down')
+    private function grid(array $rows, string $defaultSort = 'down', $searchClauses = null)
     {
         // newest/biggest first unless the user sorts otherwise
         usort($rows, function ($a, $b) use ($defaultSort) {
             return ($b[$defaultSort] ?? 0) <=> ($a[$defaultSort] ?? 0);
         });
-        return $this->searchRecordsetBase($rows);
+        return $this->searchRecordsetBase($rows, null, null, null, SORT_NATURAL | SORT_FLAG_CASE, $searchClauses);
     }
 
     public function searchDevicesAction()
@@ -135,10 +135,19 @@ class ReportController extends ApiControllerBase
     /* a service, site or address: letters, digits, spaces and the punctuation service names use */
     private const TEXT = '/^[a-zA-Z0-9 .:_+&()\/-]{1,253}$/';
 
+    /* the services list; its search box matches services, sites and addresses (in query.py, not row text) */
     public function searchHouseAction()
     {
-        $data = $this->query(['sites', $this->postHours()]);
-        return $this->grid($data['rows'] ?? []);
+        $text = trim((string)$this->request->getPost('searchPhrase', null, ''));
+        $args = ['sites', $this->postHours()];
+        if ($text !== '') {
+            if (!preg_match(self::TEXT, $text)) {
+                return $this->searchRecordsetBase([]);
+            }
+            $args[] = $text;
+        }
+        $data = $this->query($args);
+        return $this->grid($data['rows'] ?? [], 'down', ['']);
     }
 
     private function lookupSection($section, $sort)
@@ -147,7 +156,7 @@ class ReportController extends ApiControllerBase
         if (!preg_match(self::TEXT, $text)) {
             return $this->searchRecordsetBase([]);
         }
-        $data = $this->query(['lookup', $text, $this->postHours()]);
+        $data = $this->query(['lookup', $text, $this->postHours(), 'exact']);
         return $this->grid($data[$section] ?? [], $sort);
     }
 
