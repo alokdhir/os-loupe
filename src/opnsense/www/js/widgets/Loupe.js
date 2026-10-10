@@ -36,26 +36,29 @@ export default class Loupe extends BaseWidget {
 
     getMarkup() {
         return $(`
-            <div class="loupe-widget" style="padding: 0 10px 10px">
+            <div class="loupe-widget" style="padding: 0 10px 10px; text-align: left">
                 <style>
-                    .loupe-widget .lw-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; margin-top: 5px; }
+                    .loupe-widget, .loupe-widget * { text-align: left; }
+                    .loupe-widget .lw-head { display: flex; flex-wrap: wrap; gap: 0 10px; align-items: baseline; margin-top: 5px; }
+                    .loupe-widget .lw-axis { display: flex; justify-content: space-between; color: #888; font-size: 10px; }
+                    .loupe-widget .lw-axis span:last-child { text-align: right; }
                     .loupe-widget .lw-title { font-weight: bold; font-size: 12px; margin: 10px 0 2px; }
                     .loupe-widget .lw-row { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; border-top: 1px solid rgba(128,128,128,0.2); font-size: 12px; }
                     .loupe-widget .lw-main { flex: 1; min-width: 0; }
                     .loupe-widget .lw-main > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                     .loupe-widget .lw-sub { color: #888; font-size: 11px; }
-                    .loupe-widget .lw-val { white-space: nowrap; text-align: right; }
+                    .loupe-widget .lw-val { white-space: nowrap; }
+                    .loupe-widget .lw-val, .loupe-widget .lw-val * { text-align: right; }
                 </style>
                 <div class="lw-head">
                     <strong>${this.translations.last24}</strong>
                     <span id="loupe-w-total" style="font-size: 12px; white-space: nowrap"></span>
                 </div>
-                <div class="canvas-container-noaspectratio" style="height: 60px; margin: 4px 0 10px">
+                <div class="canvas-container-noaspectratio" style="height: 60px; margin: 6px 0 2px">
                     <canvas id="loupe-w-spark"></canvas>
                 </div>
+                <div class="lw-axis"><span>${this.translations.ago24}</span><span>${this.translations.now}</span></div>
                 <div id="loupe-w-top"></div>
-                <div id="loupe-w-now"></div>
-                <div id="loupe-w-new"></div>
             </div>
         `);
     }
@@ -67,20 +70,8 @@ export default class Loupe extends BaseWidget {
         return (b / Math.pow(1000, i)).toFixed(i ? 1 : 0) + ' ' + u[i];
     }
 
-    static rate(bps) {
-        if (bps < 1000) return Math.round(bps) + ' b/s';
-        const u = ['kb/s', 'Mb/s', 'Gb/s'];
-        let i = -1;
-        do { bps /= 1000; i++; } while (bps >= 1000 && i < u.length - 1);
-        return bps.toFixed(1) + ' ' + u[i];
-    }
-
     static esc(s) {
         return $('<span>').text(s == null ? '' : String(s)).html();
-    }
-
-    section(title, rows) {
-        return `<div class="lw-title">${title}</div>${rows}`;
     }
 
     // one entry: name (and a grey second line) on the left, a value on the right; long text gets "..."
@@ -90,8 +81,7 @@ export default class Loupe extends BaseWidget {
     }
 
     link(r) {
-        const id = r.mac || r.ip;
-        return `<a href="/ui/loupe/#device=${Loupe.esc(id)}">${Loupe.esc(r.name || r.ip)}</a>`;
+        return `<a href="/ui/loupe/#device=${Loupe.esc(r.mac || r.ip)}">${Loupe.esc(r.name || r.ip)}</a>`;
     }
 
     async onMarkupRendered() {
@@ -108,7 +98,11 @@ export default class Loupe extends BaseWidget {
                     title: items => new Date(items[0].label * 1000).toLocaleTimeString([], {hour: 'numeric'}),
                     label: c => c.dataset.label + ': ' + Loupe.bytes(c.raw)
                 }}},
-                scales: {x: {display: false, stacked: true}, y: {display: false, stacked: true}}
+                scales: {
+                    x: {stacked: true, ticks: {display: false}, grid: {display: false},
+                        border: {display: true, color: 'rgba(128,128,128,0.5)'}},
+                    y: {display: false, stacked: true, beginAtZero: true}
+                }
             }
         });
     }
@@ -128,27 +122,10 @@ export default class Loupe extends BaseWidget {
         this.chart.data.datasets[1].data = d.hours.map(h => h[2]);
         this.chart.update();
 
-        $('#loupe-w-top').html(this.section(this.translations.top, d.top.map(r => this.row(
+        $('#loupe-w-top').html(`<div class="lw-title">${this.translations.top}</div>` + d.top.map(r => this.row(
             this.link(r),
             Loupe.esc([r.model || r.type, (r.top || [])[0]].filter(Boolean).join(' · ')),
-            `↓ ${Loupe.bytes(r.down)}`)).join('')));
-
-        $('#loupe-w-now').html(this.section(this.translations.now, d.now.length ? d.now.map(r => this.row(
-            this.link(r),
-            Loupe.esc(r.service),
-            `↓ ${Loupe.rate(r.down_rate)}<div class="lw-sub">↑ ${Loupe.rate(r.up_rate)}</div>`)).join('')
-            : this.row(`<span class="lw-sub">${this.translations.quiet}</span>`)));
-
-        let newRows;
-        if (d.since && Date.now() / 1000 - d.since < 86400) {
-            newRows = this.row(`<span class="lw-sub" style="white-space: normal">${this.translations.learning} ${new Date(d.since * 1000).toLocaleString()}</span>`);
-        } else if (d.new.length) {
-            newRows = d.new.map(r => this.row(this.link(r), Loupe.esc(r.model || r.type || r.vendor || ''),
-                `<span class="lw-sub">${new Date(r.first_seen * 1000).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}</span>`)).join('');
-        } else {
-            newRows = this.row(`<span class="lw-sub">${this.translations.nonew}</span>`);
-        }
-        $('#loupe-w-new').html(this.section(this.translations.new + (d.new_count > d.new.length ? ` (${d.new_count})` : ''), newRows));
+            `↓ ${Loupe.bytes(r.down)}<div class="lw-sub">↑ ${Loupe.bytes(r.up)}</div>`)).join(''));
     }
 
     onWidgetClose() {

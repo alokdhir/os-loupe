@@ -220,37 +220,16 @@ def cmd_lookup(text, hours):
 
 
 def cmd_widget():
-    db, svc, ov = load()
+    db, _svc, _ov = load()
     now = int(time.time())
-    info = devices_info(db, ov)
     spark = collections.defaultdict(lambda: [0, 0])
     for bucket, up, down in db.execute(
             "SELECT bucket, sum(up), sum(down) FROM flows_1h WHERE bucket >= ? GROUP BY bucket", (now - 86400,)):
         spark[bucket] = [down, up]
     first = (now - 86400) // 3600 * 3600
     hours = [[b, *spark.get(b, [0, 0])] for b in range(first, now + 1, 3600)]
-    top = cmd_devices(24)["rows"][:5]
-    recent = collections.defaultdict(lambda: {"down": 0, "up": 0, "services": collections.Counter()})
-    for ip, mac, name, server, port, proto, up, down in db.execute(
-            "SELECT ip, mac, name, server, port, proto, up, down FROM flows_5m WHERE bucket >= ?", (now - 600,)):
-        r = recent[mac or ip]
-        r["ip"], r["mac"] = ip, mac
-        r["down"] += down
-        r["up"] += up
-        r["services"][svc.service(name, server, port, proto) or name or server] += up + down
-    now_rows = sorted(({"name": label(info.get(r["mac"]), r["ip"]), "ip": r["ip"], "mac": r["mac"],
-                        "type": info.get(r["mac"], {}).get("type", ""),
-                        "down_rate": r["down"] * 8 / 600, "up_rate": r["up"] * 8 / 600,
-                        "service": r["services"].most_common(1)[0][0] if r["services"] else ""}
-                       for r in recent.values()), key=lambda r: -(r["down_rate"] + r["up_rate"]))[:5]
-    t = time.localtime(now)
-    midnight = int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
-    new = sorted(({k: d[k] for k in ("name", "ip", "mac", "type", "vendor", "model", "first_seen")}
-                  for d in info.values() if d["first_seen"] >= midnight), key=lambda d: -d["first_seen"])
-    started = db.execute("SELECT min(first_seen) FROM devices WHERE first_seen > 0").fetchone()[0]
-    return {"hours": hours, "down": sum(h[1] for h in hours), "up": sum(h[2] for h in hours),
-            "top": top, "now": now_rows, "new": new[:10], "new_count": len(new),
-            "since": started}
+    top = cmd_devices(24)["rows"][:8]
+    return {"hours": hours, "down": sum(h[1] for h in hours), "up": sum(h[2] for h in hours), "top": top}
 
 
 def hours_arg(v):
