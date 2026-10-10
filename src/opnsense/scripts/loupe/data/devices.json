@@ -96,6 +96,7 @@
   {"when": {"talks_to": ["mirrors.fedoraproject.org"]}, "type": "Fedora", "example": {"names": ["mirrors.fedoraproject.org"]}},
   {"when": {"talks_to": ["archive.raspberrypi.com", "archive.raspberrypi.org"]}, "type": "Raspberry Pi", "example": {"names": ["archive.raspberrypi.com"]}},
   {"when": {"talks_to": ["dl-cdn.alpinelinux.org"]}, "type": "Alpine Linux", "example": {"names": ["dl-cdn.alpinelinux.org"]}},
+  {"when": {"talks_to": "sphere.azure.net"}, "type": "Azure Sphere device", "note": "Microsoft's IoT chip platform (appliances, commercial equipment)", "example": {"names": ["prod.device.core.sphere.azure.net"]}},
   {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$", "private_mac": true}, "type": "iPhone/iPad/Mac", "note": "Apple's DHCP request (iOS, iPadOS, macOS) with a private MAC", "example": {"mac": "02:00:00:00:00:01", "info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252"}}},
   {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$"}, "type": "Apple device", "example": {"info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252,95,44,46"}}},
   {"when": {"vendor": "Tuya"}, "type": "Smart home device", "example": {"vendor": "Tuya Corp."}},
@@ -206,7 +207,8 @@
   "TP-Link device": {"icon": "fa-solid fa-microchip"},
   "HP device": {"icon": "fa-solid fa-print"},
   "Alpine Linux": {"icon": "fa-brands fa-linux"},
-  "Smart lock": {"icon": "fa-solid fa-lock"}
+  "Smart lock": {"icon": "fa-solid fa-lock"},
+  "Azure Sphere device": {"icon": "fa-solid fa-microchip"}
  },
  "apple_models": {
   "MacBookAir10,1": "MacBook Air 13″ (M1)",
