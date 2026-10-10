@@ -41,7 +41,7 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->view->formDialogService = $this->getForm('dialogService');
         $this->view->formDialogDevice = $this->getForm('dialogDevice');
         $this->view->formGridServices = $this->getFormGrid('dialogService', 'grid-servicenames');
-        $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'grid-devicenames');
+        $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'grid-overrides');
         $this->view->pick('OPNsense/Loupe/index');
     }
 

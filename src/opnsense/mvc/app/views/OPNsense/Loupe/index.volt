@@ -223,7 +223,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 });
                 clearable('{{ formGridServices['table_id'] }}');
             },
-            devicenames: function () {
+            overrides: function () {
                 $('#{{ formGridOverrides['table_id'] }}').UIBootgrid({
                     search: '/api/loupe/settings/search_device',
                     get: '/api/loupe/settings/get_device/',
@@ -243,14 +243,14 @@ POSSIBILITY OF SUCH DAMAGE.
             }
         }
 
-        /* tabs <-> address: #device=…, #q=…, #services, and the settings pages #general, #servicenames, #devicenames */
+        /* tabs <-> address: #device=…, #q=…, #services, and the settings pages #general, #servicenames, #overrides */
         const TABS = {devices: '#tab_devices', services: '#tab_services', settings: '#tab_settings'};
-        const PAGES = ['general', 'servicenames', 'devicenames'];
+        const PAGES = ['general', 'servicenames', 'overrides'];
 
         function tabOf(hash) {
             if (/^#device=/.test(hash)) return 'devices';
             if (/^#(q=|lookup$|sites$)/.test(hash)) return 'services';
-            const t = hash.replace(/^#/, '') || '{{ activetab }}';
+            const t = (hash.replace(/^#/, '') || '{{ activetab }}').replace(/^devicenames$/, 'overrides');
             return PAGES.indexOf(t) >= 0 ? 'settings' : (TABS[t] ? t : 'devices');
         }
 
@@ -267,7 +267,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 q = m ? decodeURIComponent(m[1]) : '';
                 showServices();
             } else {
-                const page = hash.replace(/^#/, '') || '{{ activetab }}';
+                const page = (hash.replace(/^#/, '') || '{{ activetab }}').replace(/^devicenames$/, 'overrides');
                 showSettings(PAGES.indexOf(page) >= 0 ? page : PAGES[0]);
             }
         }
@@ -291,7 +291,7 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $('.loupe-period .btn').filter('[data-hours="' + hours + '"]').addClass('active');
 
-        /* the pencil opens the same standard dialog as the Device names grid, saved per MAC */
+        /* the pencil opens the same standard dialog as the Overrides grid, saved per MAC */
         $(document).on('click', '.loupe-edit', function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -306,7 +306,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 }, function (data) {
                     if (data.result === 'saved') {
                         $('#' + dialog).modal('hide');
-                        if (started.devicenames) $('#{{ formGridOverrides['table_id'] }}').bootgrid('reload');
+                        if (started.overrides) $('#{{ formGridOverrides['table_id'] }}').bootgrid('reload');
                         route();
                     } else if (data.validations) {
                         handleFormValidation('frm_' + dialog, data.validations);
@@ -489,7 +489,7 @@ POSSIBILITY OF SUCH DAMAGE.
             <div class="btn-group loupe-pages">
                 <button type="button" class="btn btn-default btn-sm" data-page="general">{{ lang._('General') }}</button>
                 <button type="button" class="btn btn-default btn-sm" data-page="servicenames">{{ lang._('Service names') }}</button>
-                <button type="button" class="btn btn-default btn-sm" data-page="devicenames">{{ lang._('Device names') }}</button>
+                <button type="button" class="btn btn-default btn-sm" data-page="overrides">{{ lang._('Overrides') }}</button>
             </div>
         </div>
         <div id="page_general" class="loupe-page">
@@ -499,8 +499,8 @@ POSSIBILITY OF SUCH DAMAGE.
             <p class="loupe-bar">{{ lang._('Your own names for domains. They add to and override the built-in list, and apply to all history.') }}</p>
             {{ partial('layout_partials/base_bootgrid_table', formGridServices) }}
         </div>
-        <div id="page_devicenames" class="loupe-page">
-            <p class="loupe-bar">{{ lang._('Name a device or correct its detected type. Matched by MAC address; the pencil next to a device does the same.') }}</p>
+        <div id="page_overrides" class="loupe-page">
+            <p class="loupe-bar">{{ lang._('Your name or type for one device, matched by its MAC address. They win over everything Loupe detects; the pencil next to a device in the list edits the same entries.') }}</p>
             {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
         </div>
     </div>
