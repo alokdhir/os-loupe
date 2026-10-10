@@ -28,7 +28,7 @@ def local_day(ts):
 
 
 class Loupe:
-    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), overrides=None):
+    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30)):
         self.ifaces = set(ifaces)
         self.is_local = pfstate.local_matcher(pfstate.interface_networks(ifaces))
         self.store = store.Store(db)
@@ -37,10 +37,8 @@ class Loupe:
         self.poll_every, self.flush_every, self.retention = poll, flush, retention
         self.next_poll = self.next_flush = 0
         self.next_prune = time.time() + 300
-        self.next_classify = time.time() + 120
+        self.next_classify = time.time() + 30
         self.oui = devid.load_oui()
-        self.overrides = {m.lower(): o for m, o in (overrides or {}).items()}
-        self.config = None
         self.ip_mac = {}
         self.flows = {}
         self.lookups = {}
@@ -120,22 +118,14 @@ class Loupe:
             self.store.prune(now, *self.retention)
 
     def classify(self, now):
-        if self.config:
-            try:
-                with open(self.config) as f:   # pick up name/type edits made in the GUI
-                    self.overrides = {m.lower(): o for m, o in json.load(f).get("devices", {}).items()}
-            except (OSError, ValueError):
-                pass
+        """Store what loupe detects. Names/types set in the GUI are layered on at report time
+        (query.py), so editing or resetting them shows up immediately."""
         leases, hosts = devid.leases(), devid.static_hosts()
         rows = []
         for mac, ip, hostname, info, seen in self.store.devices_with_names(now - 7 * 86400):
             name = leases.get(mac) or hosts.get(ip)
             t, src, ven = devid.classify(mac, name or hostname, info, seen, self.oui)
-            o = self.overrides.get(mac, {})
-            if o.get("type"):
-                t, src = o["type"], "set by you"
-            name = o.get("name") or name or hostname or devid.mdns_name(info)
-            rows.append((name, ven, t, src, devid.model(info), mac))
+            rows.append((name or hostname or devid.mdns_name(info), ven, t, src, devid.model(info), mac))
         self.store.set_device_types(rows)
 
     def refresh_macs(self):
@@ -195,8 +185,7 @@ def main():
         sys.exit(1)
     r = conf.get("retention", {})
     lp = Loupe(ifaces, args.db, args.poll, args.flush,
-               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_lookups", 30)), conf.get("devices"))
-    lp.config = args.config
+               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_lookups", 30)))
     cap = Capture(lp.emit)
 
     def stop(*_):
