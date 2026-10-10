@@ -10,17 +10,30 @@ Non-goals: blocking or policy (that is the firewall's job), alerts, deep packet 
 
 ## Overview
 
-```
-            kernel                                   loupd (Python, one process)                    GUI
- ┌──────────────────────────┐   BPF   ┌────────────────────────────────────────┐          ┌─────────────────────┐
- │ LAN interface(s)         │────────▶│ capture: TLS ClientHello, QUIC Initial, │          │ MVC pages + widget   │
- │  only handshakes, DNS,   │         │   DNS answers, DHCP, mDNS  → names,     │          │   ↓ API              │
- │  DHCP, mDNS pass         │         │   device clues                          │          │ ReportController     │
- ├──────────────────────────┤ pfctl   │ every 10 s: pf state table → byte       │  SQLite  │   ↓ configd          │
- │ pf state table           │────────▶│   deltas per device/server/port         │─────────▶│ query.py (read-only) │
- │  (exact counters)        │ -ss -vv │ every 60 s: flush; hourly: prune;       │   WAL    │   applies names,     │
- └──────────────────────────┘         │ every 10 min: classify devices          │          │   overrides, labels  │
-                                      └────────────────────────────────────────┘          └─────────────────────┘
+```mermaid
+flowchart LR
+    subgraph kernel["OPNsense kernel"]
+        bpf["Packet capture (BPF)<br/>only handshakes, DNS, DHCP, mDNS"]
+        pf["pf state table<br/>exact byte counters"]
+    end
+    subgraph daemon["loupd"]
+        names["Names and device clues"]
+        bytes["Byte changes per connection<br/>every 10 s"]
+        flush["Write every minute<br/>classify devices every 10 min<br/>prune hourly"]
+    end
+    db[("SQLite<br/>/var/db/loupe")]
+    data["Shipped rules (data/*.json)<br/>settings (loupe.json)"]
+    subgraph gui["OPNsense GUI"]
+        query["query.py via configd<br/>applies names, overrides, labels"]
+        api["API"]
+        pages["Devices · Services · Settings<br/>dashboard widget"]
+    end
+    bpf --> names --> flush
+    pf -- "pfctl -ss -vv" --> bytes --> flush
+    flush --> db
+    db -- "read-only" --> query --> api --> pages
+    data --> flush
+    data --> query
 ```
 
 ## Data sources
