@@ -86,13 +86,23 @@ class ReportController extends ApiControllerBase
         return preg_match('/^[0-9a-fA-F:.]{2,45}$/', $id) ? $id : null;
     }
 
-    private function grid(array $rows, string $defaultSort = 'down', $searchClauses = null)
+    /* what each grid's search box matches: the columns it shows, never the explanations behind them */
+    private const SEARCH = [
+        'devices' => ['name', 'shown_type', 'vendor'],
+        'services' => ['service', 'names'],
+        'sites' => ['name', 'service', 'servers'],
+        'ports' => ['port'],
+        'traffic' => ['device', 'ip', 'name', 'service', 'servers'],
+        'lookups' => ['device', 'ip', 'name', 'source'],
+    ];
+
+    private function grid(array $rows, string $defaultSort = 'down', $searchClauses = null, $fields = null)
     {
         // newest/biggest first unless the user sorts otherwise
         usort($rows, function ($a, $b) use ($defaultSort) {
             return ($b[$defaultSort] ?? 0) <=> ($a[$defaultSort] ?? 0);
         });
-        return $this->searchRecordsetBase($rows, null, null, null, SORT_NATURAL | SORT_FLAG_CASE, $searchClauses);
+        return $this->searchRecordsetBase($rows, $fields, null, null, SORT_NATURAL | SORT_FLAG_CASE, $searchClauses);
     }
 
     public function searchDevicesAction()
@@ -104,7 +114,7 @@ class ReportController extends ApiControllerBase
             $r['shown_type'] = ($r['type_source'] ?? '') === 'set by you' ? $r['type'] : ($r['model'] ?: $r['type']);
             $rows[] = $r;
         }
-        return $this->grid($rows);
+        return $this->grid($rows, 'down', null, self::SEARCH['devices']);
     }
 
     private function deviceSection($section, $sort = 'down')
@@ -114,7 +124,7 @@ class ReportController extends ApiControllerBase
             return $this->searchRecordsetBase([]);
         }
         $data = $this->query(['device', $id, $this->postHours()]);
-        return $this->grid($data[$section] ?? [], $sort);
+        return $this->grid($data[$section] ?? [], $sort, null, self::SEARCH[$section]);
     }
 
     public function searchServicesAction()
@@ -157,7 +167,7 @@ class ReportController extends ApiControllerBase
             return $this->searchRecordsetBase([]);
         }
         $data = $this->query(['lookup', $text, $this->postHours(), 'exact']);
-        return $this->grid($data[$section] ?? [], $sort);
+        return $this->grid($data[$section] ?? [], $sort, null, self::SEARCH[$section]);
     }
 
     public function searchLookupTrafficAction()
