@@ -176,8 +176,8 @@ POSSIBILITY OF SUCH DAMAGE.
             grid('grid-ports', '/api/loupe/report/search_ports', dev);
         }
 
-        /* Sites tab: every service the house used, or what matches the search */
-        function showSites() {
+        /* Services tab: every service the house used, or what matches the search */
+        function showServices() {
             $('#loupe-q').val(q);
             $('#loupe-q-clear').toggle(q !== '');
             if (!q) {
@@ -220,14 +220,14 @@ POSSIBILITY OF SUCH DAMAGE.
             clearable('{{ formGridOverrides['table_id'] }}');
         }
 
-        /* tabs <-> address: #device=…, #q=…, #sites, #general, #servicenames, #devicenames */
-        const TABS = {devices: '#tab_devices', sites: '#tab_sites', general: '#subtab_general',
+        /* tabs <-> address: #device=…, #q=…, #services, #general, #servicenames, #devicenames */
+        const TABS = {devices: '#tab_devices', services: '#tab_services', general: '#subtab_general',
                       servicenames: '#subtab_servicenames', devicenames: '#subtab_devicenames'};
-        const REPORT = ['devices', 'sites'];
+        const REPORT = ['devices', 'services'];
 
         function tabOf(hash) {
             if (/^#device=/.test(hash)) return 'devices';
-            if (/^#(q=|lookup$)/.test(hash)) return 'sites';
+            if (/^#(q=|lookup$|sites$)/.test(hash)) return 'services';
             const t = hash.replace(/^#/, '');
             return TABS[t] ? t : '{{ activetab }}';
         }
@@ -240,10 +240,10 @@ POSSIBILITY OF SUCH DAMAGE.
             if (tab === 'devices') {
                 const m = hash.match(/device=([^&]+)/);
                 if (m) { showDevice(decodeURIComponent(m[1])); } else { showDevices(); }
-            } else if (tab === 'sites') {
+            } else if (tab === 'services') {
                 const m = hash.match(/q=([^&]+)/);
                 q = m ? decodeURIComponent(m[1]) : '';
-                showSites();
+                showServices();
             } else {
                 showSettings();
             }
@@ -251,7 +251,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         $('#maintabs a[data-toggle="tab"][href]').on('click', function () {
             const tab = Object.keys(TABS).find(k => TABS[k] === $(this).attr('href'));
-            const keep = (tab === 'sites' && q) ? '#q=' + encodeURIComponent(q) : '#' + tab;
+            const keep = (tab === 'services' && q) ? '#q=' + encodeURIComponent(q) : '#' + tab;
             if (window.location.hash === keep) { route(); } else { window.location.hash = keep; }
         });
         $(window).on('hashchange', route);
@@ -266,12 +266,12 @@ POSSIBILITY OF SUCH DAMAGE.
         $('#loupe-form').submit(function (e) {
             e.preventDefault();
             const v = $('#loupe-q').val().trim();
-            window.location.hash = v ? '#q=' + encodeURIComponent(v) : '#sites';
+            window.location.hash = v ? '#q=' + encodeURIComponent(v) : '#services';
         });
         $('#loupe-q').on('input', function () { $('#loupe-q-clear').toggle($(this).val() !== ''); });
         $('#loupe-q-clear').click(function () {
             $('#loupe-q').val('').focus();
-            window.location.hash = '#sites';
+            window.location.hash = '#services';
         });
 
         /* the pencil opens the same standard dialog as the Device names grid, saved per MAC */
@@ -324,7 +324,7 @@ POSSIBILITY OF SUCH DAMAGE.
         'activetab': activetab,
         'tabs': [
             ['tab_id': 'devices', 'tab_descr': lang._('Devices')],
-            ['tab_id': 'sites', 'tab_descr': lang._('Sites')],
+            ['tab_id': 'services', 'tab_descr': lang._('Services')],
             ['tab_id': 'settings', 'tab_descr': lang._('Settings'), 'subtabs': [
                 ['tab_id': 'general', 'tab_descr': lang._('General')],
                 ['tab_id': 'servicenames', 'tab_descr': lang._('Service names')],
@@ -410,7 +410,7 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
     </div>
 
-    <div id="tab_sites" class="tab-pane fade in">
+    <div id="tab_services" class="tab-pane fade in">
         <div class="loupe-bar">
             <form id="loupe-form" class="form-inline">
                 <div class="input-group" style="width: 380px; display: inline-table; vertical-align: middle">
@@ -439,7 +439,7 @@ POSSIBILITY OF SUCH DAMAGE.
             </table>
         </div>
         <div id="loupe-results" style="display: none">
-            <div style="padding: 0 15px 8px"><a href="#sites">&larr; {{ lang._('All sites') }}</a></div>
+            <div style="padding: 0 15px 8px"><a href="#services">&larr; {{ lang._('All services') }}</a></div>
             <ul class="nav nav-tabs" data-tabs="tabs">
                 <li class="active"><a data-toggle="tab" href="#tab-traffic">{{ lang._('Traffic') }}</a></li>
                 <li><a data-toggle="tab" href="#tab-names">{{ lang._('Looked up or connected to') }}</a></li>

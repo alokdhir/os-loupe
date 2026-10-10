@@ -6,9 +6,9 @@ Loupe answers questions like *"what was the PlayStation doing at 2 a.m.?"*, *"wh
 
 ## What you get
 
-- **Reporting → Loupe → Devices**: every device with its name, type (e.g. *MacBook Air 15″ (M3)*, *Apple TV 4K*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and top services, for the last hour, day, week, month or year.
+- **Reporting → Loupe, Devices tab**: every device with its name, type (e.g. *MacBook Air 15″ (M3)*, *Apple TV 4K*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and top services, for the last hour, day, week, month or year.
 - **Device detail**: a traffic chart over time, and what it talked to — by service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (WireGuard)*…), by site name, and by protocol/port.
-- **Lookup**: type a name or address (`netflix`, `playstation.net`, `203.0.113.7`) to see which devices used it, how much, first and last seen — including names that were only looked up in DNS.
+- **Services**: every service the house used in the period, with the devices that used it; search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`) to see which devices used it, how much, first and last seen — including names that were only looked up in DNS.
 - **Your own names**: rename any device or correct its type from the report pages; it follows the device by MAC address.
 - **Dashboard widget**: the last 24 hours at a glance — totals, an hourly chart and the top devices.
 
@@ -75,7 +75,7 @@ ROUTER=user@192.168.1.1 tools/deploy.sh            # copy src/ into /usr/local, 
 ROUTER=user@192.168.1.1 tools/deploy.sh uninstall  # remove it again (data in /var/db/loupe is kept)
 ```
 
-The user needs passwordless `sudo` on the router. Then open **Reporting → Loupe → Settings**, tick *Enable*, choose the LAN interface(s) and press *Apply*.
+The user needs passwordless `sudo` on the router. Then open **Reporting → Loupe → Settings ▾ → General**, tick *Enable*, choose the LAN interface(s) and press *Apply*.
 
 The layout follows a plugin directory in [opnsense/plugins](https://github.com/opnsense/plugins) (`Makefile`, `pkg-descr`, `src/` installed under `/usr/local`), so it can be built as a package from that tree.
 
