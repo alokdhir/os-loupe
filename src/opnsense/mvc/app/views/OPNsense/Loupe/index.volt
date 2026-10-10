@@ -35,8 +35,6 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-bar { padding: 10px 15px; }
-    /* the theme's Bootstrap reset hides the browser's clear (×) in search fields; bring it back in our grids */
-    .bootgrid-header input[type=search]::-webkit-search-cancel-button { -webkit-appearance: searchfield-cancel-button; cursor: pointer; }
 </style>
 <script>
     $(document).ready(function () {
@@ -108,12 +106,21 @@ POSSIBILITY OF SUCH DAMAGE.
             }
         };
 
-        /* a clear (×) in the grids' search fields: the browser draws one in type=search fields (not Firefox);
-           the grid searches on keyup, so a click on it is passed on as one */
+        /* a clear (×) button at the end of each grid's search field (any browser): shown while there is text;
+           the grid searches on keyup, so clearing is passed on as one */
         function clearable(id) {
-            $('#' + id + '-search-field').attr('type', 'search');
+            const $f = $('#' + id + '-search-field');
+            if (!$f.length || $f.next('.loupe-clear').length) return;
+            const $x = $('<span class="input-group-btn loupe-clear"><button class="btn btn-default" type="button" title="{{ lang._("Clear") }}"><i class="fa fa-times"></i></button></span>');
+            $f.after($x);
+            const sync = () => $x.toggle($f.val() !== '');
+            $f.on('input keyup', sync);
+            $x.find('button').on('click', function () {
+                $f.val('').trigger('keyup').focus();
+                sync();
+            });
+            sync();
         }
-        $(document).on('search', '.bootgrid-header .search-field', function () { $(this).trigger('keyup'); });
 
         function grid(id, endpoint, extra) {
             if (grids[id]) {

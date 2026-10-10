@@ -86,6 +86,12 @@ class TestDevid(unittest.TestCase):
         self.assertEqual(devid.mdns_name({"mdns_hosts": ["0a1b2c3d4e5f.local", "box.local"]}), "box")
 
 
+    def test_placeholder_names(self):
+        self.assertEqual(devid.display_name("Mac", "Mac", "studio"), "studio")
+        self.assertEqual(devid.display_name("", "iPhone", None), "iPhone")          # nothing better
+        self.assertEqual(devid.display_name("office-pc", "x", "y"), "office-pc")
+
+
 if __name__ == "__main__":
     unittest.main()
 

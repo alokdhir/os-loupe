@@ -160,7 +160,7 @@ class Loupe:
         for mac, ip, hostname, info, seen in self.store.devices_with_names(now - 7 * 86400):
             name = leases.get(mac) or hosts.get(ip)
             t, src, ven = devid.classify(mac, name or hostname, info, seen, self.oui)
-            rows.append((name or hostname or devid.mdns_name(info), ven, t, src, devid.model(info), mac))
+            rows.append((devid.display_name(name, hostname, devid.mdns_name(info)), ven, t, src, devid.model(info), mac))
         self.store.set_device_types(rows)
 
     def refresh_macs(self):

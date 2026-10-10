@@ -185,6 +185,17 @@ def model(info):
 ID_NAME = re.compile(r"(?i)^([0-9a-f]{12,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
 
 
+# names Apple devices send instead of their own when a private Wi-Fi address is on
+PLACEHOLDERS = {"mac", "iphone", "ipad", "watch", "apple-watch", "ipod", "localhost"}
+
+
+def display_name(*candidates):
+    """The first real name: lease or static name, DHCP host name, Bonjour name. A generic
+    placeholder ("Mac", "iPhone") only if nothing better is known."""
+    names = [c for c in candidates if c]
+    return next((n for n in names if n.lower() not in PLACEHOLDERS), names[0] if names else None)
+
+
 def mdns_name(info):
     """The name a device announces over Bonjour ("midnight" from midnight.local).
 

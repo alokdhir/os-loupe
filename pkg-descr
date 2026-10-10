@@ -10,6 +10,22 @@ hourly for a year. Reports live under Reporting, with a dashboard widget.
 Plugin Changelog
 ================
 
+0.9
+
+* One page with Devices, Services and Settings tabs
+* Services tab: every service the house used, with the devices that used it;
+  search matches services, sites and addresses
+* Device identification rules and service names are data (devices.json,
+  services.json), with an icon and maker per device type
+* VPN tunnels named by provider; Schlage locks, NanoKVM/PiKVM, HDHomeRun,
+  Azure Sphere devices and Linux distributions recognised
+* Last seen accurate to the minute
+* Reads neighbour tables, interface addresses and Unbound's cache natively;
+  compiles its capture filter with libpcap; pf states parsed 2x faster
+* Hardened against malformed packets and database errors; device-supplied
+  names escaped in the GUI
+* tools/install.sh and tools/uninstall.sh to install from the repository
+
 0.1
 
 * Initial release
