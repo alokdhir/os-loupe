@@ -75,7 +75,7 @@ def parse(text, is_local, ifaces=None):
         (ia, ip_), (ra, rp) = (split_endpoint(right), split_endpoint(left)) if arrow == "<-" else \
             (split_endpoint(left), split_endpoint(right))
         il, rl = is_local(ia), is_local(ra)
-        if il == rl:
+        if il == rl or is_group(ra if il else ia):
             return
         p_init, p_resp, b_init, b_resp = (int(x) for x in c.groups())
         g = AGE.search(rest)
@@ -96,6 +96,15 @@ def parse(text, is_local, ifaces=None):
             block.append(line)
     flush()
     return out
+
+
+def is_group(addr):
+    """Multicast/broadcast destinations (mDNS, SSDP, ...) are not internet traffic."""
+    try:
+        a = ipaddress.ip_address(addr.split("%")[0])
+    except ValueError:
+        return False
+    return a.is_multicast or a == ipaddress.IPv4Address("255.255.255.255")
 
 
 def snapshot(is_local, ifaces=None):

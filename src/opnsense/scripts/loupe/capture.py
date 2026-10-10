@@ -42,11 +42,15 @@ class Capture:
         self.stats = {"frames": 0, "tls": 0, "tls_joined": 0, "tls_nosni": 0, "quic": 0,
                       "dns": 0, "dhcp": 0, "mdns": 0}
 
-    def run(self, ifaces):
+    def run(self, ifaces, tick=None):
+        """Capture forever. `tick(now)` runs about once a second, between reads."""
         fds = {t.fileno(): t for t in (bpf.Bpf(i, FILTER) for i in ifaces)}
         while True:
             ready, _, _ = select.select(list(fds), [], [], 1.0)
-            self.expire_partial(time.time())
+            now = time.time()
+            self.expire_partial(now)
+            if tick is not None:
+                tick(now)
             for fd in ready:
                 for ts, frame in fds[fd].read():
                     self.stats["frames"] += 1
@@ -63,8 +67,8 @@ class Capture:
             self.stats["tls_joined"] += 1
         if not h.sni:
             self.stats["tls_nosni"] += 1
-        self.emit({"ev": "tls", "ts": p.ts, "client": p.src, "mac": p.src_mac, "server": p.dst,
-                   "port": p.dport, "sni": h.sni, "alpn": list(h.alpn), "ech": h.ech, "joined": joined,
+        self.emit({"ev": "tls", "ts": p.ts, "client": p.src, "cport": p.sport, "mac": p.src_mac,
+                   "server": p.dst, "port": p.dport, "sni": h.sni, "alpn": list(h.alpn), "ech": h.ech, "joined": joined,
                    "seg": len(p.payload), "rec": tls.record_length(p.payload)})
 
     def expire_partial(self, now):
@@ -105,8 +109,8 @@ class Capture:
             h = self.quic.feed(p.src, p.payload, p.ts)
             if h is not None:
                 self.stats["quic"] += 1
-                self.emit({"ev": "quic", "ts": p.ts, "client": p.src, "mac": p.src_mac, "server": p.dst,
-                           "port": p.dport, "sni": h.sni, "alpn": list(h.alpn), "ech": h.ech})
+                self.emit({"ev": "quic", "ts": p.ts, "client": p.src, "cport": p.sport, "mac": p.src_mac,
+                           "server": p.dst, "port": p.dport, "sni": h.sni, "alpn": list(h.alpn), "ech": h.ech})
         elif p.proto == packet.PROTO_UDP and p.sport == 53:
             a = dns.answers(p.payload)
             if a:

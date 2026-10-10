@@ -1,0 +1,171 @@
+#!/usr/local/bin/python3
+"""loupe daemon: capture names, poll pf byte counters, write per-device traffic to SQLite.
+
+usage: loupd.py [--db PATH] [--poll S] [--flush S] IFACE [IFACE ...]
+"""
+import argparse
+import collections
+import re
+import signal
+import subprocess
+import sys
+import syslog
+import time
+
+sys.path.insert(0, __file__.rsplit("/", 1)[0])
+
+from capture import Capture  # noqa: E402
+from lib import names, pfstate, store  # noqa: E402
+
+ARP = re.compile(r"\((\S+)\) at ([0-9a-f:]{17})")
+NDP = re.compile(r"^(\S+)\s+([0-9a-f:]{17})\s", re.M)
+
+
+def local_day(ts):
+    t = time.localtime(ts)
+    return int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+
+
+class Loupe:
+    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30)):
+        self.ifaces = set(ifaces)
+        self.is_local = pfstate.local_matcher(pfstate.interface_networks(ifaces))
+        self.store = store.Store(db)
+        self.names = names.Names()
+        self.tracker = pfstate.Tracker(fresh=poll)
+        self.poll_every, self.flush_every, self.retention = poll, flush, retention
+        self.next_poll = self.next_flush = 0
+        self.next_prune = time.time() + 300
+        self.ip_mac = {}
+        self.flows = {}
+        self.lookups = {}
+        self.devices = collections.defaultdict(dict)
+        self.live = set()
+        self.seed_names()
+
+    def seed_names(self):
+        try:
+            out = subprocess.run(["unbound-control", "-c", "/var/unbound/unbound.conf", "dump_cache"],
+                                 capture_output=True, text=True, timeout=30).stdout
+        except (subprocess.SubprocessError, OSError):
+            return
+        self.names.seed_unbound(out, time.time())
+
+    # ---- capture events -------------------------------------------------------------
+    def emit(self, ev):
+        kind = ev["ev"]
+        if kind in ("tls", "quic"):
+            if not self.is_local(ev["client"]) or self.is_local(ev["server"]):
+                return  # LAN<->LAN TLS (AirPlay, lockdownd, ...) carries no site
+            self.names.tls(ev, "sni" if kind == "tls" else "quic")
+            self.ip_mac.setdefault(ev["client"], ev["mac"])
+            if ev.get("sni"):
+                self.lookup(ev["ts"], ev["client"], ev["sni"], kind if kind == "quic" else "sni")
+        elif kind == "dns":
+            if self.is_local(ev["client"]):
+                self.names.dns_answer(ev)
+                self.lookup(ev["ts"], ev["client"], ev["name"], "dns")
+        elif kind == "dhcp":
+            d = self.devices[ev["mac"]]
+            d["ts"] = ev["ts"]
+            if ev.get("hostname"):
+                d["hostname"] = ev["hostname"]
+            info = d.setdefault("info", {})
+            for k in ("vendor_class", "params", "fqdn"):
+                if ev.get(k):
+                    info[f"dhcp_{k}"] = ev[k]
+        elif kind == "mdns":
+            d = self.devices[ev["mac"]]
+            d["ts"], d["ip"] = ev["ts"], ev["client"]
+            info = d.setdefault("info", {})
+            for k in ("models", "names", "services"):
+                if ev.get(k):
+                    info[f"mdns_{k}"] = sorted(set(info.get(f"mdns_{k}", [])) | set(ev[k]))
+            hosts = [h for h in ev.get("hosts", {}) if h.endswith(".local")]
+            if hosts:
+                info["mdns_hosts"] = sorted(set(info.get("mdns_hosts", [])) | set(hosts))
+
+    def lookup(self, ts, ip, name, source):
+        k = (local_day(ts), ip, name, source)
+        v = self.lookups.get(k)
+        if v is None:
+            self.lookups[k] = [1, int(ts), int(ts)]
+        else:
+            v[0] += 1
+            v[2] = int(ts)
+
+    # ---- periodic work --------------------------------------------------------------
+    def tick(self, now):
+        if now >= self.next_poll:
+            self.next_poll = now + self.poll_every
+            try:
+                self.poll(now)
+            except (subprocess.SubprocessError, OSError) as e:
+                syslog.syslog(syslog.LOG_ERR, f"loupe: pf poll failed: {e!r}")
+        if now >= self.next_flush:
+            self.next_flush = now + self.flush_every
+            self.flush(now)
+        if now >= self.next_prune:
+            self.next_prune = now + 3600
+            self.store.prune(now, *self.retention)
+
+    def refresh_macs(self):
+        out = subprocess.run(["arp", "-an"], capture_output=True, text=True).stdout
+        self.ip_mac.update((ip, mac) for ip, mac in ARP.findall(out))
+        out = subprocess.run(["ndp", "-an"], capture_output=True, text=True).stdout
+        self.ip_mac.update((ip.split("%")[0], mac) for ip, mac in NDP.findall(out))
+
+    def poll(self, now):
+        states = pfstate.snapshot(self.is_local, self.ifaces)
+        self.live = set(states)
+        bucket = int(now // 300 * 300)
+        for d in self.tracker.update(states):
+            st = d.state
+            name, source = self.names.name_for(st, now)
+            k = (bucket, st.local, st.remote, st.rport if st.outbound else st.lport, st.proto, name or "")
+            v = self.flows.get(k)
+            if v is None:
+                v = self.flows[k] = [self.ip_mac.get(st.local, ""), source or "", int(not st.outbound), 0, 0, 0, 0]
+            v[3] += d.up
+            v[4] += d.down
+            v[5] += d.pkts_up + d.pkts_down
+            v[6] += d.new
+
+    def flush(self, now):
+        self.refresh_macs()
+        for (_b, ip, *_rest), v in self.flows.items():
+            if not v[0]:
+                v[0] = self.ip_mac.get(ip, "")
+            if v[0]:
+                d = self.devices[v[0]]
+                d.setdefault("ip", ip)
+                d["ts"] = max(d.get("ts", 0), now)
+        devices = {m: d for m, d in self.devices.items() if "ts" in d}
+        self.store.write(self.flows, self.lookups, devices)
+        self.flows, self.lookups = {}, {}
+        self.devices = collections.defaultdict(dict)
+        self.names.expire(self.live, now)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--db", default="/var/db/loupe/loupe.db")
+    ap.add_argument("--poll", type=float, default=10)
+    ap.add_argument("--flush", type=float, default=60)
+    ap.add_argument("ifaces", nargs="+")
+    args = ap.parse_args()
+    syslog.openlog("loupe", syslog.LOG_PID, syslog.LOG_DAEMON)
+    lp = Loupe(args.ifaces, args.db, args.poll, args.flush)
+    cap = Capture(lp.emit)
+
+    def stop(*_):
+        lp.flush(time.time())
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    syslog.syslog(syslog.LOG_NOTICE, f"loupe: started on {' '.join(args.ifaces)}")
+    cap.run(args.ifaces, tick=lp.tick)
+
+
+if __name__ == "__main__":
+    main()
