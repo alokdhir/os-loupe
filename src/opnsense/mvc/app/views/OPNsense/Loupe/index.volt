@@ -423,7 +423,7 @@ POSSIBILITY OF SUCH DAMAGE.
         <div id="loupe-overview" style="display: none">
             <table id="grid-house" class="table table-condensed table-hover table-striped table-responsive">
                 <thead><tr>
-                    <th data-column-id="service" data-identifier="true" data-formatter="housesvc">{{ lang._('Service') }}</th>
+                    <th data-column-id="service" data-identifier="true" data-formatter="housesvc" data-width="16em">{{ lang._('Service') }}</th>
                     <th data-column-id="devices" data-formatter="housedevices">{{ lang._('Devices') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
