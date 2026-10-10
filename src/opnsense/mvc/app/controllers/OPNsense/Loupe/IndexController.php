@@ -36,14 +36,15 @@ class IndexController extends \OPNsense\Base\IndexController
      */
     private function page($activetab)
     {
+        // grid ids must not contain '-': mapDataToFormUI matches a dialog's form by the id before the first '-'
         $this->view->activetab = $activetab;
         $this->view->formSettings = $this->getForm('settings');
         $this->view->formDialogService = $this->getForm('dialogService');
         $this->view->formDialogDevice = $this->getForm('dialogDevice');
-        $this->view->formGridServices = $this->getFormGrid('dialogService', 'grid-servicenames');
-        $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'grid-overrides');
+        $this->view->formGridServices = $this->getFormGrid('dialogService', 'gridServiceNames');
+        $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'gridOverrides');
         $this->view->formDialogRule = $this->getForm('dialogRule');
-        $this->view->formGridRules = $this->getFormGrid('dialogRule', 'grid-rules');
+        $this->view->formGridRules = $this->getFormGrid('dialogRule', 'gridRules');
         $this->view->pick('OPNsense/Loupe/index');
     }
 
