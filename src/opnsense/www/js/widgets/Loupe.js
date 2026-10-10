@@ -124,7 +124,7 @@ export default class Loupe extends BaseWidget {
 
         $('#loupe-w-top').html(`<div class="lw-title">${this.translations.top}</div>` + d.top.map(r => this.row(
             this.link(r),
-            Loupe.esc([r.model || r.type, (r.top || [])[0]].filter(Boolean).join(' · ')),
+            Loupe.esc(r.model || r.type || '') + ' · ' + (Loupe.esc((r.top || [])[0] || '') || '—'),
             `↓ ${Loupe.bytes(r.down)}<div class="lw-sub">↑ ${Loupe.bytes(r.up)}</div>`)).join(''));
     }
 

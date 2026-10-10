@@ -181,7 +181,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     {key: 'vendor', label: '{{ lang._("Vendor") }}'},
                     {key: 'down', label: '{{ lang._("Down") }}', num: true, fmt: r => loupe.bytes(r.down)},
                     {key: 'up', label: '{{ lang._("Up") }}', num: true, fmt: r => loupe.bytes(r.up)},
-                    {key: 'top', label: '{{ lang._("Top services") }}', fmt: r => loupe.esc(r.top.join(', '))},
+                    {key: 'top', label: '{{ lang._("Top services") }}', fmt: r => r.top.map(t => t ? loupe.esc(t) : '<span class="loupe-muted" title="{{ lang._("No name seen for this traffic") }}">—</span>').join(', ')},
                     {key: 'last', label: '{{ lang._("Last seen") }}', num: true, fmt: r => loupe.ago(r.last)}
                 ], data.rows, 'down', function (r) {
                     window.location.hash = 'device=' + (r.mac || r.ip);

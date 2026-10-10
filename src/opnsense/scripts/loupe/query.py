@@ -106,7 +106,7 @@ def cmd_devices(hours):
         r["up"] += up
         r["conns"] += conns
         r["last"] = max(r["last"], last)
-        tops[key][svc.service(name, server, port, proto) or "Unlabelled"] += up + down
+        tops[key][svc.service(name, server, port, proto) or ""] += up + down   # "" = no name: shown as a grey dash
     for key, r in rows.items():
         r["top"] = [s for s, _ in tops[key].most_common(3)]
         if not r["name"]:
