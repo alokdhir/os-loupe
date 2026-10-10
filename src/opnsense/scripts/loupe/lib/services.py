@@ -173,6 +173,26 @@ PORTS = {
     ("tcp", 7844): "Cloudflare Tunnel", ("udp", 7844): "Cloudflare Tunnel", ("tcp", 32400): "Plex",
 }
 
+# domains a VPN app talks to (its API, server lists): names the provider behind a bare VPN tunnel
+VPN_PROVIDERS = {
+    "nordvpn.com": "NordVPN", "nordvpn.net": "NordVPN", "nordcdn.com": "NordVPN",
+    "protonvpn.com": "Proton VPN", "protonvpn.ch": "Proton VPN", "protonvpn.net": "Proton VPN",
+    "surfshark.com": "Surfshark", "mullvad.net": "Mullvad", "expressvpn.com": "ExpressVPN",
+    "windscribe.com": "Windscribe", "privateinternetaccess.com": "PIA", "cyberghostvpn.com": "CyberGhost",
+    "ipvanish.com": "IPVanish", "tunnelbear.com": "TunnelBear", "hide.me": "hide.me",
+    "purevpn.com": "PureVPN", "hotspotshield.com": "Hotspot Shield", "vyprvpn.com": "VyprVPN",
+    "airvpn.org": "AirVPN", "ivpn.net": "IVPN", "atlasvpn.com": "Atlas VPN", "tailscale.com": "Tailscale",
+}
+
+
+def vpn_provider(name):
+    parts = (name or "").lower().rstrip(".").split(".")
+    for i in range(len(parts) - 1):
+        p = VPN_PROVIDERS.get(".".join(parts[i:]))
+        if p:
+            return p
+    return None
+
 
 class ServiceMap:
     def __init__(self, extra=None):

@@ -40,7 +40,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib.services import ServiceMap  # noqa: E402
+from lib.services import PORTS, ServiceMap, vpn_provider  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
 CONF = "/usr/local/etc/loupe.json"
@@ -82,6 +82,43 @@ def devices_info(db, overrides):
     return out
 
 
+VPN_PORTS = [(proto, port) for (proto, port), s in PORTS.items() if s.startswith("VPN (")]
+
+
+class Labels:
+    """Service names for one report window, with VPN tunnels told apart.
+
+    A device that looked up a VPN provider's domain gets "VPN (NordVPN)" instead of "VPN (WireGuard)", and other
+    nameless traffic to a server it uses as a VPN (e.g. a TCP fallback) is counted as that VPN too.
+    """
+
+    def __init__(self, db, svc, table, start):
+        self.svc = svc
+        self.provider = {}
+        counts = collections.defaultdict(collections.Counter)
+        for ip, name, n in db.execute("SELECT ip, name, sum(count) FROM lookups WHERE day >= ? AND last_seen >= ? "
+                                      "GROUP BY ip, name", (start - 86400, start - 86400)):
+            p = vpn_provider(name)
+            if p:
+                counts[ip][p] += n
+        self.provider = {ip: c.most_common(1)[0][0] for ip, c in counts.items()}
+        self.tunnels = {}
+        cond = " OR ".join("(proto = ? AND port = ?)" for _ in VPN_PORTS)
+        for ip, server, proto, port in db.execute(
+                f"SELECT DISTINCT ip, server, proto, port FROM {table} WHERE bucket >= ? AND name = '' AND ({cond})",
+                (start, *[x for pp in VPN_PORTS for x in pp])):
+            self.tunnels[(ip, server)] = PORTS[(proto, port)]
+
+    def service(self, ip, name, server, port, proto):
+        s = self.svc.by_name(name)
+        if s:
+            return s
+        s = self.tunnels.get((ip, server)) or self.svc.service(name, server, port, proto)
+        if s and s.startswith("VPN (") and ip in self.provider:
+            return f"VPN ({self.provider[ip]})"
+        return s
+
+
 def label(dev, ip):
     return (dev or {}).get("name") or ip
 
@@ -90,6 +127,7 @@ def cmd_devices(hours):
     db, svc, ov = load()
     table, start, _ = window(hours)
     info = devices_info(db, ov)
+    lab = Labels(db, svc, table, start)
     rows = {}
     tops = collections.defaultdict(collections.Counter)
     for ip, mac, name, server, port, proto, up, down, conns, last in db.execute(
@@ -106,7 +144,7 @@ def cmd_devices(hours):
         r["up"] += up
         r["conns"] += conns
         r["last"] = max(r["last"], last)
-        tops[key][svc.service(name, server, port, proto) or ""] += up + down   # "" = no name: shown as a grey dash
+        tops[key][lab.service(ip, name, server, port, proto) or ""] += up + down   # "" = no name: shown as a grey dash
     for key, r in rows.items():
         r["top"] = [s for s, _ in tops[key].most_common(3)]
         if not r["name"]:
@@ -124,6 +162,7 @@ def cmd_device(arg, hours):
     col, val = device_filter(arg)
     table, start, step = window(hours)
     info = devices_info(db, ov)
+    lab = Labels(db, svc, table, start)
     dev = None
     if col == "mac":
         dev = info.get(val)
@@ -133,10 +172,10 @@ def cmd_device(arg, hours):
     sites = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "last": 0, "service": "", "servers": set()})
     ports = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0})
     timeline = collections.defaultdict(lambda: [0, 0])
-    for bucket, name, server, port, proto, inbound, up, down, conns in db.execute(
-            f"SELECT bucket, name, server, port, proto, inbound, up, down, conns FROM {table} "
+    for bucket, ip, name, server, port, proto, inbound, up, down, conns in db.execute(
+            f"SELECT bucket, ip, name, server, port, proto, inbound, up, down, conns FROM {table} "
             f"WHERE {col} = ? AND bucket >= ?", (val, start)):
-        s = svc.service(name, server, port, proto) or "Other"
+        s = lab.service(ip, name, server, port, proto) or "Other"
         sv = services[s]
         sv["down"] += down
         sv["up"] += up
@@ -176,6 +215,7 @@ def cmd_lookup(text, hours):
     db, svc, ov = load()
     table, start, _ = window(hours)
     info = devices_info(db, ov)
+    lab = Labels(db, svc, table, start)
     text = text.strip().lower()
     try:
         ipaddress.ip_address(text)
@@ -190,7 +230,7 @@ def cmd_lookup(text, hours):
             f"FROM {table} WHERE bucket >= ? AND {where} GROUP BY ip, mac, name, server, port, proto LIMIT 20000",
             (start, arg)):
         r = rows[(mac or ip, name)]
-        r.update(ip=ip, mac=mac, name=name, service=svc.service(name, server, port, proto) or "")
+        r.update(ip=ip, mac=mac, name=name, service=lab.service(ip, name, server, port, proto) or "")
         r["down"] += down
         r["up"] += up
         r["conns"] += conns

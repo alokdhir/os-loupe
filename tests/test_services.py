@@ -22,10 +22,13 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import os
+import sqlite3
+import tempfile
 import unittest
 
 import helpers  # noqa: F401
-from lib import services
+from lib import services, store
 
 
 class TestServices(unittest.TestCase):
@@ -47,6 +50,32 @@ class TestServices(unittest.TestCase):
         self.assertEqual(self.m.service("", "17.57.147.7", 5223, "tcp"), "Apple")
         self.assertEqual(self.m.service("", "203.0.113.9", 51820, "udp"), "VPN (WireGuard)")
         self.assertEqual(self.m.service("", "203.0.113.9", 9999, "tcp"), None)
+
+
+    def test_vpn_provider(self):
+        self.assertEqual(services.vpn_provider("api.nordvpn.com"), "NordVPN")
+        self.assertEqual(services.vpn_provider("nordvpn.com."), "NordVPN")
+        self.assertEqual(services.vpn_provider("notnordvpn.com"), None)
+        self.assertEqual(services.vpn_provider(""), None)
+
+
+class TestVpnLabels(unittest.TestCase):
+    def test_provider_and_fallback(self):
+        import query
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            b = 3600
+            s.write({(b, "10.9.1.30", "203.0.113.50", 51820, "udp", ""): ["02:00:00:00:00:30", "", 0, 10, 100, 3, 1],
+                     (b, "10.9.1.30", "203.0.113.50", 993, "tcp", ""): ["02:00:00:00:00:30", "", 0, 1, 2, 1, 1],
+                     (b, "10.9.1.31", "203.0.113.60", 51820, "udp", ""): ["02:00:00:00:00:31", "", 0, 1, 2, 1, 1]},
+                    {(0, "10.9.1.30", "api.nordvpn.com", "dns"): [1, b, b]}, {})
+            lab = query.Labels(sqlite3.connect(path), services.ServiceMap(), "flows_5m", b)
+            self.assertEqual(lab.service("10.9.1.30", "", "203.0.113.50", 51820, "udp"), "VPN (NordVPN)")
+            self.assertEqual(lab.service("10.9.1.30", "", "203.0.113.50", 993, "tcp"), "VPN (NordVPN)")
+            self.assertEqual(lab.service("10.9.1.30", "", "203.0.113.70", 993, "tcp"), "Email (IMAP)")
+            self.assertEqual(lab.service("10.9.1.31", "", "203.0.113.60", 51820, "udp"), "VPN (WireGuard)")
+            self.assertEqual(lab.service("10.9.1.30", "www.youtube.com", "203.0.113.50", 443, "tcp"), "YouTube")
 
 
 if __name__ == "__main__":
