@@ -45,7 +45,7 @@ class TestServices(unittest.TestCase):
     def test_fallbacks(self):
         self.assertEqual(self.m.service("", "17.250.96.102", 443, "udp"), "iCloud Private Relay")
         self.assertEqual(self.m.service("", "17.57.147.7", 5223, "tcp"), "Apple")
-        self.assertEqual(self.m.service("", "203.0.113.9", 51820, "udp"), "WireGuard")
+        self.assertEqual(self.m.service("", "203.0.113.9", 51820, "udp"), "VPN (WireGuard)")
         self.assertEqual(self.m.service("", "203.0.113.9", 9999, "tcp"), None)
 
 

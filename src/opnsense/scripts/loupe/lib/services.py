@@ -138,6 +138,7 @@ SUFFIXES = {
     "akamaized.net": "Akamai CDN", "akamaihd.net": "Akamai CDN", "akamai.net": "Akamai CDN",
     "edgekey.net": "Akamai CDN", "edgesuite.net": "Akamai CDN", "fastly.net": "Fastly CDN",
     "fastly-edge.com": "Fastly CDN",
+    "cqloud.com": "Qwilt CDN (ISP cache)", "qwilt.com": "Qwilt CDN (ISP cache)",
     "fastlylb.net": "Fastly CDN", "llnwd.net": "Edgio CDN", "edgecastcdn.net": "Edgio CDN",
     "cloudflare.net": "Cloudflare", "azurefd.net": "Microsoft Azure", "trafficmanager.net": "Microsoft Azure",
     "ntp.org": "NTP", "time.apple.com": "NTP", "time.google.com": "NTP",
@@ -146,6 +147,7 @@ SUFFIXES = {
 
 # address ranges -> owner, for traffic with no name at all
 RANGES = [
+    ("151.205.0.0/16", "Verizon CDN cache"),
     ("17.0.0.0/8", "Apple"),
     ("2620:149::/32", "Apple"), ("2a01:b740::/32", "Apple"),
     ("142.250.0.0/15", "Google"), ("172.217.0.0/16", "Google"), ("216.58.192.0/19", "Google"),
@@ -159,8 +161,8 @@ RANGES = [
 
 # (proto, remote port) -> service, last resort
 PORTS = {
-    ("udp", 51820): "WireGuard", ("udp", 1194): "OpenVPN", ("tcp", 1194): "OpenVPN",
-    ("udp", 500): "IPsec VPN", ("udp", 4500): "IPsec VPN",
+    ("udp", 51820): "VPN (WireGuard)", ("udp", 1194): "VPN (OpenVPN)", ("tcp", 1194): "VPN (OpenVPN)",
+    ("udp", 500): "VPN (IPsec)", ("udp", 4500): "VPN (IPsec)", ("udp", 2408): "Cloudflare WARP",
     ("tcp", 22): "SSH", ("udp", 123): "NTP", ("udp", 53): "DNS (outside router)", ("tcp", 53): "DNS (outside router)",
     ("tcp", 853): "DNS over TLS", ("udp", 853): "DNS over QUIC",
     ("tcp", 5223): "Apple Push", ("tcp", 993): "Email (IMAP)", ("tcp", 587): "Email (SMTP)",
