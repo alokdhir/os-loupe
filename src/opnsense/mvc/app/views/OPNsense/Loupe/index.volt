@@ -247,7 +247,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 clearable('{{ formGridOverrides['table_id'] }}');
             }
         };
-        /* Yours | Built-in on Service names and Device rules: the shipped rules, read-only */
+        /* Custom | Built-in on Service names and Device rules: the shipped rules, read-only */
         const builtin = {
             'grid-builtin-services': '/api/loupe/report/search_builtin_services',
             'grid-builtin-rules': '/api/loupe/report/search_builtin_rules'
@@ -535,11 +535,11 @@ POSSIBILITY OF SUCH DAMAGE.
         <div id="page_servicenames" class="loupe-page">
             <div class="loupe-bar">
                 <div class="btn-group btn-group-xs loupe-source">
-                    <button type="button" class="btn btn-default active" data-source="mine">{{ lang._('Yours') }}</button>
+                    <button type="button" class="btn btn-default active" data-source="mine">{{ lang._('Custom') }}</button>
                     <button type="button" class="btn btn-default" data-source="builtin">{{ lang._('Built-in') }}</button>
                 </div>
                 <p class="loupe-source-help" data-for="mine" style="margin: 8px 0 0">{{ lang._('Your own names for domains. They add to and override the built-in list, and apply to all history.') }}</p>
-                <p class="loupe-source-help" data-for="builtin" style="margin: 8px 0 0; display: none">{{ lang._('The names Loupe ships with: domains (a domain also covers its subdomains), address ranges and ports for traffic with no name, and the domains VPN apps use. Add your own under Yours to change one.') }}</p>
+                <p class="loupe-source-help" data-for="builtin" style="margin: 8px 0 0; display: none">{{ lang._('The names Loupe ships with: domains (a domain also covers its subdomains), address ranges and ports for traffic with no name, and the domains VPN apps use. Add your own under Custom to change one.') }}</p>
             </div>
             <div data-source-pane="mine">
                 {{ partial('layout_partials/base_bootgrid_table', formGridServices) }}
@@ -558,7 +558,7 @@ POSSIBILITY OF SUCH DAMAGE.
         <div id="page_rules" class="loupe-page">
             <div class="loupe-bar">
                 <div class="btn-group btn-group-xs loupe-source">
-                    <button type="button" class="btn btn-default active" data-source="mine">{{ lang._('Yours') }}</button>
+                    <button type="button" class="btn btn-default active" data-source="mine">{{ lang._('Custom') }}</button>
                     <button type="button" class="btn btn-default" data-source="builtin">{{ lang._('Built-in') }}</button>
                 </div>
                 <p class="loupe-source-help" data-for="mine" style="margin: 8px 0 0">{{ lang._('Set the type of every device that matches, e.g. all devices whose MAC vendor is Tuya are Window shades. Your rules are checked before the built-in ones; an override for one device still wins. Apply to use them: devices are reclassified within a minute.') }}</p>

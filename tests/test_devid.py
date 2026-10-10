@@ -102,7 +102,7 @@ class TestUserRules(unittest.TestCase):
         self.assertEqual(before[0], "Smart home device")                 # built-in: talks to tuyaus.com
         self.assertEqual(devid.set_user_rules([{"when": {"vendor": "Tuya"}, "type": "Window shade"}]), [])
         t, src, ven = devid.classify("ac:00:00:00:00:01", names=["a1.tuyaus.com"], oui=oui)
-        self.assertEqual((t, src, ven), ("Window shade", "your rule: vendor Tuya Smart Inc.", "Tuya Smart Inc."))
+        self.assertEqual((t, src, ven), ("Window shade", "custom rule: vendor Tuya Smart Inc.", "Tuya Smart Inc."))
 
     def test_comma_list(self):
         devid.set_user_rules([{"when": {"mac_prefix": "ac:00:00:01, ac:00:00:02"}, "type": "Window shade"},

@@ -193,7 +193,7 @@ def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
             for conds, r in tier:
                 src = _match(conds, ev)
                 if src is not None:
-                    return r["type"], (f"your rule: {src}" if mine else src), r.get("vendor", ven)
+                    return r["type"], (f"custom rule: {src}" if mine else src), r.get("vendor", ven)
     return None, None, ven
 
 
