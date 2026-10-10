@@ -166,7 +166,10 @@ class TestSeed(unittest.TestCase):
 
 class TestGroup(unittest.TestCase):
     def test_multicast_dropped(self):
-        text = ("all udp 224.0.0.251:5353 <- 10.9.1.20:5353       MULTIPLE:SINGLE\n"
-                "   age 00:00:01, expires in 00:00:59, 1:0 pkts, 60:0 bytes, rule 5\n"
-                "   id: 0000000000000009 creatorid: aaaa0001\n   origif: bridge0\n")
-        self.assertEqual(pfstate.parse(text, pfstate.local_matcher(["10.9.0.0/16"]), {"bridge0"}), {})
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+        import bench_pfstate
+        from lib import pfnl
+        msg = bench_pfstate.message(9, "bridge0", True, ("224.0.0.251", 5353), ("10.9.1.20", 5353), "udp", (1, 0), (60, 0), 1)
+        self.assertEqual(pfstate.from_netlink(pfnl.parse_states([msg], {"bridge0"}),
+                                              pfstate.local_matcher(["10.9.0.0/16"]), {"bridge0"}), {})

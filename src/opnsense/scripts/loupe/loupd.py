@@ -68,7 +68,6 @@ class Loupe:
         self.lookups = {}
         self.devices = collections.defaultdict(dict)
         self.live = set()
-        self.state_source = None
         self.error_hour, self.errors_logged = None, 0
         self.seed_names()
 
@@ -180,9 +179,6 @@ class Loupe:
 
     def poll(self, now):
         states = pfstate.snapshot(self.is_local, self.ifaces)
-        if pfstate.source != self.state_source:
-            self.state_source = pfstate.source
-            syslog.syslog(syslog.LOG_NOTICE, f"loupe: reading pf states via {pfstate.source}")
         self.live = set(states)
         bucket = int(now // 60 * 60)          # minute; the store derives 5-minute and hourly rows
         for d in self.tracker.update(states):

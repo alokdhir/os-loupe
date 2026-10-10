@@ -25,9 +25,9 @@
 """Per-connection byte counts from pf's state table.
 
 Every connection through the router has a pf state with byte counters for both
-directions, and the LAN-side state names the device before NAT. Polling
-`pfctl -ss -vv` and diffing counters gives exact per-device up/down bytes per
-server in small time slices.
+directions, and the LAN-side state names the device before NAT. Reading the states
+over pf's netlink interface (lib/pfnl.py) and diffing counters gives exact per-device
+up/down bytes per server in small time slices.
 
 Why not the flow log: OPNsense's netflow on a LAN bridge misses LAN->internet
 packets on ingress (uploads only appear post-NAT on the WAN, with the public
@@ -37,19 +37,11 @@ Poll at most every 10 s: pf keeps closed TCP states >= 45 s (finwait) and idle
 UDP >= 30 s (udp.single), so every state is seen with its final counters.
 """
 import ipaddress
-import re
 import struct
-import subprocess
 import time
 
 from . import netif, pfnl
 from typing import NamedTuple
-
-HEADER = re.compile(r"^\S+ (\S+) (.+?) (<-|->) (.+?)\s{2,}\S*\s*$")
-COUNTS = re.compile(r"(\d+):(\d+) pkts, (\d+):(\d+) bytes")
-IDLINE = re.compile(r"id: ([0-9a-f]+) creatorid: ([0-9a-f]+)")
-AGE = re.compile(r"age (\d+):(\d+):(\d+)")
-
 
 class State(NamedTuple):
     key: tuple          # (id, creatorid)
@@ -67,25 +59,6 @@ class State(NamedTuple):
     age: int            # seconds since the state was created
 
 
-def split_endpoint(tok):
-    """'1.2.3.4:443', '2001:db8::1[443]', 'a (b)' -> (addr, port). Prefers the pre-NAT address in parens."""
-    if tok.endswith(")"):
-        i = tok.find(" (")
-        if i >= 0:
-            tok = tok[i + 2:-1]
-    if tok.endswith("]"):
-        i = tok.find("[")
-        if i >= 0:
-            return tok[:i], int(tok[i + 1:-1])
-    if tok.count(":") == 1:
-        addr, port = tok.split(":")
-        return addr, int(port)
-    return tok, 0
-
-
-RECORD = re.compile(r"\n(?=\S)")      # a state starts on an unindented line
-
-
 def _cached(fn, cache):
     def get(addr):
         hit = cache.get(addr)
@@ -98,8 +71,9 @@ def _cached(fn, cache):
 
 
 def _state(key, origif, proto, left, right, inbound, counts, age, local, group):
-    """One pf state as Loupe sees it, or None. `left`/`right` are (addr, port) as pfctl prints them
-    ("left <- right" for an inbound state); counts = (pkts0, pkts1, bytes0, bytes1), initiator first."""
+    """One pf state as Loupe sees it, or None. `left`/`right` are the stack key's (addr1, port1) and
+    (addr0, port0) - "left <- right" for an inbound state, as pfctl prints it; counts = (pkts0, pkts1,
+    bytes0, bytes1), initiator first."""
     (ia, ip_), (ra, rp) = (right, left) if inbound else (left, right)
     il, rl = local(ia), local(ra)
     if il == rl or group(ra if il else ia):
@@ -110,44 +84,8 @@ def _state(key, origif, proto, left, right, inbound, counts, age, local, group):
     return State(key, origif, proto, ra, rp, ia, ip_, False, b_resp, b_init, p_resp, p_init, age)
 
 
-def parse(text, is_local, ifaces=None):
-    """Parse `pfctl -ss -vv` output. Keeps states with exactly one local endpoint
-    (on `ifaces`, if given) and returns {key: State}.
-
-    Hot path (every 10 s, ~half the records are the WAN-side twin): the interface is
-    checked before anything else is parsed, and address checks are cached per call."""
-    out = {}
-    local = _cached(is_local, {})
-    group = _cached(is_group, {})
-    for rec in RECORD.split(text):
-        o = rec.find("origif: ")
-        if o < 0:
-            continue
-        e = rec.find("\n", o)
-        origif = rec[o + 8:e if e >= 0 else len(rec)].strip()
-        if ifaces is not None and origif not in ifaces:
-            continue
-        nl = rec.find("\n")
-        if nl < 0:
-            continue
-        m = HEADER.match(rec[:nl])
-        c = COUNTS.search(rec, nl)
-        i = IDLINE.search(rec, nl)
-        if not (m and c and i):
-            continue
-        proto, left, arrow, right = m.groups()
-        g = AGE.search(rec, nl)
-        age = int(g.group(1)) * 3600 + int(g.group(2)) * 60 + int(g.group(3)) if g else 0
-        key = (i.group(1), i.group(2))
-        st = _state(key, origif, proto, split_endpoint(left), split_endpoint(right), arrow == "<-",
-                    tuple(int(x) for x in c.groups()), age, local, group)
-        if st:
-            out[key] = st
-    return out
-
-
 def from_netlink(states, is_local, ifaces=None):
-    """The same as parse(), from pfnl.Client.states()."""
+    """pfnl states -> {key: State}: those with exactly one local endpoint, on `ifaces` if given."""
     out = {}
     local = _cached(is_local, {})
     group = _cached(is_group, {})
@@ -192,26 +130,21 @@ def is_group(addr):
 
 
 _client = None
-source = None           # "netlink" or "pfctl": where the last snapshot came from
 
 
 def snapshot(is_local, ifaces=None):
-    """Current states, from pf over netlink; `pfctl -ss -vv` text for this poll if netlink fails
-    (it is tried again next time)."""
-    global _client, source
+    """Current states from pf over netlink. On an error the client is dropped and the error raised
+    (loupd logs it and tries again at the next poll with a fresh socket)."""
+    global _client
     try:
         if _client is None:
             _client = pfnl.Client()
-        states = from_netlink(_client.states(ifaces), is_local, ifaces)
-        source = "netlink"
-        return states
-    except (OSError, ValueError, KeyError, IndexError, struct.error):    # incl. replies we don't understand
+        return from_netlink(_client.states(ifaces), is_local, ifaces)
+    except (OSError, ValueError, KeyError, IndexError, struct.error):
         if _client is not None:
             _client.close()
         _client = None
-    source = "pfctl"
-    text = subprocess.run(["pfctl", "-ss", "-vv"], capture_output=True, text=True, check=True).stdout
-    return parse(text, is_local, ifaces)
+        raise
 
 
 def local_matcher(networks):

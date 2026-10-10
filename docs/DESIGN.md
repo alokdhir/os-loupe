@@ -42,7 +42,7 @@ Everything Loupe knows comes from these. Required ones stop Loupe from working i
 
 | Source | Gives | When | Needed |
 |---|---|---|---|
-| pf state table (pf's netlink interface; `pfctl -ss -vv` text as fallback) | bytes and packets per connection, both directions, before NAT | every 10 s | required |
+| pf state table (pf's netlink interface) | bytes and packets per connection, both directions, before NAT | every 10 s | required |
 | Packet capture (BPF) on the selected interfaces | TLS SNI and QUIC names, DNS answers sent to devices, DHCP requests (host name, vendor class, parameter list), mDNS (host names, models, services) | continuously | required |
 | ARP and IPv6 neighbour tables (sysctl, as `arp -an` / `ndp -an` show them) | IP → MAC, to tie traffic to a device | every 60 s | required |
 | Interface addresses (`getifaddrs()`) | which networks are local | at start, every 10 min | required |
@@ -54,7 +54,7 @@ Everything Loupe knows comes from these. Required ones stop Loupe from working i
 
 ## Bytes: pf state counters
 
-Every connection through the router has a pf state with exact packet and byte counters for both directions. On the LAN interface that state is recorded **before NAT**, with the device's own address. `lib/pfstate.py` reads the state table every 10 seconds over pf's generic netlink family (`pfctl`, the interface `pfctl` itself uses; `lib/pfnl.py`), falling back to parsing `pfctl -ss -vv` text if netlink fails, keeps states whose `origif` is a selected interface and that have exactly one local endpoint, and records the change in each state's counters since the last read. The first read after start is only a baseline, so restarts never double count.
+Every connection through the router has a pf state with exact packet and byte counters for both directions. On the LAN interface that state is recorded **before NAT**, with the device's own address. `lib/pfstate.py` reads the state table every 10 seconds over pf's generic netlink family (`pfctl`, the interface `pfctl` itself uses; `lib/pfnl.py`), keeps states whose `origif` is a selected interface and that have exactly one local endpoint, and records the change in each state's counters since the last read. The first read after start is only a baseline, so restarts never double count.
 
 pf keeps a closed state for at least its close timeouts (TCP fin-wait 45 s, single-packet UDP 30 s), longer than the 10-second poll, so every connection's final counters are seen. Counters are `initiator:responder`; the device-opened direction decides which side is "up".
 
@@ -120,9 +120,9 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **Kea and ISC DHCP** lease and config formats are read from their documentation and tested with sample files; Loupe has only run against dnsmasq so far.
 - **IPv6** is implemented (filters, parsing) but has not seen real traffic yet.
 - **VLANs / several LAN interfaces:** supported by configuration, tested only on one bridged LAN.
-- **Large state tables:** the state table is read every 10 seconds. The kernel hands it over in ~1.5 ms for 1,000 states, but decoding it in Python costs ~25 µs per state either way (netlink fields or `pfctl` text, `tools/bench_pfstate.py`): ~0.25% of a core at 1,000 states, ~12% at 50,000. Beyond that it would need a compiled helper or a longer poll interval (pf keeps closed states only 30–45 s, so the interval can't go much past 20 s).
-- **External commands:** none in normal operation. pf states, neighbour tables, interface addresses, the filter compiler (libpcap) and Unbound's cache are all read natively; `pfctl` runs only if pf's netlink interface fails, and loupd logs which source it is using.
-- **pf's netlink attributes** (`netpfil/pf/pf_nl.h`) are a kernel interface that can grow between FreeBSD releases; Loupe reads only the fields it needs by number and keeps the text parser as a fallback.
+- **Large state tables:** the state table is read every 10 seconds. The kernel hands it over in ~1.5 ms for 1,000 states, but decoding it in Python costs ~25 µs per state on an N150 (`tools/bench_pfstate.py`): ~0.25% of a core at 1,000 states, ~12% at 50,000. Beyond that it would need a compiled helper or a longer poll interval (pf keeps closed states only 30–45 s, so the interval can't go much past 20 s).
+- **External commands:** none. pf states, neighbour tables, interface addresses, the filter compiler (libpcap) and Unbound's cache are all read natively. A failed netlink read is logged and retried at the next poll.
+- **pf's netlink attributes** (`netpfil/pf/pf_nl.h`) are a kernel interface that can grow between FreeBSD releases; Loupe reads only the fields it needs by number and skips a state missing one of them.
 
 ## Privacy
 
