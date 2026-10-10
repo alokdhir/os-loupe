@@ -59,24 +59,17 @@ def load():
     return db, ServiceMap(conf.get("services")), {k.lower().replace("-", ":"): v for k, v in conf.get("devices", {}).items()}
 
 
-def keep_5m_days():
-    try:
-        with open(CONF) as f:
-            return float(json.load(f).get("retention", {}).get("days_5m", 30))
-    except (OSError, ValueError, TypeError, AttributeError):
-        return 30.0
-
-
 def window(hours):
-    """(table, start, bucket size): minutes for the last 3 hours, 5-minute detail while it is kept (the
-    retention setting), hourly beyond."""
+    """(table, start, bucket size): minutes up to 3 hours, 5-minute detail up to 2 days, the hourly table
+    beyond (longer periods are charted by the hour anyway, and it holds the whole history whatever the
+    5-minute retention is set to)."""
     now = time.time()
     start = int(now - hours * 3600)
     if hours <= 3:
         return "flows_1m", start, 60
-    if hours > keep_5m_days() * 24:
-        return "flows_1h", start, 86400 if hours > 24 * 90 else 3600
-    return "flows_5m", start, 300 if hours <= 48 else 3600
+    if hours <= 48:
+        return "flows_5m", start, 300
+    return "flows_1h", start, 86400 if hours > 24 * 90 else 3600
 
 
 def vendor_of(mac, vendor, dtype):

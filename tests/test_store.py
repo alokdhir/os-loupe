@@ -50,6 +50,17 @@ class TestRollup(unittest.TestCase):
             self.assertEqual(db.execute("SELECT bucket, down FROM flows_1h").fetchall(), [(7200, 300)])
 
 
+class TestTransactions(unittest.TestCase):
+    def test_failed_update_rolls_back(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = store.Store(os.path.join(d, "loupe.db"))
+            self.addCleanup(s.close)
+            with self.assertRaises(sqlite3.Error):
+                s.set_device_types([("n", "v", "t", "s", "m")])          # wrong number of values
+            s.write({}, {}, {})                                            # would fail inside a stuck transaction
+            self.assertFalse(s.db.in_transaction)
+
+
 class TestNames(unittest.TestCase):
     def test_priority(self):
         n = names.Names()

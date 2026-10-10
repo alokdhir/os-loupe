@@ -241,7 +241,10 @@ class Delta(NamedTuple):
 class Tracker:
     """Turns successive snapshots into byte deltas. The first snapshot is a baseline:
     bytes moved before loupe started are not counted, except for states younger than
-    `fresh` seconds (they began just now)."""
+    `fresh` seconds (they began just now). Later, a state seen for the first time is
+    counted in full only if it is new (younger than a few polls); an older one existed
+    unseen (e.g. while the LAN networks were missing), so it is a baseline too - better
+    to miss its past than to count a long connection's lifetime again."""
 
     def __init__(self, fresh=15):
         self.prev = None
@@ -256,7 +259,7 @@ class Tracker:
             if old is not None and (st.up < old.up or st.down < old.down):
                 old = None   # id reused / counters reset
             if old is None:
-                if first and st.age > self.fresh:
+                if st.age > (self.fresh if first else 3 * self.fresh):
                     continue
                 d = Delta(st, st.up, st.down, st.pkts_up, st.pkts_down, True)
             else:

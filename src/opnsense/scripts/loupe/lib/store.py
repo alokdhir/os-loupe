@@ -201,9 +201,13 @@ class Store:
     def set_device_types(self, rows):
         """rows: [(name, vendor, type, type_source, model, mac)]"""
         self.db.execute("BEGIN")
-        self.db.executemany("UPDATE devices SET name = ?, vendor = ?, type = ?, type_source = ?, model = ? WHERE mac = ?",
-                            rows)
-        self.db.execute("COMMIT")
+        try:
+            self.db.executemany("UPDATE devices SET name = ?, vendor = ?, type = ?, type_source = ?, model = ? "
+                                "WHERE mac = ?", rows)
+            self.db.execute("COMMIT")
+        except BaseException:
+            self.db.execute("ROLLBACK")      # never leave the shared connection inside a transaction
+            raise
 
     def prune(self, now, days_5m=30, days_1h=365, days_lookups=30):
         db = self.db

@@ -123,7 +123,6 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **Large state tables:** the state table is read every 10 seconds. The kernel hands it over in ~1.5 ms for 1,000 states, but decoding it in Python costs ~25 µs per state either way (netlink fields or `pfctl` text, `tools/bench_pfstate.py`): ~0.25% of a core at 1,000 states, ~12% at 50,000. Beyond that it would need a compiled helper or a longer poll interval (pf keeps closed states only 30–45 s, so the interval can't go much past 20 s).
 - **External commands:** none in normal operation. pf states, neighbour tables, interface addresses, the filter compiler (libpcap) and Unbound's cache are all read natively; `pfctl` runs only if pf's netlink interface fails, and loupd logs which source it is using.
 - **pf's netlink attributes** (`netpfil/pf/pf_nl.h`) are a kernel interface that can grow between FreeBSD releases; Loupe reads only the fields it needs by number and keeps the text parser as a fallback.
-- **Long report periods:** reports up to 30 days scan the 5-minute table; at a full month of data, reports beyond 48 hours should read the hourly table.
 
 ## Privacy
 

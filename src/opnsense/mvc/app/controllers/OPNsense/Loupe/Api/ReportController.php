@@ -142,8 +142,9 @@ class ReportController extends ApiControllerBase
         return $this->deviceSection('ports');
     }
 
-    /* a service, site or address: letters, digits, spaces and the punctuation service names use */
-    private const TEXT = '/^[^\p{C}"\\\\`]{1,253}$/u';     // printable, no quotes/backslash/backtick
+    /* a service, site or address: any printable text except double quotes, backslash and backtick
+       (configdpRun shell-escapes each argument anyway) */
+    private const TEXT = '/^[^\p{C}"\\\\`]{1,253}$/u';
 
     /* the services list; its search box matches services, sites and addresses (in query.py, not row text) */
     public function searchHouseAction()

@@ -101,6 +101,18 @@ class TestPfState(unittest.TestCase):
         self.assertNotIn("3", d)                             # unchanged
 
 
+class TestTrackerUnseen(unittest.TestCase):
+    def test_old_state_first_seen_is_a_baseline(self):
+        """A long connection that reappears (networks were missing) must not be counted for its whole life."""
+        t = pfstate.Tracker(fresh=10)
+        old = pfstate.State(("1", "c"), "bridge0", "tcp", "10.9.1.20", 51000, "203.0.113.10", 443, True,
+                            5_000_000, 9_000_000, 10, 10, 3600)
+        new = old._replace(key=("2", "c"), up=100, down=200, age=4)
+        self.assertEqual(t.update({}), [])                      # first snapshot: nothing local yet
+        deltas = t.update({old.key: old, new.key: new})
+        self.assertEqual([(d.state.key, d.up, d.down) for d in deltas], [(("2", "c"), 100, 200)])
+
+
 class TestLargeTable(unittest.TestCase):
     def test_synthetic_dump(self):
         """The benchmark's dump: every connection kept once, from its LAN-side state, with the right direction."""

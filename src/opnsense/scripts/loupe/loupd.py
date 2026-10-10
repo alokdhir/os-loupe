@@ -32,7 +32,6 @@ import collections
 import json
 import signal
 import ssl
-import subprocess
 import sys
 import syslog
 import time
@@ -47,6 +46,9 @@ from lib import devid, names, neighbours, pfstate, store, unbound  # noqa: E402
 def local_day(ts):
     t = time.localtime(ts)
     return int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+
+
+MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
 
 
 class Loupe:
@@ -67,6 +69,7 @@ class Loupe:
         self.devices = collections.defaultdict(dict)
         self.live = set()
         self.state_source = None
+        self.error_hour, self.errors_logged = None, 0
         self.seed_names()
 
     def seed_names(self):
@@ -79,6 +82,14 @@ class Loupe:
     # ---- capture events -------------------------------------------------------------
     def emit(self, ev):
         kind = ev["ev"]
+        if kind == "error":                  # a packet capture could not handle (logged, at most 10 an hour)
+            hour = int(ev.get("ts", 0) // 3600)
+            if hour != self.error_hour:
+                self.error_hour, self.errors_logged = hour, 0
+            if self.errors_logged < 10:
+                self.errors_logged += 1
+                syslog.syslog(syslog.LOG_WARNING, f"loupe: skipped a packet from {ev.get('src')}: {ev.get('err')}")
+            return
         if kind in ("tls", "quic"):
             if not self.is_local(ev["client"]) or self.is_local(ev["server"]):
                 return  # LAN<->LAN TLS (AirPlay, lockdownd, ...) carries no site
@@ -125,10 +136,7 @@ class Loupe:
     def tick(self, now):
         if now >= self.next_poll:
             self.next_poll = now + self.poll_every
-            try:
-                self.poll(now)
-            except (subprocess.SubprocessError, OSError) as e:
-                syslog.syslog(syslog.LOG_ERR, f"loupe: pf poll failed: {e!r}")
+            self.guarded("pf poll", self.poll, now)
         # a database or system error is logged and retried later; it must not stop the daemon
         # (flush keeps its buffered minute until a write succeeds)
         if now >= self.next_flush:
@@ -150,8 +158,11 @@ class Loupe:
             syslog.syslog(syslog.LOG_ERR, f"loupe: {what} failed: {e!r}")
 
     def refresh_networks(self):
-        """LAN networks can change while running (e.g. a delegated IPv6 prefix arrives)."""
-        self.is_local = pfstate.local_matcher(pfstate.interface_networks(self.ifaces))
+        """LAN networks can change while running (e.g. a delegated IPv6 prefix arrives). An interface
+        briefly without addresses (being reconfigured) keeps the networks it had."""
+        nets = pfstate.interface_networks(self.ifaces)
+        if nets:
+            self.is_local = pfstate.local_matcher(nets)
 
     def classify(self, now):
         """Store what loupe detects. Names/types set in the GUI are layered on at report time
@@ -196,7 +207,14 @@ class Loupe:
                 d.setdefault("ip", ip)
                 d["ts"] = max(d.get("ts", 0), now)
         devices = {m: d for m, d in self.devices.items() if "ts" in d}
-        self.store.write(self.flows, self.lookups, devices, now)
+        try:
+            self.store.write(self.flows, self.lookups, devices, now)
+        except Exception:
+            if len(self.flows) + len(self.lookups) > MAX_BUFFERED:     # the database has been failing for a while
+                syslog.syslog(syslog.LOG_ERR, f"loupe: dropping {len(self.flows)} unwritten traffic rows")
+                self.flows, self.lookups = {}, {}
+                self.devices = collections.defaultdict(dict)
+            raise
         self.flows, self.lookups = {}, {}
         self.devices = collections.defaultdict(dict)
         self.names.expire(self.live, now)
