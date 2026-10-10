@@ -20,6 +20,8 @@ Plugin Changelog
 * VPN tunnels named by provider; Schlage locks, NanoKVM/PiKVM, HDHomeRun,
   Azure Sphere devices and Linux distributions recognised
 * Last seen accurate to the minute
+* 1-minute detail for the last day: the 1 and 3 hour views chart minutes
+  (after updating, they fill in over the first 3 hours); charts in Mbps
 * Reads neighbour tables, interface addresses and Unbound's cache natively;
   compiles its capture filter with libpcap; pf states parsed 2x faster
 * Hardened against malformed packets and database errors; device-supplied
