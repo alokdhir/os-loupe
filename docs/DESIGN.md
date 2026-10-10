@@ -44,7 +44,7 @@ Everything Loupe knows comes from these. Required ones stop Loupe from working i
 |---|---|---|---|
 | pf state table (`pfctl -ss -vv`) | bytes and packets per connection, both directions, before NAT | every 10 s | required |
 | Packet capture (BPF) on the selected interfaces | TLS SNI and QUIC names, DNS answers sent to devices, DHCP requests (host name, vendor class, parameter list), mDNS (host names, models, services) | continuously | required |
-| ARP table (`arp -an`) | IP → MAC, to tie traffic to a device | every 60 s | required (IPv6 neighbours not read yet: LOUPE-16) |
+| ARP and IPv6 neighbour tables (`arp -an`, `ndp -an`) | IP → MAC, to tie traffic to a device | every 60 s | required |
 | Interface addresses (`ifconfig`) | which networks are local | at start, every 10 min | required |
 | Unbound cache (`unbound-control dump_cache`) | names for connections opened before Loupe started | at start | optional (Unbound) |
 | dnsmasq leases and static hosts (`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`) | device names | every 10 min | optional (Kea and ISC DHCP not read yet: LOUPE-15) |
@@ -120,7 +120,8 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **DHCP servers other than dnsmasq:** lease-file names are read from dnsmasq only; Kea and ISC DHCP installs lose that clue.
 - **IPv6** is implemented (filters, parsing) but has not seen real traffic yet.
 - **VLANs / several LAN interfaces:** supported by configuration, tested only on one bridged LAN.
-- **Large state tables:** `pfctl -ss -vv` is parsed as text every 10 seconds. Fine at home scale; with tens of thousands of states the parse cost needs measuring, and a binary interface (`/dev/pf` ioctls) may be needed.
+- **Large state tables:** `pfctl -ss -vv` is parsed as text every 10 seconds: ~40 µs per state, so ~0.5% of a core at 1,000 states but ~20% at 50,000. A faster text parser (LOUPE-20) and then pf's binary interface (LOUPE-21) address it.
+- **External commands:** Loupe still runs `pfctl`, `arp`, `ndp`, `ifconfig`, `tcpdump -ddd` and `unbound-control`; each has a native replacement planned (LOUPE-21, LOUPE-22).
 - **pfctl output format** is a text interface and could change between releases; the parser has tests, but a format change would stop byte counting.
 - **Long report periods:** reports up to 30 days scan the 5-minute table; at a full month of data, reports beyond 48 hours should read the hourly table.
 
