@@ -221,9 +221,9 @@ def cmd_widget():
                        for r in recent.values()), key=lambda r: -(r["down_rate"] + r["up_rate"]))[:5]
     t = time.localtime(now)
     midnight = int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
-    new = sorted(({k: d[k] for k in ("name", "ip", "mac", "type", "vendor", "first_seen")}
+    new = sorted(({k: d[k] for k in ("name", "ip", "mac", "type", "vendor", "model", "first_seen")}
                   for d in info.values() if d["first_seen"] >= midnight), key=lambda d: -d["first_seen"])
-    started = db.execute("SELECT min(first_seen) FROM devices").fetchone()[0]
+    started = db.execute("SELECT min(first_seen) FROM devices WHERE first_seen > 0").fetchone()[0]
     return {"hours": hours, "down": sum(h[1] for h in hours), "up": sum(h[2] for h in hours),
             "top": top, "now": now_rows, "new": new[:10], "new_count": len(new),
             "since": started}

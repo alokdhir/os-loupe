@@ -1,0 +1,21 @@
+<metadata>
+    <loupe>
+        <filename>Loupe.js</filename>
+        <endpoints>
+            <endpoint>/api/loupe/report/widget</endpoint>
+        </endpoints>
+        <translations>
+            <title>Loupe</title>
+            <last24>Last 24 hours</last24>
+            <down>down</down>
+            <up>up</up>
+            <top>Top devices (24h)</top>
+            <now>Busy now (10 min)</now>
+            <quiet>Nothing busy right now</quiet>
+            <new>New today</new>
+            <nonew>No new devices today</nonew>
+            <learning>Learning your network since</learning>
+            <nodata>No data yet. Is Loupe enabled?</nodata>
+        </translations>
+    </loupe>
+</metadata>
