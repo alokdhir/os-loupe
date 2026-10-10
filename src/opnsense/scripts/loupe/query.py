@@ -67,17 +67,13 @@ def keep_5m_days():
         return 30.0
 
 
-def window(hours, db=None):
-    """(table, start, bucket size): minutes for the last 3 hours (once minute data covers the whole period;
-    before that, e.g. right after installing, 5-minute data), 5-minute detail while it is kept (the
+def window(hours):
+    """(table, start, bucket size): minutes for the last 3 hours, 5-minute detail while it is kept (the
     retention setting), hourly beyond."""
     now = time.time()
     start = int(now - hours * 3600)
     if hours <= 3:
-        first = db.execute("SELECT min(bucket) FROM flows_1m").fetchone()[0] if db is not None else None
-        if first is not None and first <= start:
-            return "flows_1m", start, 60
-        return "flows_5m", start, 300
+        return "flows_1m", start, 60
     if hours > keep_5m_days() * 24:
         return "flows_1h", start, 86400 if hours > 24 * 90 else 3600
     return "flows_5m", start, 300 if hours <= 48 else 3600
@@ -156,7 +152,7 @@ def label(dev, ip):
 
 def cmd_devices(hours):
     db, svc, ov = load()
-    table, start, _ = window(hours, db)
+    table, start, _ = window(hours)
     info = devices_info(db, ov)
     lab = Labels(db, svc, table, start)
     rows = {}
@@ -194,7 +190,7 @@ def device_filter(arg):
 def cmd_device(arg, hours):
     db, svc, ov = load()
     col, val = device_filter(arg)
-    table, start, step = window(hours, db)
+    table, start, step = window(hours)
     info = devices_info(db, ov)
     lab = Labels(db, svc, table, start)
     dev = None
@@ -255,7 +251,7 @@ def cmd_sites(hours, text=""):
     With TEXT, only services where the service, a site name or an address matches; traffic with no
     service that matches is listed under its site name or address."""
     db, svc, ov = load()
-    table, start, _ = window(hours, db)
+    table, start, _ = window(hours)
     info = devices_info(db, ov)
     lab = Labels(db, svc, table, start)
     rows = {}
@@ -290,7 +286,7 @@ def cmd_lookup(text, hours, exact=False):
 
     exact: one row of the services list - its service, or for nameless traffic its site name or address."""
     db, svc, ov = load()
-    table, start, _ = window(hours, db)
+    table, start, _ = window(hours)
     info = devices_info(db, ov)
     lab = Labels(db, svc, table, start)
     text = text.strip().lower()
