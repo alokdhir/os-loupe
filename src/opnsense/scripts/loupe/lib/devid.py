@@ -175,6 +175,9 @@ def classify(mac, hostname=None, info=None, names=(), oui=None):
         t = h and _match(HOSTNAMES, h.removesuffix(".local"))
         if t:
             return t, f"hostname {h}", ven
+    hosted = server_role(info)
+    if hosted:
+        return "Server", hosted, ven
     for svc, t in SERVICES[:6]:            # strong services (cast, sonos, printing)
         if svc in info.get("mdns_services", []):
             return t, f"mdns {svc}", ven
@@ -199,6 +202,25 @@ def classify(mac, hostname=None, info=None, names=(), oui=None):
     if is_private(mac):
         return "Phone/tablet/laptop", "private MAC", None
     return None, None, ven
+
+
+HOMEKIT_HOSTS = ("homebridge", "scrypted")
+SERVER_SERVICES = ("_smb._tcp", "_channels_dvr._tcp", "_plexmediasvr._tcp")
+
+
+def server_role(info):
+    """A machine hosting HomeKit bridges (Homebridge, Scrypted) or serving files/media next to HomeKit is a
+    server, not an accessory. Returns the evidence, or None."""
+    svcs = info.get("mdns_services", [])
+    hosts = sorted({m.split("=", 1)[1] for m in info.get("mdns_models", [])
+                    if m.startswith("md=") and m.split("=", 1)[1].lower() in HOMEKIT_HOSTS})
+    if hosts:
+        return "mdns " + " + ".join(hosts)
+    if "_hap._tcp" in svcs:
+        extra = [s for s in SERVER_SERVICES if s in svcs]
+        if extra:
+            return "mdns _hap._tcp + " + " + ".join(extra)
+    return None
 
 
 def model(info):
