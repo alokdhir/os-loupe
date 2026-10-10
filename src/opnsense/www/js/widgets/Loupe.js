@@ -87,23 +87,28 @@ export default class Loupe extends BaseWidget {
     }
 
     async onMarkupRendered() {
-        const blue = 'rgba(54,162,235,0.8)', orange = 'rgba(255,159,64,0.8)';
+        const blue = 'rgba(54,162,235,1)', orange = 'rgba(255,159,64,1)';
+        const blueFill = 'rgba(54,162,235,0.25)', orangeFill = 'rgba(255,159,64,0.25)';
         this.chart = new Chart($('#loupe-w-spark')[0].getContext('2d'), {
-            type: 'bar',
+            // the same smoothed lines as the device page (monotone: never above or below the real values)
+            type: 'line',
             data: {labels: [], datasets: [
-                {label: this.translations.down, data: [], backgroundColor: blue, stack: 's'},
-                {label: this.translations.up, data: [], backgroundColor: orange, stack: 's'}
+                {label: this.translations.down, data: [], bytes: [], borderColor: blue, backgroundColor: blueFill, fill: 'origin'},
+                {label: this.translations.up, data: [], bytes: [], borderColor: orange, backgroundColor: orangeFill, fill: 'origin'}
             ]},
             options: {
                 maintainAspectRatio: false, animation: false,
+                interaction: {mode: 'index', intersect: false},
+                elements: {line: {borderWidth: 1.5, cubicInterpolationMode: 'monotone'}, point: {radius: 0, hoverRadius: 3}},
                 plugins: {legend: {display: false}, tooltip: {callbacks: {
                     title: items => new Date(items[0].label * 1000).toLocaleTimeString([], {hour: 'numeric'}),
-                    label: c => c.dataset.label + ': ' + Loupe.bytes(c.raw)
+                    label: c => c.dataset.label + ': ' + c.raw.toFixed(c.raw < 10 ? 2 : 1) + ' Mbps ('
+                        + Loupe.bytes(c.dataset.bytes[c.dataIndex]) + ')'
                 }}},
                 scales: {
-                    x: {stacked: true, ticks: {display: false}, grid: {display: false},
+                    x: {ticks: {display: false}, grid: {display: false},
                         border: {display: true, color: 'rgba(128,128,128,0.5)'}},
-                    y: {display: false, stacked: true, beginAtZero: true}
+                    y: {display: false, beginAtZero: true}
                 }
             }
         });
@@ -119,9 +124,12 @@ export default class Loupe extends BaseWidget {
             return;
         }
         $('#loupe-w-total').text(`↓ ${Loupe.bytes(d.down)}  ↑ ${Loupe.bytes(d.up)}`);
-        this.chart.data.labels = d.hours.map(h => h[0]);
-        this.chart.data.datasets[0].data = d.hours.map(h => h[1]);
-        this.chart.data.datasets[1].data = d.hours.map(h => h[2]);
+        const mbps = b => b * 8 / 3600 / 1e6;                 // average rate over each hour
+        this.chart.data.labels = d.hours.map(h => h[0] + 1800);
+        this.chart.data.datasets.forEach((ds, i) => {
+            ds.bytes = d.hours.map(h => h[i + 1]);
+            ds.data = ds.bytes.map(mbps);
+        });
         this.chart.update();
 
         $('#loupe-w-top').html(`<div class="lw-title">${this.translations.top}</div>` + d.top.map(r => this.row(
