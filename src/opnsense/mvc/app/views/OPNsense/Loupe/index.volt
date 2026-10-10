@@ -32,10 +32,8 @@ POSSIBILITY OF SUCH DAMAGE.
     .tabulator-row:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
     @media (hover: none) { .loupe-edit { visibility: visible; } }
     .loupe-edit:hover { color: #337ab7; }
-    .loupe-copy { color: #999; cursor: pointer; visibility: hidden; padding-left: 6px; }
-    .tabulator-row:hover .loupe-copy { visibility: visible; }
-    @media (hover: none) { .loupe-copy { visibility: visible; } }
-    .loupe-copy:hover { color: #337ab7; }
+    .loupe-copy { display: block; cursor: copy; overflow: hidden; text-overflow: ellipsis; }
+    .loupe-copied { color: #3c763d; transition: color 0.2s; }
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-bar { padding: 10px 15px; }
@@ -58,13 +56,13 @@ POSSIBILITY OF SUCH DAMAGE.
                 + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '"></i>';
         }
 
-        /* a copy icon at the end of a cell (shown on hover, like the pencil) */
-        const copyable = v => v ? esc(v) + '<i class="fa fa-clipboard loupe-copy" title="{{ lang._("Copy") }}" data-copy="' + esc(v) + '"></i>' : '';
+        /* click a cell to copy its value (the cursor says so); it flashes green when copied */
+        const copyable = v => v ? '<span class="loupe-copy" title="{{ lang._("Click to copy") }}" data-copy="' + esc(v) + '">' + esc(v) + '</span>' : '';
         $(document).on('click', '.loupe-copy', function (e) {
             e.preventDefault();
             e.stopPropagation();
             const $i = $(this), text = String($i.data('copy'));
-            const done = () => { $i.removeClass('fa-clipboard').addClass('fa-check'); setTimeout(() => $i.removeClass('fa-check').addClass('fa-clipboard'), 1200); };
+            const done = () => { $i.addClass('loupe-copied'); setTimeout(() => $i.removeClass('loupe-copied'), 700); };
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(text).then(done);
             } else {                                        /* plain http: the older way */
@@ -99,8 +97,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     + (row.names && row.names.length ? ' <span class="text-muted">' + esc(row.names.slice(0, 3).join(', ')) + '</span>' : '');
             },
             site: function (column, row) {
-                return '<a href="#q=' + encodeURIComponent(row.name) + '">' + esc(row.name) + '</a>'
-                    + '<i class="fa fa-clipboard loupe-copy" title="{{ lang._("Copy") }}" data-copy="' + esc(row.name) + '"></i>';
+                return '<a href="#q=' + encodeURIComponent(row.name) + '">' + esc(row.name) + '</a>';
             },
             sitesvc: function (column, row) {
                 return row.service && row.service !== 'Other' ? esc(row.service) : dash;
