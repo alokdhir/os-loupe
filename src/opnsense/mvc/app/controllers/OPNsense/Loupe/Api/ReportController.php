@@ -62,8 +62,8 @@ class ReportController extends ApiControllerBase
     public function lookupAction($text = '', $hours = 24)
     {
         $text = rawurldecode($text);
-        if (!preg_match('/^[a-zA-Z0-9.:_-]{1,253}$/', $text)) {
-            return ['error' => 'enter a name or address'];
+        if (!preg_match(self::TEXT, $text)) {
+            return ['error' => 'enter a service, site or address'];
         }
         return $this->query(['lookup', $text, $this->hours($hours)]);
     }
@@ -132,10 +132,19 @@ class ReportController extends ApiControllerBase
         return $this->deviceSection('ports');
     }
 
+    /* a service, site or address: letters, digits, spaces and the punctuation service names use */
+    private const TEXT = '/^[a-zA-Z0-9 .:_+&()\/-]{1,253}$/';
+
+    public function searchHouseAction()
+    {
+        $data = $this->query(['sites', $this->postHours()]);
+        return $this->grid($data['rows'] ?? []);
+    }
+
     private function lookupSection($section, $sort)
     {
-        $text = (string)$this->request->getPost('q', null, '');
-        if (!preg_match('/^[a-zA-Z0-9.:_-]{1,253}$/', $text)) {
+        $text = trim((string)$this->request->getPost('q', null, ''));
+        if (!preg_match(self::TEXT, $text)) {
             return $this->searchRecordsetBase([]);
         }
         $data = $this->query(['lookup', $text, $this->postHours()]);

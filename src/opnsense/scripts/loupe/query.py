@@ -28,6 +28,7 @@
 usage:
   query.py devices HOURS
   query.py device IP HOURS
+  query.py sites HOURS
   query.py lookup TEXT HOURS
   query.py widget
 """
@@ -227,26 +228,52 @@ def cmd_device(arg, hours):
     }
 
 
+def matches(text, *fields):
+    return any(text in (f or "").lower() for f in fields)
+
+
+def cmd_sites(hours):
+    """Every named service the house used in the period, biggest first, with the devices that used it."""
+    db, svc, ov = load()
+    table, start, _ = window(hours)
+    info = devices_info(db, ov)
+    lab = Labels(db, svc, table, start)
+    rows = {}
+    for ip, mac, name, server, port, proto, up, down, conns, last in db.execute(
+            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(bucket) FROM {table} "
+            f"WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
+        s = lab.service(ip, name, server, port, proto)
+        if not s:
+            continue
+        r = rows.setdefault(s, {"service": s, "down": 0, "up": 0, "conns": 0, "last": 0, "by": collections.Counter()})
+        r["down"] += down
+        r["up"] += up
+        r["conns"] += conns
+        r["last"] = max(r["last"], last)
+        r["by"][label(info.get(mac) or next((d for d in info.values() if d["ip"] == ip), None), ip)] += up + down
+    out = []
+    for r in rows.values():
+        by = r.pop("by")
+        out.append({**r, "devices": len(by), "names": [n for n, _ in by.most_common(3)]})
+    return {"hours": hours, "rows": sorted(out, key=lambda r: -(r["down"] + r["up"]))}
+
+
 def cmd_lookup(text, hours):
+    """Traffic and lookups matching a site name, a service name (YouTube also finds googlevideo.com) or an address."""
     db, svc, ov = load()
     table, start, _ = window(hours)
     info = devices_info(db, ov)
     lab = Labels(db, svc, table, start)
     text = text.strip().lower()
-    try:
-        ipaddress.ip_address(text)
-        where, arg = "server = ?", text
-        lwhere = None
-    except ValueError:
-        where, arg = "name LIKE ? ESCAPE '\\'", "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        lwhere = arg
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
     for ip, mac, name, server, port, proto, up, down, conns, first, last in db.execute(
             f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), min(bucket), max(bucket) "
-            f"FROM {table} WHERE bucket >= ? AND {where} GROUP BY ip, mac, name, server, port, proto LIMIT 20000",
-            (start, arg)):
-        r = rows[(mac or ip, name)]
-        r.update(ip=ip, mac=mac, name=name, service=lab.service(ip, name, server, port, proto) or "")
+            f"FROM {table} WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
+        s = lab.service(ip, name, server, port, proto) or ""
+        if not (matches(text, name, s) or server == text):
+            continue
+        r = rows[(mac or ip, name or (s and "\0" + s) or server)]     # nameless traffic: one row per service
+        r.update(ip=ip, mac=mac, name=name, service=s)
         r["down"] += down
         r["up"] += up
         r["conns"] += conns
@@ -254,15 +281,15 @@ def cmd_lookup(text, hours):
         r["last"] = max(r["last"], last)
         r["servers"].add(server)
     looked = []
-    if lwhere:
-        day0 = start - 86400
-        for ip, name, source, count, first, last in db.execute(
-                "SELECT ip, name, source, sum(count), min(first_seen), max(last_seen) FROM lookups "
-                "WHERE day >= ? AND last_seen >= ? AND name LIKE ? ESCAPE '\\' GROUP BY ip, name, source "
-                "ORDER BY 6 DESC LIMIT 2000", (day0, start, lwhere)):
-            dev = next((d for d in info.values() if d["ip"] == ip), None)
-            looked.append({"ip": ip, "device": label(dev, ip), "type": (dev or {}).get("type", ""), "name": name,
-                           "source": source, "count": count, "first": first, "last": last})
+    day0 = start - 86400
+    for ip, name, source, count, first, last in db.execute(
+            "SELECT ip, name, source, sum(count), min(first_seen), max(last_seen) FROM lookups "
+            "WHERE day >= ? AND last_seen >= ? GROUP BY ip, name, source", (day0, start)):
+        if not matches(text, name, svc.by_name(name)):
+            continue
+        dev = next((d for d in info.values() if d["ip"] == ip), None)
+        looked.append({"ip": ip, "device": label(dev, ip), "type": (dev or {}).get("type", ""), "name": name,
+                       "source": source, "count": count, "first": first, "last": last})
     out = []
     for (key, _name), r in rows.items():
         dev = info.get(r["mac"]) or next((d for d in info.values() if d["ip"] == r["ip"]), None)
@@ -270,7 +297,7 @@ def cmd_lookup(text, hours):
                     "device": label(dev, r["ip"]), "type": (dev or {}).get("type", ""),
                     "servers": sorted(r["servers"])[:5]})
     return {"hours": hours, "query": text, "traffic": sorted(out, key=lambda r: -(r["down"] + r["up"])),
-            "lookups": looked}
+            "lookups": sorted(looked, key=lambda r: -r["last"])[:2000]}
 
 
 def cmd_widget():
@@ -300,6 +327,8 @@ def main(argv):
             out = cmd_devices(hours_arg(argv[2]))
         elif cmd == "device":
             out = cmd_device(argv[2], hours_arg(argv[3]))
+        elif cmd == "sites":
+            out = cmd_sites(hours_arg(argv[2]))
         elif cmd == "lookup":
             out = cmd_lookup(argv[2], hours_arg(argv[3]))
         elif cmd == "widget":

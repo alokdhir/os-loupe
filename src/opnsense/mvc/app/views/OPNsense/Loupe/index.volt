@@ -94,6 +94,13 @@ POSSIBILITY OF SUCH DAMAGE.
             },
             lookupservice: function (column, row) {
                 return row.service ? esc(row.service) : dash;
+            },
+            housesvc: function (column, row) {
+                return '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>';
+            },
+            housedevices: function (column, row) {
+                return esc(row.devices) + ' <span class="text-muted">' + esc((row.names || []).join(', '))
+                    + (row.devices > (row.names || []).length ? ', …' : '') + '</span>';
             }
         };
 
@@ -161,10 +168,17 @@ POSSIBILITY OF SUCH DAMAGE.
             grid('grid-ports', '/api/loupe/report/search_ports', dev);
         }
 
-        /* Lookup tab */
-        function lookup() {
-            if (!q) return;
+        /* Sites tab: every service the house used, or what matches the search */
+        function showSites() {
             $('#loupe-q').val(q);
+            $('#loupe-q-clear').toggle(q !== '');
+            if (!q) {
+                $('#loupe-results').hide();
+                $('#loupe-overview').show();
+                grid('grid-house', '/api/loupe/report/search_house');
+                return;
+            }
+            $('#loupe-overview').hide();
             $('#loupe-results').show();
             const query = () => ({q: q});
             grid('grid-traffic', '/api/loupe/report/search_lookup_traffic', query);
@@ -196,14 +210,14 @@ POSSIBILITY OF SUCH DAMAGE.
             });
         }
 
-        /* tabs <-> address: #device=…, #q=…, #lookup, #general, #servicenames, #devicenames */
-        const TABS = {devices: '#tab_devices', lookup: '#tab_lookup', general: '#subtab_general',
+        /* tabs <-> address: #device=…, #q=…, #sites, #general, #servicenames, #devicenames */
+        const TABS = {devices: '#tab_devices', sites: '#tab_sites', general: '#subtab_general',
                       servicenames: '#subtab_servicenames', devicenames: '#subtab_devicenames'};
-        const REPORT = ['devices', 'lookup'];
+        const REPORT = ['devices', 'sites'];
 
         function tabOf(hash) {
             if (/^#device=/.test(hash)) return 'devices';
-            if (/^#q=/.test(hash)) return 'lookup';
+            if (/^#(q=|lookup$)/.test(hash)) return 'sites';
             const t = hash.replace(/^#/, '');
             return TABS[t] ? t : '{{ activetab }}';
         }
@@ -216,10 +230,10 @@ POSSIBILITY OF SUCH DAMAGE.
             if (tab === 'devices') {
                 const m = hash.match(/device=([^&]+)/);
                 if (m) { showDevice(decodeURIComponent(m[1])); } else { showDevices(); }
-            } else if (tab === 'lookup') {
+            } else if (tab === 'sites') {
                 const m = hash.match(/q=([^&]+)/);
-                if (m) { q = decodeURIComponent(m[1]); }
-                lookup();
+                q = m ? decodeURIComponent(m[1]) : '';
+                showSites();
             } else {
                 showSettings();
             }
@@ -227,7 +241,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         $('#maintabs a[data-toggle="tab"][href]').on('click', function () {
             const tab = Object.keys(TABS).find(k => TABS[k] === $(this).attr('href'));
-            const keep = (tab === 'lookup' && q) ? '#q=' + encodeURIComponent(q) : '#' + tab;
+            const keep = (tab === 'sites' && q) ? '#q=' + encodeURIComponent(q) : '#' + tab;
             if (window.location.hash === keep) { route(); } else { window.location.hash = keep; }
         });
         $(window).on('hashchange', route);
@@ -242,7 +256,12 @@ POSSIBILITY OF SUCH DAMAGE.
         $('#loupe-form').submit(function (e) {
             e.preventDefault();
             const v = $('#loupe-q').val().trim();
-            if (v) window.location.hash = '#q=' + encodeURIComponent(v);
+            window.location.hash = v ? '#q=' + encodeURIComponent(v) : '#sites';
+        });
+        $('#loupe-q').on('input', function () { $('#loupe-q-clear').toggle($(this).val() !== ''); });
+        $('#loupe-q-clear').click(function () {
+            $('#loupe-q').val('').focus();
+            window.location.hash = '#sites';
         });
 
         /* the pencil opens the same standard dialog as the Device names grid, saved per MAC */
@@ -295,7 +314,7 @@ POSSIBILITY OF SUCH DAMAGE.
         'activetab': activetab,
         'tabs': [
             ['tab_id': 'devices', 'tab_descr': lang._('Devices')],
-            ['tab_id': 'lookup', 'tab_descr': lang._('Lookup')],
+            ['tab_id': 'sites', 'tab_descr': lang._('Sites')],
             ['tab_id': 'settings', 'tab_descr': lang._('Settings'), 'subtabs': [
                 ['tab_id': 'general', 'tab_descr': lang._('General')],
                 ['tab_id': 'servicenames', 'tab_descr': lang._('Service names')],
@@ -381,13 +400,14 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
     </div>
 
-    <div id="tab_lookup" class="tab-pane fade in">
+    <div id="tab_sites" class="tab-pane fade in">
         <div class="loupe-bar">
             <form id="loupe-form" class="form-inline">
                 <div class="input-group" style="width: 380px; display: inline-table; vertical-align: middle">
-                    <input id="loupe-q" type="text" class="form-control" placeholder="{{ lang._('Site or address, e.g. netflix or 17.250.96.102') }}"/>
+                    <input id="loupe-q" type="text" class="form-control" placeholder="{{ lang._('Service, site or address, e.g. YouTube, netflix.com, 17.250.96.102') }}"/>
                     <span class="input-group-btn">
-                        <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i> {{ lang._('Look up') }}</button>
+                        <button id="loupe-q-clear" class="btn btn-default" type="button" title="{{ lang._('Clear') }}" style="display: none"><i class="fa fa-times"></i></button>
+                        <button class="btn btn-primary" type="submit"><i class="fa fa-search"></i> {{ lang._('Search') }}</button>
                     </span>
                 </div>
                 <div class="btn-group loupe-period" style="margin-left: 10px">
@@ -395,7 +415,21 @@ POSSIBILITY OF SUCH DAMAGE.
                 </div>
             </form>
         </div>
+        <div id="loupe-overview" style="display: none">
+            <table id="grid-house" class="table table-condensed table-hover table-striped table-responsive">
+                <thead><tr>
+                    <th data-column-id="service" data-identifier="true" data-formatter="housesvc">{{ lang._('Service') }}</th>
+                    <th data-column-id="devices" data-formatter="housedevices">{{ lang._('Devices') }}</th>
+                    <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
+                    <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
+                    <th data-column-id="conns" data-visible="false" data-width="8em">{{ lang._('Connections') }}</th>
+                    <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
         <div id="loupe-results" style="display: none">
+            <div style="padding: 0 15px 8px"><a href="#sites">&larr; {{ lang._('All sites') }}</a></div>
             <ul class="nav nav-tabs" data-tabs="tabs">
                 <li class="active"><a data-toggle="tab" href="#tab-traffic">{{ lang._('Traffic') }}</a></li>
                 <li><a data-toggle="tab" href="#tab-names">{{ lang._('Looked up or connected to') }}</a></li>

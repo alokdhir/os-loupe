@@ -31,7 +31,7 @@ namespace OPNsense\Loupe;
 class IndexController extends \OPNsense\Base\IndexController
 {
     /**
-     * One page with tabs (like Reporting: Unbound DNS): Devices, Lookup, Settings (General, Service names,
+     * One page with tabs (like Reporting: Unbound DNS): Devices, Sites, Settings (General, Service names,
      * Device names). The old addresses open the matching tab.
      */
     private function page($activetab)
@@ -52,7 +52,7 @@ class IndexController extends \OPNsense\Base\IndexController
 
     public function lookupAction()
     {
-        $this->page('lookup');
+        $this->page('sites');
     }
 
     public function settingsAction()
