@@ -45,6 +45,13 @@ POSSIBILITY OF SUCH DAMAGE.
     #loupe-detail-title .loupe-edit { float: none; font-size: 16px; padding-left: 10px; }
     .loupe-table tr:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
     .loupe-edit:hover { color: #337ab7; }
+    #loupe-edit-dialog .modal-header { padding: 15px 20px; }
+    #loupe-edit-dialog .modal-body { padding: 20px 20px 5px; }
+    #loupe-edit-dialog .modal-footer { padding: 15px 20px; }
+    #loupe-edit-dialog .form-group { margin-bottom: 18px; }
+    #loupe-edit-dialog label { display: block; margin-bottom: 6px; font-weight: bold; }
+    #loupe-edit-dialog .form-control { width: 100%; }
+    #loupe-edit-mac { margin-left: 8px; }
 </style>
 <script>
     const loupe = {
