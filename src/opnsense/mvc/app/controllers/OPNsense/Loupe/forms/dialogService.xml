@@ -1,9 +1,9 @@
 <form>
     <field>
         <id>service.suffix</id>
-        <label>Domain</label>
+        <label>Domain or address</label>
         <type>text</type>
-        <help>Matches this domain and everything under it, e.g. example.com also matches cdn.example.com.</help>
+        <help>A domain matches itself and everything under it (example.com also matches cdn.example.com). An IP address or range (192.0.2.10, 203.0.113.0/24, 2001:db8::/48) names traffic to those servers, whatever their name says.</help>
     </field>
     <field>
         <id>service.name</id>

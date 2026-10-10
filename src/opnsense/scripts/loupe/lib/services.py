@@ -50,12 +50,45 @@ def vpn_provider(name):
     return None
 
 
+def as_network(text):
+    """An IP address or range from the settings, or None for a domain."""
+    try:
+        return ipaddress.ip_network(text.strip(), strict=False)
+    except ValueError:
+        return None
+
+
 class ServiceMap:
     def __init__(self, extra=None):
+        """`extra`: the user's names - keys are domains, or IP addresses / ranges (checked before anything else)."""
         self.suffixes = dict(SUFFIXES)
-        self.suffixes.update({k.lower().strip("."): v for k, v in (extra or {}).items()})
+        mine = []
+        for k, v in (extra or {}).items():
+            net = as_network(k)
+            if net is not None:
+                mine.append((net, v))
+            else:
+                self.suffixes[k.lower().strip(".")] = v
+        self.mine = sorted(mine, key=lambda x: -x[0].prefixlen)       # most specific first
         self.ranges = [(ipaddress.ip_network(n), s) for n, s in RANGES]
         self._cache = {}
+
+    def by_my_address(self, addr):
+        """The user's own name for this server address, if they gave one."""
+        if not self.mine:
+            return None
+        return self._in(addr, self.mine)
+
+    @staticmethod
+    def _in(addr, ranges):
+        try:
+            a = ipaddress.ip_address(addr)
+        except ValueError:
+            return None
+        for net, s in ranges:
+            if a.version == net.version and a in net:
+                return s
+        return None
 
     def by_name(self, name):
         if not name:
@@ -73,17 +106,10 @@ class ServiceMap:
         return hit or None
 
     def by_address(self, addr):
-        try:
-            a = ipaddress.ip_address(addr)
-        except ValueError:
-            return None
-        for net, s in self.ranges:
-            if a.version == net.version and a in net:
-                return s
-        return None
+        return self._in(addr, self.ranges)
 
     def service(self, name, server, port, proto):
-        s = self.by_name(name)
+        s = self.by_my_address(server) or self.by_name(name)
         if s:
             return s
         owner = self.by_address(server)

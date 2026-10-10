@@ -134,7 +134,7 @@ class Labels:
             self.tunnels[(ip, server)] = PORTS[(proto, port)]
 
     def service(self, ip, name, server, port, proto):
-        s = self.svc.by_name(name)
+        s = self.svc.by_my_address(server) or self.svc.by_name(name)
         if s:
             return s
         s = self.tunnels.get((ip, server)) or self.svc.service(name, server, port, proto)

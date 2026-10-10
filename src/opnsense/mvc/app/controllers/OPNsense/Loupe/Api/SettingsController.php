@@ -47,14 +47,37 @@ class SettingsController extends ApiMutableModelControllerBase
         return $this->getBase('service', 'services.service', $uuid);
     }
 
+    /**
+     * A service entry is a domain, or an IP address / range: refuse addresses that don't parse
+     * (e.g. 300.1.1.1 or 10.0.0.0/40) while the dialog can still show it.
+     */
+    private function checkService()
+    {
+        $svc = $this->request->getPost('service');
+        $text = is_array($svc) ? trim((string)($svc['suffix'] ?? '')) : '';
+        $looksLikeAddress = strpos($text, '/') !== false || strpos($text, ':') !== false
+            || preg_match('/^[0-9.]+$/', $text);
+        if ($text === '' || !$looksLikeAddress) {
+            return null;
+        }
+        [$ip, $bits] = array_pad(explode('/', $text, 2), 2, null);
+        $v6 = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
+        $ok = filter_var($ip, FILTER_VALIDATE_IP) !== false
+            && ($bits === null || (ctype_digit($bits) && (int)$bits <= ($v6 ? 128 : 32)));
+        if (!$ok) {
+            return ['result' => 'failed', 'validations' => ['service.suffix' => gettext('Enter a valid IP address or range, e.g. 203.0.113.0/24.')]];
+        }
+        return null;
+    }
+
     public function addServiceAction()
     {
-        return $this->addBase('service', 'services.service');
+        return $this->checkService() ?? $this->addBase('service', 'services.service');
     }
 
     public function setServiceAction($uuid)
     {
-        return $this->setBase('service', 'services.service', $uuid);
+        return $this->checkService() ?? $this->setBase('service', 'services.service', $uuid);
     }
 
     public function delServiceAction($uuid)

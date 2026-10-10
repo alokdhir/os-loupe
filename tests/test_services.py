@@ -52,6 +52,15 @@ class TestServices(unittest.TestCase):
         self.assertEqual(self.m.service("", "203.0.113.9", 9999, "tcp"), None)
 
 
+    def test_user_addresses(self):
+        m = services.ServiceMap({"192.0.2.10": "My server", "203.0.113.0/24": "Office", "203.0.113.128/25": "Office B",
+                                 "example.org": "Example"})
+        self.assertEqual(m.service("vps.amazonaws.com", "192.0.2.10", 443, "tcp"), "My server")   # beats the name
+        self.assertEqual(m.service("", "203.0.113.5", 443, "tcp"), "Office")
+        self.assertEqual(m.service("", "203.0.113.200", 443, "tcp"), "Office B")                  # most specific
+        self.assertEqual(m.service("www.example.org", "198.51.100.1", 443, "tcp"), "Example")
+        self.assertEqual(m.service("vps.amazonaws.com", "198.51.100.2", 443, "tcp"), "AWS")
+
     def test_vpn_provider(self):
         self.assertEqual(services.vpn_provider("api.nordvpn.com"), "NordVPN")
         self.assertEqual(services.vpn_provider("nordvpn.com."), "NordVPN")

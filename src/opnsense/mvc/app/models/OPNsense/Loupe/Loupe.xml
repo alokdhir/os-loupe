@@ -38,8 +38,8 @@
             <service type="ArrayField">
                 <suffix type="TextField">
                     <Required>Y</Required>
-                    <Mask>/^[a-zA-Z0-9.\-_]+$/</Mask>
-                    <ValidationMessage>Enter a domain or domain suffix, e.g. example.com.</ValidationMessage>
+                    <Mask>/^[a-zA-Z0-9.\-_:\/]+$/</Mask>
+                    <ValidationMessage>Enter a domain (example.com), an IP address or a range (203.0.113.0/24).</ValidationMessage>
                 </suffix>
                 <name type="TextField">
                     <Required>Y</Required>
