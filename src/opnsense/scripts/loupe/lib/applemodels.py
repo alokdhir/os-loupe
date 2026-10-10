@@ -54,6 +54,7 @@ MODELS = {
     "Mac16,10": "Mac mini (M4)", "Mac16,11": "Mac mini (M4 Pro)",
     "Mac16,12": "MacBook Air 13″ (M4)", "Mac16,13": "MacBook Air 15″ (M4)",
     "Mac16,9": "Mac Studio (M4 Max)",
+    "Mac17,5": "MacBook Neo",
     # Apple TV
     "AppleTV5,3": "Apple TV HD", "AppleTV6,2": "Apple TV 4K (1st gen)",
     "AppleTV11,1": "Apple TV 4K (2nd gen)", "AppleTV14,1": "Apple TV 4K (3rd gen)",

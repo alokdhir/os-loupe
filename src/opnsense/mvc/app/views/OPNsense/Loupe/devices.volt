@@ -59,6 +59,10 @@ POSSIBILITY OF SUCH DAMAGE.
                 const tip = (row.model && row.type_source !== 'set by you' ? row.type + ' · ' : '') + (row.type_source || '');
                 return '<span title="' + esc(tip) + '">' + esc(row.shown_type) + '</span>';
             },
+            vendor: function (column, row) {
+                if (!row.vendor_note) return esc(row.vendor);
+                return '<span class="text-muted" title="' + esc(row.vendor_note) + '">' + esc(row.vendor || row.vendor_note) + '</span>';
+            },
             services: function (column, row) {
                 return (row.top || []).map(t => t ? esc(t) : dash).join(', ');
             },
@@ -204,7 +208,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
                 <th data-column-id="name" data-formatter="device">{{ lang._('Device') }}</th>
                 <th data-column-id="shown_type" data-formatter="devtype">{{ lang._('Type') }}</th>
-                <th data-column-id="vendor">{{ lang._('Vendor') }}</th>
+                <th data-column-id="vendor" data-formatter="vendor">{{ lang._('Vendor') }}</th>
                 <th data-column-id="mac" data-visible="false">{{ lang._('MAC address') }}</th>
                 <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                 <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>

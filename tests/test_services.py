@@ -78,5 +78,14 @@ class TestVpnLabels(unittest.TestCase):
             self.assertEqual(lab.service("10.9.1.30", "www.youtube.com", "203.0.113.50", 443, "tcp"), "YouTube")
 
 
+    def test_vendor_fallback(self):
+        import query
+        self.assertEqual(query.vendor_of("ac:00:00:00:00:01", "Acme", "Mac"), ("Acme", ""))
+        self.assertEqual(query.vendor_of("02:00:00:00:00:01", "", "iPhone"), ("Apple", "from device type (private MAC)"))
+        self.assertEqual(query.vendor_of("ac:00:00:00:00:01", "", "Mac"),
+                         ("Apple", "from device type (MAC prefix not in the vendor list)"))
+        self.assertEqual(query.vendor_of("02:00:00:00:00:01", "", "Android device"), ("", "private MAC"))
+
+
 if __name__ == "__main__":
     unittest.main()
