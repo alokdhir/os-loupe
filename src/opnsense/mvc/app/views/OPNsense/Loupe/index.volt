@@ -58,7 +58,7 @@ POSSIBILITY OF SUCH DAMAGE.
         const formatters = {
             device: function (column, row) {
                 return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>'
-                    + (row.name !== row.ip ? ' <span class="text-muted">' + esc(row.ip) + '</span>' : '') + editButton(row);
+                    + editButton(row);
             },
             devtype: function (column, row) {
                 if (!row.shown_type) return dash;
@@ -88,7 +88,6 @@ POSSIBILITY OF SUCH DAMAGE.
             },
             lookupdevice: function (column, row) {
                 return '<a href="#device=' + esc(row.mac || row.ip) + '">' + esc(row.device) + '</a>'
-                    + (row.device !== row.ip ? ' <span class="text-muted">' + esc(row.ip) + '</span>' : '')
                     + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '');
             },
             lookupsite: function (column, row) {
@@ -395,6 +394,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <tr>
                     <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
                     <th data-column-id="name" data-formatter="device">{{ lang._('Device') }}</th>
+                    <th data-column-id="ip" data-width="9em">{{ lang._('Address') }}</th>
                     <th data-column-id="shown_type" data-formatter="devtype">{{ lang._('Type') }}</th>
                     <th data-column-id="vendor" data-formatter="vendor">{{ lang._('Vendor') }}</th>
                     <th data-column-id="mac" data-visible="false">{{ lang._('MAC address') }}</th>
@@ -492,6 +492,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <table id="grid-traffic" class="table table-condensed table-hover table-striped table-responsive">
                         <thead><tr>
                             <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
+                            <th data-column-id="ip" data-width="9em">{{ lang._('Address') }}</th>
                             <th data-column-id="name" data-formatter="lookupsite">{{ lang._('Site') }}</th>
                             <th data-column-id="service" data-formatter="lookupservice">{{ lang._('Service') }}</th>
                             <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
@@ -507,6 +508,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <table id="grid-names" class="table table-condensed table-hover table-striped table-responsive">
                         <thead><tr>
                             <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
+                            <th data-column-id="ip" data-width="9em">{{ lang._('Address') }}</th>
                             <th data-column-id="name">{{ lang._('Name') }}</th>
                             <th data-column-id="source" data-width="7em">{{ lang._('Seen in') }}</th>
                             <th data-column-id="count" data-width="7em">{{ lang._('Times') }}</th>
