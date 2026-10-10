@@ -23,6 +23,22 @@ Non-goals: blocking or policy (that is the firewall's job), alerts, deep packet 
                                       └────────────────────────────────────────┘          └─────────────────────┘
 ```
 
+## Data sources
+
+Everything Loupe knows comes from these. Required ones stop Loupe from working if missing; optional ones only cost names or detail.
+
+| Source | Gives | When | Needed |
+|---|---|---|---|
+| pf state table (`pfctl -ss -vv`) | bytes and packets per connection, both directions, before NAT | every 10 s | required |
+| Packet capture (BPF) on the selected interfaces | TLS SNI and QUIC names, DNS answers sent to devices, DHCP requests (host name, vendor class, parameter list), mDNS (host names, models, services) | continuously | required |
+| ARP table (`arp -an`) | IP → MAC, to tie traffic to a device | every 60 s | required (IPv6 neighbours not read yet: LOUPE-16) |
+| Interface addresses (`ifconfig`) | which networks are local | at start, every 10 min | required |
+| Unbound cache (`unbound-control dump_cache`) | names for connections opened before Loupe started | at start | optional (Unbound) |
+| dnsmasq leases and static hosts (`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`) | device names | every 10 min | optional (Kea and ISC DHCP not read yet: LOUPE-15) |
+| IEEE vendor list (`/usr/local/opnsense/contrib/ieee/oui.csv`, shipped with OPNsense) | MAC maker | at start | optional |
+| Settings (`/usr/local/etc/loupe.json`, from the OPNsense config via a template) | interfaces, retention, your service and device names | daemon: at start (Apply restarts it); reports: every query | required |
+| Shipped rules (`data/devices.json`, `data/services.json`) | device types, icons, makers, Apple model names; service names, address ranges, ports, VPN providers | at start / every query | required |
+
 ## Bytes: pf state counters
 
 Every connection through the router has a pf state with exact packet and byte counters for both directions. On the LAN interface that state is recorded **before NAT**, with the device's own address. `lib/pfstate.py` reads `pfctl -ss -vv` every 10 seconds, keeps states whose `origif` is a selected interface and that have exactly one local endpoint, and records the change in each state's counters since the last read. The first read after start is only a baseline, so restarts never double count.
