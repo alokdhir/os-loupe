@@ -11,7 +11,7 @@ Non-goals: blocking or policy (that is the firewall's job), alerts, deep packet 
 ## Overview
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph kernel["OPNsense kernel"]
         bpf["Packet capture (BPF)<br/>only handshakes, DNS, DHCP, mDNS"]
         pf["pf state table<br/>exact byte counters"]
