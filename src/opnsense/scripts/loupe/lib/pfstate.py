@@ -39,12 +39,13 @@ UDP >= 30 s (udp.single), so every state is seen with its final counters.
 import ipaddress
 import re
 import subprocess
+
+from . import netif
 from typing import NamedTuple
 
 HEADER = re.compile(r"^\S+ (\S+) (.+?) (<-|->) (.+?)\s{2,}\S*\s*$")
 COUNTS = re.compile(r"(\d+):(\d+) pkts, (\d+):(\d+) bytes")
 IDLINE = re.compile(r"id: ([0-9a-f]+) creatorid: ([0-9a-f]+)")
-ORIGIF = re.compile(r"origif: (\S+)")
 AGE = re.compile(r"age (\d+):(\d+):(\d+)")
 
 
@@ -165,15 +166,7 @@ def local_matcher(networks):
 
 def interface_networks(ifaces):
     """IPv4/IPv6 networks configured on the given interfaces (link-local excluded)."""
-    nets = []
-    for iface in ifaces:
-        out = subprocess.run(["ifconfig", iface], capture_output=True, text=True).stdout
-        for m in re.finditer(r"inet (\S+) netmask (0x[0-9a-f]+)", out):
-            nets.append(f"{m.group(1)}/{bin(int(m.group(2), 16)).count('1')}")
-        for m in re.finditer(r"inet6 (\S+) prefixlen (\d+)", out):
-            if not m.group(1).lower().startswith("fe80"):
-                nets.append(f"{m.group(1).split('%')[0]}/{m.group(2)}")
-    return nets
+    return [str(i.network) for _, i in netif.addresses(set(ifaces)) if not i.ip.is_link_local]
 
 
 class Delta(NamedTuple):

@@ -24,6 +24,7 @@
 
 import socket
 import struct
+import sys
 import unittest
 
 import helpers  # noqa: F401  (sets sys.path)
@@ -132,6 +133,19 @@ class TestNeighbours(unittest.TestCase):
         v6 = bytes([28, socket.AF_INET6, 0, 0, 0, 0, 0, 0]) + bytes(ll) + b"\0" * 4
         got = neighbours.parse(self.record(v4, "02:00:00:00:00:01") + self.record(v6, "02:00:00:00:00:02"))
         self.assertEqual(got, {"10.9.1.20": "02:00:00:00:00:01", "fe80::1": "02:00:00:00:00:02"})
+
+
+class TestNetif(unittest.TestCase):
+    def test_short_netmask_padded(self):
+        import ctypes
+        from lib import netif
+        mask = ctypes.create_string_buffer(bytes([7, 0, 0, 0, 255, 255, 240]))     # trimmed /20, as the kernel sends it
+        self.assertEqual(netif._sockaddr(ctypes.addressof(mask), socket.AF_INET, 4), bytes([255, 255, 240, 0]))
+
+    @unittest.skipUnless(sys.platform.startswith(("freebsd", "darwin")), "BSD sockaddr layout")
+    def test_loopback(self):
+        from lib import netif
+        self.assertIn("127.0.0.1/8", [str(i) for _, i in netif.addresses({"lo0"})])
 
 
 if __name__ == "__main__":
