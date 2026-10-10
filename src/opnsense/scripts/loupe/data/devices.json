@@ -45,7 +45,7 @@
   {"when": {"hostname": "(?i)raspberrypi|^rpi"}, "type": "Raspberry Pi", "example": {"hostname": "raspberrypi"}},
   {"when": {"hostname": "(?i)denon|marantz|onkyo|yamaha-?(rx|av)|avr"}, "type": "AV receiver", "example": {"hostname": "denon-avr-x1700h"}},
   {"when": {"hostname": "(?i)^(EP|HS|KP|KS|P1)\\d\\d|kasa|smart-?plug"}, "type": "Smart plug", "example": {"hostname": "HS105"}},
-  {"when": {"hostname": "(?i)^GEModule|^GE[-_]"}, "type": "GE appliance", "example": {"hostname": "GEModule1234"}},
+  {"when": {"hostname": "(?i)^GEModule|^GE[-_]"}, "type": "Appliance (GE / Haier module)", "example": {"hostname": "GEModule1234"}, "note": "GE Appliances' Wi-Fi module, also used in Fisher & Paykel and other Haier brands"},
   {"when": {"hostname": "(?i)^schlage"}, "type": "Smart lock", "note": "Schlage Encode (Wi-Fi) uses its brand as its DHCP name", "example": {"hostname": "Schlage", "info": {"dhcp_params": "1,3,6"}}},
   {"when": {"hostname": "(?i)^HDHR-[0-9a-f]{8}$"}, "type": "TV tuner", "note": "SiliconDust HDHomeRun: HDHR- plus its device ID", "example": {"hostname": "HDHR-1A2B3C4D"}},
   {"when": {"hostname": "(?i)tuya|^wlan0$|^esp[-_]"}, "type": "Smart home device", "example": {"hostname": "esp_0a1b2c"}},
@@ -134,7 +134,7 @@
   {"when": {"vendor": "Micro-Star"}, "type": "Computer", "example": {"vendor": "Micro-Star Corp."}},
   {"when": {"vendor": "Dell"}, "type": "Computer", "example": {"vendor": "Dell Corp."}},
   {"when": {"vendor": "Lenovo"}, "type": "Computer", "example": {"vendor": "Lenovo Corp."}},
-  {"when": {"vendor": "General Electric"}, "type": "GE appliance", "example": {"vendor": "General Electric Corp."}},
+  {"when": {"vendor": "General Electric"}, "type": "Appliance (GE / Haier module)", "example": {"vendor": "General Electric Corp."}},
   {"when": {"vendor": "Magicjack"}, "type": "VoIP adapter", "example": {"vendor": "Magicjack Corp."}},
   {"when": {"vendor": "Globalscale"}, "type": "Embedded device", "example": {"vendor": "Globalscale Corp."}},
   {"when": {"vendor": "Telit"}, "type": "Cellular IoT module", "example": {"vendor": "Telit Corp."}},
@@ -193,7 +193,6 @@
   "Matter device": {"icon": "fa-solid fa-house-signal"},
   "Smart home device": {"icon": "fa-solid fa-house-signal"},
   "Smart home hub": {"icon": "fa-solid fa-house-signal"},
-  "GE appliance": {"icon": "fa-solid fa-house-signal"},
   "IoT device (ESP)": {"icon": "fa-solid fa-microchip"},
   "Embedded device": {"icon": "fa-solid fa-microchip"},
   "Cellular IoT module": {"icon": "fa-solid fa-tower-cell"},
@@ -210,7 +209,8 @@
   "Alpine Linux": {"icon": "fa-brands fa-linux"},
   "Smart lock": {"icon": "fa-solid fa-lock"},
   "Azure Sphere device": {"icon": "fa-solid fa-microchip"},
-  "TV tuner": {"icon": "fa-solid fa-tower-broadcast", "vendor": "SiliconDust"}
+  "TV tuner": {"icon": "fa-solid fa-tower-broadcast", "vendor": "SiliconDust"},
+  "Appliance (GE / Haier module)": {"icon": "fa-solid fa-house-signal"}
  },
  "apple_models": {
   "MacBookAir10,1": "MacBook Air 13″ (M1)",
