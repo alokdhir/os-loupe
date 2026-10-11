@@ -48,6 +48,8 @@ POSSIBILITY OF SUCH DAMAGE.
         const esc = s => (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ESC[c]);
         const ago = ts => ts ? moment(ts * 1000).fromNow() : '';
         const dash = '<span class="text-muted">&mdash;</span>';
+        /* named from the same device's other traffic to the same server (query.py Labels) */
+        const inferred = r => r.inferred ? ' <span class="text-muted" title="{{ lang._("Named from other traffic between this device and the same server") }}">({{ lang._("same server") }})</span>' : '';
         const dialog = '{{ formGridOverrides['edit_dialog_id'] }}';
 
         function editButton(r) {
@@ -100,7 +102,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 return '<a href="#q=' + encodeURIComponent(row.name) + '">' + esc(row.name) + '</a>';
             },
             sitesvc: function (column, row) {
-                return row.service && row.service !== 'Other' ? esc(row.service) : dash;
+                return row.service && row.service !== 'Other' ? esc(row.service) + inferred(row) : dash;
             },
             ago: function (column, row) {
                 return ago(row[column.id]);
@@ -119,7 +121,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '') + esc(row.type);
             },
             lookupservice: function (column, row) {
-                return row.service ? esc(row.service) : dash;
+                return row.service ? esc(row.service) + inferred(row) : dash;
             },
             housesvc: function (column, row) {
                 return '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>';

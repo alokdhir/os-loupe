@@ -42,7 +42,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from lib.devid import is_private, rules  # noqa: E402
-from lib.services import PORTS, ServiceMap  # noqa: E402
+from lib.services import HOSTING, PORTS, ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
 CONF = "/usr/local/etc/loupe.json"
@@ -109,6 +109,10 @@ class Labels:
 
     A device that looked up a VPN provider's domain gets "VPN (NordVPN)" instead of "VPN (WireGuard)", and other
     nameless traffic to a server it uses as a VPN (e.g. a TCP fallback) is counted as that VPN too.
+
+    Traffic with no service, or one that only names the hosting company (Fastly CDN), takes the service of the
+    other traffic between the same device and server in the window, if that is exactly one service: a stream from a
+    video vendor's domain on the servers the NFL app's own names used is NFL. `inferred()` tells such rows apart.
     """
 
     def __init__(self, db, svc, table, start):
@@ -127,8 +131,15 @@ class Labels:
                 f"SELECT DISTINCT ip, server, proto, port FROM {table} WHERE bucket >= ? AND name = '' AND ({cond})",
                 (start, *[x for pp in VPN_PORTS for x in pp])):
             self.tunnels[(ip, server)] = PORTS[(proto, port)]
+        owners = collections.defaultdict(set)
+        for ip, server, name in db.execute(f"SELECT DISTINCT ip, server, name FROM {table} WHERE bucket >= ? AND name != ''",
+                                           (start,)):
+            s = svc.by_my_address(server) or svc.by_name(name)
+            if s and s not in HOSTING:
+                owners[(ip, server)].add(s)
+        self.shared = {k: v.pop() for k, v in owners.items() if len(v) == 1}
 
-    def service(self, ip, name, server, port, proto):
+    def _own(self, ip, name, server, port, proto):
         s = self.svc.by_my_address(server) or self.svc.by_name(name)
         if s:
             return s
@@ -136,6 +147,17 @@ class Labels:
         if s and s.startswith("VPN (") and ip in self.provider:
             return f"VPN ({self.provider[ip]})"
         return s
+
+    def service(self, ip, name, server, port, proto):
+        s = self._own(ip, name, server, port, proto)
+        if not s or s in HOSTING:
+            return self.shared.get((ip, server)) or s
+        return s
+
+    def inferred(self, ip, name, server, port, proto):
+        """True when service() named this traffic from other traffic on the same server."""
+        s = self._own(ip, name, server, port, proto)
+        return (not s or s in HOSTING) and (ip, server) in self.shared
 
 
 def label(dev, ip):
@@ -191,7 +213,8 @@ def cmd_device(arg, hours):
     else:
         dev = next((d for d in info.values() if d["ip"] == val), None)
     services = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "names": collections.Counter()})
-    sites = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "last": 0, "service": "", "servers": set()})
+    sites = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "last": 0, "service": "", "inferred": False,
+                                             "servers": set()})
     ports = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0})
     timeline = collections.defaultdict(lambda: [0, 0])
     for bucket, last, ip, name, server, port, proto, inbound, up, down, conns in db.execute(
@@ -209,6 +232,7 @@ def cmd_device(arg, hours):
         site["conns"] += conns
         site["last"] = max(site["last"], bucket, last)
         site["service"] = s
+        site["inferred"] = lab.inferred(ip, name, server, port, proto)
         site["servers"].add(server)
         p = ports[f"{proto}/{port}" + (" in" if inbound else "")]
         p["down"] += down
@@ -224,7 +248,7 @@ def cmd_device(arg, hours):
         "services": sorted(({"service": k, "down": v["down"], "up": v["up"], "conns": v["conns"],
                              "names": [n for n, _ in v["names"].most_common(5)]} for k, v in services.items()),
                            key=lambda r: -(r["down"] + r["up"])),
-        "sites": sorted(({"name": k, **{x: v[x] for x in ("down", "up", "conns", "last", "service")},
+        "sites": sorted(({"name": k, **{x: v[x] for x in ("down", "up", "conns", "last", "service", "inferred")},
                           "servers": sorted(v["servers"])[:5]} for k, v in sites.items()),
                         key=lambda r: -(r["down"] + r["up"]))[:500],
         "ports": sorted(({"port": k, **v} for k, v in ports.items()), key=lambda r: -(r["down"] + r["up"]))[:50],
@@ -293,7 +317,7 @@ def cmd_lookup(text, hours, exact=False):
         elif not (matches(text, name, s) or server == text):
             continue
         r = rows[(mac or ip, name or (s and "\0" + s) or server)]     # nameless traffic: one row per service
-        r.update(ip=ip, mac=mac, name=name, service=s)
+        r.update(ip=ip, mac=mac, name=name, service=s, inferred=bool(s) and lab.inferred(ip, name, server, port, proto))
         r["down"] += down
         r["up"] += up
         r["conns"] += conns
@@ -316,7 +340,7 @@ def cmd_lookup(text, hours, exact=False):
     out = []
     for (key, _name), r in rows.items():
         dev = info.get(r["mac"]) or next((d for d in info.values() if d["ip"] == r["ip"]), None)
-        out.append({**{k: r[k] for k in ("ip", "mac", "name", "service", "down", "up", "conns", "first", "last")},
+        out.append({**{k: r[k] for k in ("ip", "mac", "name", "service", "inferred", "down", "up", "conns", "first", "last")},
                     "device": label(dev, r["ip"]), "type": (dev or {}).get("type", ""),
                     "servers": sorted(r["servers"])[:5]})
     return {"hours": hours, "query": text, "traffic": sorted(out, key=lambda r: -(r["down"] + r["up"])),

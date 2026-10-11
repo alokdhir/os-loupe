@@ -1,7 +1,8 @@
 {
  "_comment": [
   "Service names for Loupe: domain suffix -> service, address ranges and ports for nameless traffic,",
-  "and the domains VPN apps use (to name the provider behind a bare tunnel)."
+  "and the domains VPN apps use (to name the provider behind a bare tunnel). 'hosting': names that only say whose",
+  "servers these are; such traffic takes the name of the one service the same device used on the same server."
  ],
  "suffixes": {
   "youtube.com": "YouTube",
@@ -264,6 +265,7 @@
   "target.com": "Target",
   "etsy.com": "Etsy",
   "nytimes.com": "New York Times",
+  "nyt.com": "New York Times",
   "cnn.com": "CNN",
   "espn.com": "ESPN",
   "nfl.com": "NFL",
@@ -385,5 +387,6 @@
   "ivpn.net": "IVPN",
   "atlasvpn.com": "Atlas VPN",
   "tailscale.com": "Tailscale"
- }
+ },
+ "hosting": ["Akamai CDN", "Fastly CDN", "Edgio CDN", "CloudFront", "Cloudflare", "AWS", "Microsoft Azure", "Qwilt CDN (ISP cache)", "Verizon CDN cache"]
 }

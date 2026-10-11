@@ -110,6 +110,7 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 ## Known limits
 
 - **Hidden names:** Encrypted Client Hello, DNS-over-HTTPS that bypasses the router, VPNs and relays (iCloud Private Relay) hide the real site. Loupe labels VPNs (and the provider when the device looked up its domain) and Private Relay as what they are.
+- **Shared servers:** traffic with no name, or named only for its hosting company (Fastly, Akamai, CloudFront…), takes the service of the device's other traffic to the same server in the report window, when that is exactly one service; reports mark it "(same server)". A video vendor's domain on its own servers (e.g. `lura.live` on Google Cloud) stays "Other".
 - **Containers and VMs behind one MAC** look like one device; a distro rule can be swayed by a container's update traffic.
 - **Private MACs** can rotate, which splits a device's history until the user names it or turns the private address off for the network.
 - **Multicast and broadcast** traffic is not counted.

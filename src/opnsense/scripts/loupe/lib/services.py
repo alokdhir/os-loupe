@@ -42,6 +42,7 @@ SUFFIXES = _data["suffixes"]                                       # domain suff
 RANGES = [tuple(x) for x in _data["ranges"]]                        # address ranges -> owner, for nameless traffic
 PORTS = {(proto, port): name for proto, port, name in _data["ports"]}   # (proto, remote port) -> service, last resort
 VPN_PROVIDERS = _data["vpn_providers"]                              # domains a VPN app uses -> provider
+HOSTING = set(_data["hosting"])                                     # names that only say whose servers these are
 
 
 def as_network(text):

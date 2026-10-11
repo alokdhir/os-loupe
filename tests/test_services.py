@@ -92,6 +92,38 @@ class TestServices(unittest.TestCase):
         self.assertEqual(services.ServiceMap().vpn_provider(""), None)
 
 
+class TestSharedServer(unittest.TestCase):
+    def test_borrows_one_service(self):
+        import query
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            b = 3600
+            mac = "02:00:00:00:00:40"
+            s.write({(b, "10.9.1.40", "203.0.113.10", 443, "tcp", "api.nfl.com"): [mac, "", 0, 1, 2, 1, 1],
+                     (b, "10.9.1.40", "203.0.113.10", 443, "tcp", "video.example.net"): [mac, "", 0, 1, 900, 1, 1],
+                     (b, "10.9.1.40", "203.0.113.10", 443, "udp", ""): [mac, "", 0, 1, 500, 1, 1],
+                     (b, "10.9.1.40", "203.0.113.10", 443, "tcp", "x.fastly.net"): [mac, "", 0, 1, 5, 1, 1],
+                     (b, "10.9.1.40", "203.0.113.20", 443, "tcp", "www.hulu.com"): [mac, "", 0, 1, 2, 1, 1],
+                     (b, "10.9.1.40", "203.0.113.20", 443, "tcp", "www.netflix.com"): [mac, "", 0, 1, 2, 1, 1],
+                     (b, "10.9.1.40", "203.0.113.20", 443, "tcp", "cdn.example.net"): [mac, "", 0, 1, 2, 1, 1],
+                     (b, "10.9.1.41", "203.0.113.10", 443, "tcp", "video.example.net"): ["02:00:00:00:00:41", "", 0, 1, 2, 1, 1]},
+                    {}, {})
+            s.close()
+            db = sqlite3.connect(path)
+            try:
+                lab = query.Labels(db, services.ServiceMap(), "flows_5m", b)
+                for name, proto in (("video.example.net", "tcp"), ("", "udp"), ("x.fastly.net", "tcp")):
+                    self.assertEqual(lab.service("10.9.1.40", name, "203.0.113.10", 443, proto), "NFL")
+                    self.assertTrue(lab.inferred("10.9.1.40", name, "203.0.113.10", 443, proto))
+                self.assertEqual(lab.service("10.9.1.40", "api.nfl.com", "203.0.113.10", 443, "tcp"), "NFL")
+                self.assertFalse(lab.inferred("10.9.1.40", "api.nfl.com", "203.0.113.10", 443, "tcp"))
+                self.assertEqual(lab.service("10.9.1.40", "cdn.example.net", "203.0.113.20", 443, "tcp"), None)  # two services there
+                self.assertEqual(lab.service("10.9.1.41", "video.example.net", "203.0.113.10", 443, "tcp"), None)  # another device
+            finally:
+                db.close()
+
+
 class TestVpnLabels(unittest.TestCase):
     def test_provider_and_fallback(self):
         import query
