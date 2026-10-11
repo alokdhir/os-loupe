@@ -24,6 +24,9 @@
 
 """Friendly service names: domain suffix -> service, plus address-range and port fallbacks.
 
+A domain pattern may start with a label prefix: "vod-hulu-*.media.dssott.com" matches vod-hulu-akc-na.media.dssott.com
+but not other names under media.dssott.com (a service streaming from another company's servers).
+
 Applied when reports are built (not stored), so edits to the map apply to all history.
 Users add or override suffixes in the settings; those win over the built-in table.
 """
@@ -84,6 +87,13 @@ class ServiceMap:
                 self.suffixes[pattern.lower().strip(".")] = name
         self.mine = sorted(mine, key=lambda x: -x[0].prefixlen)       # most specific first
         self.ranges = [(ipaddress.ip_network(n), s) for n, s in RANGES]
+        self.prefixed = {}                                            # suffix -> [(first-label prefix, service)]
+        for pattern, s in self.suffixes.items():
+            label, star, rest = pattern.partition("*.")
+            if star and label and "." not in label:
+                self.prefixed.setdefault(rest, []).append((label, s))
+        for v in self.prefixed.values():
+            v.sort(key=lambda x: -len(x[0]))                          # longest prefix first
         self._cache = {}
 
     def by_my_address(self, addr):
@@ -110,8 +120,10 @@ class ServiceMap:
         if hit is None:
             hit = ""
             parts = name.lower().rstrip(".").split(".")
-            for i in range(len(parts)):          # longest suffix first
+            for i in range(len(parts)):          # longest suffix first; a prefixed label just ahead of the next one
                 s = self.suffixes.get(".".join(parts[i:]))
+                if not s and self.prefixed:
+                    s = next((s for p, s in self.prefixed.get(".".join(parts[i + 1:]), ()) if parts[i].startswith(p)), None)
                 if s:
                     hit = s
                     break

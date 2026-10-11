@@ -41,6 +41,17 @@ class TestServices(unittest.TestCase):
         self.assertEqual(self.m.by_name("p42-contacts.icloud.com"), "iCloud")
         self.assertEqual(self.m.by_name("notgoogle.com"), None)
 
+    def test_label_prefix(self):
+        self.assertEqual(self.m.by_name("vod-hulu-akc-na.media.dssott.com"), "Hulu")
+        self.assertEqual(self.m.by_name("vod-hulu-fa-na.media.dssott.com"), "Hulu")
+        self.assertEqual(self.m.by_name("vod-akc-na.media.dssott.com"), "Disney+")
+        self.assertEqual(self.m.by_name("x.vod-hulu-akc-na.media.dssott.com"), "Hulu")      # subdomains too, like any domain rule
+        m = services.ServiceMap([{"kind": "domain", "pattern": "cdn-*.example.org", "name": "CDN"},
+                                 {"kind": "domain", "pattern": "cdn-eu-*.example.org", "name": "EU CDN"}])
+        self.assertEqual(m.by_name("cdn-us-1.example.org"), "CDN")
+        self.assertEqual(m.by_name("cdn-eu-1.example.org"), "EU CDN")                          # longest prefix
+        self.assertEqual(m.by_name("www.example.org"), None)
+
     def test_user_overrides(self):
         self.assertEqual(self.m.by_name("a.example.org"), "Example")
         self.assertEqual(self.m.by_name("www.youtube.com"), "Tube")

@@ -164,9 +164,9 @@ def cmd_devices(hours):
         r["conns"] += conns
         if last > r["last"]:
             r["last"], r["ip"] = last, ip       # the address it used most recently
-        tops[key][lab.service(ip, name, server, port, proto) or ""] += up + down
+        tops[key][lab.service(ip, name, server, port, proto) or "Other"] += up + down
     for key, r in rows.items():
-        r["top"] = [s for s, _ in tops[key].most_common() if s][:3]     # named services only
+        r["top"] = [s for s, _ in tops[key].most_common(3)]     # "Other" too: an unnamed stream can be the biggest
         # traffic is filed under its 5-minute bucket; loupd also stamps each device it saw (every minute)
         r["last"] = max(r["last"], (info.get(r["mac"]) or {}).get("last_seen") or 0)
         if not r["name"]:

@@ -9,7 +9,7 @@
         <id>service.suffix</id>
         <label>Pattern</label>
         <type>text</type>
-        <help>example.com, 192.0.2.10, 203.0.113.0/24, 2001:db8::/48, tcp/8443 or udp/51820.</help>
+        <help>example.com (or cdn-*.example.com: names under example.com whose next label starts with cdn-), 192.0.2.10, 203.0.113.0/24, 2001:db8::/48, tcp/8443 or udp/51820.</help>
     </field>
     <field>
         <id>service.name</id>
