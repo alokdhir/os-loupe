@@ -383,7 +383,15 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $('#' + dialog).on('shown.bs.modal', function () { $('#device\\.name').focus().select(); })
             .on('hidden.bs.modal', function () { $('#device\\.mac').prop('readonly', false); });
-        $('#frm_' + dialog).on('submit', function (e) { e.preventDefault(); $('#btn_' + dialog + '_save').click(); });
+        /* Enter in a text field saves any of the page's dialogs (OPNsense's dialogs have no submit button) */
+        $(document).on('keydown', '.modal form input', function (e) {
+            if (e.key !== 'Enter' || e.isComposing || !$(this).is('[type=text], [type=number], [type=email], :not([type])')
+                || $(this).closest('.dropdown-menu, .tokenize').length) return;          /* a dropdown's own search box */
+            e.preventDefault();
+            const id = $(this).closest('.modal').attr('id');
+            $('#btn_' + id + '_save').click();
+        });
+        $(document).on('submit', '.modal form', function (e) { e.preventDefault(); });
 
         $('#reconfigureAct').SimpleActionButton({
             onPreAction: function () {
