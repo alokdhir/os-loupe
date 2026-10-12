@@ -34,6 +34,19 @@ Byte counts are read every 10 seconds and added up in memory per device, server,
 
 The design, the alternatives considered and the known limits are in [docs/DESIGN.md](docs/DESIGN.md).
 
+### Knowing the devices
+
+OPNsense's own reports, Insight (NetFlow) and Unbound's DNS reporting, name a device by looking up its IP address in DNS. That gives a name only if the DHCP server registered one, never a type, and the history belongs to the address: a new DHCP lease, a private Wi-Fi address or IPv6's rotating addresses split one device into several, or hand its history to another.
+
+Loupe keys everything on the device's MAC address and works out what it is from what the device says about itself:
+
+- **The model**, from Bonjour/mDNS: Apple devices announce an identifier (`Mac15,13`, `AppleTV14,1`) that Loupe turns into *MacBook Air 15″ (M3)* or *Apple TV 4K (3rd gen)*; printers, speakers and Cast devices announce their services.
+- **The name**, from the DHCP lease, the hostname the device sends, or its Bonjour name, preferring a real name over the placeholders phones with private addresses send (*iPhone*, *Mac*).
+- **The type and maker**, from DHCP fingerprints (vendor class and parameter list), the MAC vendor, and the services it talks to (`playstation.net` → PlayStation, `ring.com` → Ring device).
+- **Your corrections**: a name, type or icon you set follows the device by MAC, and your rules type whole groups at once.
+
+Each guess records where it came from, shown as a tooltip on the type.
+
 ### Why not just NetFlow / Insight?
 
 OPNsense's NetFlow on a bridged LAN misses LAN→internet packets on ingress — uploads only show up after NAT, with the router's public address — so per-device upload totals in Insight are wrong. NetFlow also exports long connections only every 30 minutes and has no site names. Loupe's pf counters are exact in both directions and per device.
