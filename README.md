@@ -30,7 +30,22 @@ Each connection gets the name from its own handshake first, then from the DNS an
 
 ### Data collection and retention
 
-Byte counts are read every 10 seconds and added up in memory per device, server, port and site name for each minute. Once a minute they are written to SQLite (`/var/db/loupe/loupe.db`) in a single transaction, into three tables at once: per minute, per 5 minutes and per hour. There is no separate roll-up job, so the coarser tables are always current. Old rows are pruned hourly: minute rows after 4 hours, 5-minute rows after 30 days, hourly rows after a year and site lookups after 30 days. All but the minute rows can be changed under *Settings → General*: **Keep 5-minute detail**, **Keep hourly totals** and **Keep site lookups** (in days). Reports read minute rows for periods up to 3 hours, 5-minute rows up to 2 days and hourly rows for anything longer, even where finer rows still exist (a week or a month by the hour is plenty, and far fewer rows to read); charts beyond 90 days are by the day. Site lookups are kept per device per day, with a count and the first and last time seen. Names and device types are applied when a report is built, not stored with the traffic, so renaming a device or a service changes its whole history.
+**Collecting.** Byte counts are read every 10 seconds and added up in memory per device, server, port and site name for each minute.
+
+**Saving.** Once a minute they are written to SQLite (`/var/db/loupe/loupe.db`) in a single transaction, into three tables at once: per minute, per 5 minutes and per hour. There is no separate roll-up job, so the coarser tables are always current.
+
+**Keeping and reading.** Old rows are pruned hourly. How long each kind is kept, and which one reports read:
+
+| Detail | Kept for | Setting (*Settings → General*, days) | Reports use it for |
+|---|---|---|---|
+| Per minute | 4 hours | — | periods up to 3 hours |
+| Per 5 minutes | 30 days | Keep 5-minute detail | periods up to 2 days |
+| Per hour | 1 year | Keep hourly totals | longer periods (charted by the day past 90 days) |
+| Site lookups (per device per day: count, first and last seen) | 30 days | Keep site lookups | the Lookups tab and search |
+
+Past 2 days, reports read hourly rows even where 5-minute rows still exist: a week or a month by the hour is plenty, and far fewer rows to read.
+
+**Names.** Device names, types and service names are applied when a report is built, not stored with the traffic, so renaming a device or a service changes its whole history.
 
 The design, the alternatives considered and the known limits are in [docs/DESIGN.md](docs/DESIGN.md).
 
