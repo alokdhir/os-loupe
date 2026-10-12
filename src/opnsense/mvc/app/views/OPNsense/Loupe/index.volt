@@ -391,6 +391,18 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $('#' + dialog).on('shown.bs.modal', function () { $('#device\\.name').focus().select(); })
             .on('hidden.bs.modal', function () { $('#device\\.mac').prop('readonly', false); });
+        /* icon choices show the icon itself: added here from each option's value, since API output is
+           HTML-escaped and the form code decodes option labels but not their data attributes */
+        $(document).on('refreshed.bs.select', '#device\\.icon, #rule\\.icon', function () {
+            let added = false;
+            $(this).find('option').each(function () {
+                if (this.value && !this.hasAttribute('data-content')) {
+                    this.setAttribute('data-content', '<i class="' + esc(this.value) + ' fa-fw"></i> ' + esc(this.text));
+                    added = true;
+                }
+            });
+            if (added) $(this).selectpicker('refresh');
+        });
         /* Enter in a text field saves any of the page's dialogs (OPNsense's dialogs have no submit button) */
         $(document).on('keydown', '.modal form input', function (e) {
             if (e.key !== 'Enter' || e.isComposing || !$(this).is('[type=text], [type=number], [type=email], :not([type])')

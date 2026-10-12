@@ -77,7 +77,7 @@
                     <Required>Y</Required>
                 </type>
                 <icon type="OptionField">
-                    <BlankDesc>Automatic (from the type)</BlankDesc>
+                    <BlankDesc>Automatic</BlankDesc>
                     <OptionValues>
                         <apple value="fa-brands fa-apple">Apple</apple>
                         <windows value="fa-brands fa-windows">Windows</windows>
@@ -148,7 +148,7 @@
                 <name type="TextField"/>
                 <type type="TextField"/>
                 <icon type="OptionField">
-                    <BlankDesc>Automatic (from the type)</BlankDesc>
+                    <BlankDesc>Automatic</BlankDesc>
                     <OptionValues>
                         <apple value="fa-brands fa-apple">Apple</apple>
                         <windows value="fa-brands fa-windows">Windows</windows>

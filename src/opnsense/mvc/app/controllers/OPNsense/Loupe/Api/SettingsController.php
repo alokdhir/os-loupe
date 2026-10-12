@@ -116,17 +116,7 @@ class SettingsController extends ApiMutableModelControllerBase
 
     public function getRuleAction($uuid = null)
     {
-        return $this->withIcons($this->getBase('rule', 'rules.rule', $uuid), 'rule');
-    }
-
-    /* show each icon choice as the icon itself (the dropdown renders an option's data-content) */
-    private function withIcons(array $result, string $key)
-    {
-        foreach ($result[$key]['icon'] ?? [] as $value => $option) {
-            $html = $value === '' ? '' : '<i class="' . htmlspecialchars($value) . ' fa-fw"></i> ';
-            $result[$key]['icon'][$value]['data'] = ['content' => $html . htmlspecialchars($option['value'])];
-        }
-        return $result;
+        return $this->getBase('rule', 'rules.rule', $uuid);
     }
 
     /**
@@ -175,7 +165,7 @@ class SettingsController extends ApiMutableModelControllerBase
 
     public function getDeviceAction($uuid = null)
     {
-        return $this->withIcons($this->getBase('device', 'devices.device', $uuid), 'device');
+        return $this->getBase('device', 'devices.device', $uuid);
     }
 
     public function addDeviceAction()
