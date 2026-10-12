@@ -75,7 +75,7 @@ def check_rule(r):
     return None
 
 
-def _loose(text):
+def loose(text):
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
@@ -86,14 +86,14 @@ class Rules:
         self.types = data.get("types", {})
         self.apple_models = data.get("apple_models", {})
         self.user_icons = {r["type"]: r["icon"] for r in user if r.get("icon") and r.get("type")}
-        self.loose = {_loose(t): v["icon"] for t, v in self.types.items() if v.get("icon")}
+        self.loose_icons = {loose(t): v["icon"] for t, v in self.types.items() if v.get("icon")}
         self.user = _tiers(user)
         self.tiers = _tiers(data.get("rules", []))
 
     def icon(self, dtype):
         """The icon a rule of the user's gave this type, else the built-in type's: "A/V Receiver" is "AV receiver"."""
         dtype = dtype or ""
-        return (self.user_icons.get(dtype) or self.types.get(dtype, {}).get("icon") or self.loose.get(_loose(dtype))
+        return (self.user_icons.get(dtype) or self.types.get(dtype, {}).get("icon") or self.loose_icons.get(loose(dtype))
                 or "")
 
     def vendor(self, dtype):

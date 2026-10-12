@@ -161,15 +161,23 @@ class SettingsController extends ApiMutableModelControllerBase
     public function searchDeviceAction()
     {
         $result = $this->searchBase('devices.device', ['mac', 'name', 'type', 'icon'], 'name');
-        /* the Type column shows the icon: the one picked here, else the automatic one for the type */
-        $picked = [];
+        /* the Type column shows the icon: the one picked here, else one picked for the same type, else what the
+           reports show (saved picks count before Apply; a pick applies to every device of that type) */
+        $loose = function ($type) {
+            return preg_replace('/[^a-z0-9]/', '', strtolower($type));
+        };
+        $picked = $byType = [];
         foreach ($this->getModel()->devices->device->iterateItems() as $uuid => $dev) {
             $picked[$uuid] = (string)$dev->icon;
+            if ((string)$dev->icon !== '' && (string)$dev->type !== '' && !isset($byType[$loose((string)$dev->type)])) {
+                $byType[$loose((string)$dev->type)] = (string)$dev->icon;
+            }
         }
         $auto = json_decode((new Backend())->configdpRun('loupe query', ['icons']) ?? '', true);
         foreach ($result['rows'] as &$row) {
             $mac = str_replace('-', ':', strtolower($row['mac']));
-            $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: ($auto[$mac] ?? '');
+            $type = $loose(html_entity_decode($row['type']));
+            $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: (($type !== '' ? $byType[$type] ?? '' : '') ?: ($auto[$mac] ?? ''));
         }
         return $result;
     }

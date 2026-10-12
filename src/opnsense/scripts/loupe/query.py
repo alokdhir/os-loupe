@@ -41,7 +41,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib.devid import is_private, rules, set_user_rules  # noqa: E402
+from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
 from lib.services import HOSTING, PORTS, ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
@@ -83,21 +83,30 @@ def vendor_of(mac, vendor, dtype):
     return "", why
 
 
+def icon_for(o, dtype, picked):
+    """A device's own pick, else one picked for another device of the same type, else the type's icon."""
+    return o.get("icon") or picked.get(loose(dtype or "")) or rules().icon(dtype)
+
+
 def devices_info(db, overrides):
     out = {}
+    picked = {}                         # type -> icon picked on some device of that type
+    for o in overrides.values():
+        if o.get("type") and o.get("icon"):
+            picked.setdefault(loose(o["type"]), o["icon"])
     for mac, ip, name, hostname, vendor, dtype, src, model, first, last in db.execute(
             "SELECT mac, ip, name, hostname, vendor, type, type_source, model, first_seen, last_seen FROM devices"):
         o = overrides.get(mac, {})
         vendor, vnote = vendor_of(mac, vendor, o.get("type") or dtype)
         out[mac] = {"mac": mac, "ip": ip, "name": o.get("name") or name or hostname or "", "vendor": vendor,
-                    "vendor_note": vnote, "icon": o.get("icon") or rules().icon(o.get("type") or dtype),
+                    "vendor_note": vnote, "icon": icon_for(o, o.get("type") or dtype, picked),
                     "icon_set": o.get("icon") or "",
                     "model": model or "",
                     "type": o.get("type") or dtype or "", "type_source": "set by you" if o.get("type") else (src or ""),
                     "first_seen": first, "last_seen": last, "custom": bool(o)}
     for mac, o in overrides.items():   # named before loupe recorded the device
         out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "vendor_note": "",
-                             "icon": o.get("icon") or rules().icon(o.get("type") or ""), "icon_set": o.get("icon") or "",
+                             "icon": icon_for(o, o.get("type"), picked), "icon_set": o.get("icon") or "",
                              "type": o.get("type") or "",
                              "type_source": "set by you" if o.get("type") else "", "model": "", "first_seen": 0, "last_seen": 0,
                              "custom": True})
@@ -366,13 +375,13 @@ def cmd_lookup(text, hours, exact=False):
 
 
 def cmd_icons():
-    """The automatic icon of each overridden device (from its type), for the Overrides grid."""
+    """The icon each overridden device shows, for the Overrides grid."""
     db, _svc, ov = load()
     try:
         info = devices_info(db, ov)
     finally:
         db.close()
-    return {mac: rules().icon(info[mac]["type"]) for mac in ov}
+    return {mac: info[mac]["icon"] for mac in ov}
 
 
 def cmd_widget():

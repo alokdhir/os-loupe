@@ -3,11 +3,17 @@
         <id>device.mac</id>
         <label>MAC address</label>
         <type>text</type>
+        <grid_view>
+            <formatter>copy</formatter>
+        </grid_view>
     </field>
     <field>
         <id>device.name</id>
         <label>Name</label>
         <type>text</type>
+        <grid_view>
+            <formatter>copy</formatter>
+        </grid_view>
     </field>
     <field>
         <id>device.type</id>

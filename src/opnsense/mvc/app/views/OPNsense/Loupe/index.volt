@@ -32,7 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
     .tabulator-row:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
     @media (hover: none) { .loupe-edit { visibility: visible; } }
     .loupe-edit:hover { color: #337ab7; }
-    .loupe-copy { display: block; cursor: copy; overflow: hidden; text-overflow: ellipsis; }
+    .loupe-copy { display: block; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
     .loupe-copied { color: #3c763d; transition: color 0.2s; }
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
@@ -43,9 +43,11 @@ POSSIBILITY OF SUCH DAMAGE.
         let hours = parseFloat(localStorage.getItem('loupe.hours') || '24');
         let chart = null, current = null, q = '';
         const grids = {};
-        /* values from the network (host names, vendor classes) also land in attributes: escape quotes too */
+        /* values from the network (host names, vendor classes) also land in attributes: escape quotes too.
+           The API HTML-escapes what it sends the GUI (& arrives as &amp;): decode first, so it isn't escaped twice */
         const ESC = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
-        const esc = s => (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ESC[c]);
+        const esc = s => (s == null ? '' : String(s).includes('&') ? htmlDecode(String(s)) : String(s))
+            .replace(/[&<>"']/g, c => ESC[c]);
         const ago = ts => ts ? moment(ts * 1000).fromNow() : '';
         const dash = '<span class="text-muted">&mdash;</span>';
         /* named from the same device's other traffic to the same server (query.py Labels) */
@@ -277,6 +279,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     add: '/api/loupe/settings/add_device/',
                     del: '/api/loupe/settings/del_device/',
                     options: {formatters: {
+                        copy: formatters.copy,
                         devtype: (column, row) => (row.icon_class ? '<i class="' + esc(row.icon_class) + ' fa-fw text-muted"></i> '
                             : '<i class="fa fa-fw"></i> ') + esc(row.type)
                     }}

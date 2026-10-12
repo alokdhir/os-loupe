@@ -157,6 +157,23 @@ class TestDeviceNames(unittest.TestCase):
                              [("b.example", "dns", 1), ("a.example", "dns, sni", 3)])
 
 
+class TestIcons(unittest.TestCase):
+    def test_pick_applies_to_the_type(self):
+        import query
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            store.Store(path).close()
+            db = sqlite3.connect(path)
+            self.addCleanup(db.close)
+            ov = {"02:00:00:00:00:61": {"type": "Dishwasher (Fisher & Paykel)", "icon": "fa-solid fa-soap"},
+                  "02:00:00:00:00:62": {"type": "dishwasher (fisher & paykel)"},
+                  "02:00:00:00:00:63": {"type": "Dishwasher (Fisher & Paykel)", "icon": "fa-solid fa-kitchen-set"},
+                  "02:00:00:00:00:64": {"type": "TV"}}
+            info = query.devices_info(db, ov)
+            self.assertEqual([info[m]["icon"] for m in sorted(ov)],
+                             ["fa-solid fa-soap", "fa-solid fa-soap", "fa-solid fa-kitchen-set", "fa-solid fa-tv"])
+
+
 class TestVpnLabels(unittest.TestCase):
     def test_provider_and_fallback(self):
         import query
