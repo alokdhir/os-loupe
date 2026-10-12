@@ -1,4 +1,4 @@
-# Loupe for OPNsense
+# <img src="docs/loupe-icon.svg" height="28" alt=""> Loupe for OPNsense
 
 Which device on your network talked to which site or service, how much data moved each way, and when — inside the OPNsense GUI.
 
@@ -129,3 +129,5 @@ All test data is synthetic.
 ## License
 
 BSD 2-Clause — see [LICENSE](LICENSE).
+
+The magnifying-glass icon is from [Font Awesome Free](https://fontawesome.com) 6.7.1, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
