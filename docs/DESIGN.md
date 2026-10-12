@@ -82,8 +82,8 @@ Identification is **data, not code**: `data/devices.json` holds the rules, the i
 
 SQLite at `/var/db/loupe/loupe.db`, WAL mode: `loupd` is the only writer; `query.py` opens it read-only from configd.
 
-- `flows_5m` / `flows_1h`: per bucket, device, server, port, protocol and name — bytes up/down, packets, connections, and when loupd last added to the row. Kept 30 days / 365 days by default.
-- `lookups`: names each device looked up or connected to, per day, including ones that moved no data. 30 days.
+- `flows_1m` / `flows_5m` / `flows_1h`: per bucket, device, server, port, protocol and name — bytes up/down, packets, connections, and when loupd last added to the row. All three are written in the same transaction each minute (no separate roll-up). Kept 4 hours / 30 days / 365 days (the last two are settings).
+- `lookups`: names each device looked up or connected to, per day and device (address and MAC), including ones that moved no data. 30 days by default.
 - `devices`: detected facts only.
 
 Names, user overrides and service labels are applied **when a report is built**, never stored: editing a service name or resetting a device fixes all history immediately.

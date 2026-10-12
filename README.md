@@ -2,7 +2,7 @@
 
 Which device on your network talked to which site or service, how much data moved each way, and when — inside the OPNsense GUI.
 
-Loupe answers questions like *"what was the PlayStation doing at 2 a.m.?"*, *"who's using all the bandwidth?"*, *"which devices talk to this address?"* and *"what is this unknown thing on my Wi-Fi?"* — with device names and types, site and service names, and exact upload/download bytes, kept for 30 days at 5-minute detail and a year hourly.
+Loupe answers questions like *"what was the PlayStation doing at 2 a.m.?"*, *"who's using all the bandwidth?"*, *"which devices talk to this address?"* and *"what is this unknown thing on my Wi-Fi?"* — with device names and types, site and service names, and exact upload/download bytes.
 
 ## What you get
 
@@ -22,7 +22,11 @@ Loupe runs as a small service on the router and combines three sources:
 
 Each connection gets the name from its own handshake first, then from the DNS answer that device received for that address, then from any device's DNS answer. Service names come from a built-in map of ~300 domains (plus address-range and port fallbacks for nameless traffic) that you can extend in the settings; they are applied when reports are built, so changes cover all history.
 
-Data lives in SQLite at `/var/db/loupe/loupe.db`. The design, the alternatives considered and the known limits are in [docs/DESIGN.md](docs/DESIGN.md).
+### How the data is kept
+
+Byte counts are read every 10 seconds and added up in memory per device, server, port and site name for each minute. Once a minute they are written to SQLite (`/var/db/loupe/loupe.db`) in a single transaction, into three tables at once: per minute, per 5 minutes and per hour. There is no separate roll-up job, so the coarser tables are always current. Old rows are pruned hourly: minute rows after 4 hours, 5-minute rows after 30 days and hourly rows after a year (the last two, and how long site lookups are kept, are settings; lookups default to 30 days). Reports read the finest table that covers the period: minutes for up to 3 hours, 5 minutes for up to 2 days, hours beyond that (charted by the day past 90 days). Site lookups are kept per device per day, with a count and the first and last time seen. Names and device types are applied when a report is built, not stored with the traffic, so renaming a device or a service changes its whole history.
+
+The design, the alternatives considered and the known limits are in [docs/DESIGN.md](docs/DESIGN.md).
 
 ### Why not just NetFlow / Insight?
 
