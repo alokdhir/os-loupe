@@ -9,7 +9,7 @@
         <id>loupe.general.interfaces</id>
         <label>Interfaces</label>
         <type>select_multiple</type>
-        <help>The LAN-side interfaces your devices are on. Traffic is attributed to addresses in these interfaces' networks.</help>
+        <help>The LAN or VLAN interfaces your devices are on. Only interfaces with their own address and no gateway are listed (not WAN, not a bridge's member ports); with a bridge, choose the bridge.</help>
     </field>
     <field>
         <id>loupe.general.retention_5m</id>

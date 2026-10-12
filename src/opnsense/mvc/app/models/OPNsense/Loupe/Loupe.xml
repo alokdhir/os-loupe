@@ -14,6 +14,9 @@
                 <Required>Y</Required>
                 <filters>
                     <enable>/^(?!0).*$/</enable>
+                    <if>/^(?!lo[0-9]).*$/</if>
+                    <ipaddr>/^(?!0$|dhcp|pppoe|pptp|l2tp|ppp$).+$/</ipaddr>
+                    <gateway>/^0$/</gateway>
                 </filters>
             </interfaces>
             <retention_5m type="IntegerField">
