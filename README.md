@@ -4,13 +4,19 @@ Which device on your network talked to which site or service, how much data move
 
 Loupe answers questions like *"what was the PlayStation doing at 2 a.m.?"*, *"who's using all the bandwidth?"*, *"which devices talk to this address?"* and *"what is this unknown thing on my Wi-Fi?"* — with device names and types, site and service names, and exact upload/download bytes.
 
-## What you get
+## Features
 
-- **Reporting → Loupe, Devices tab**: every device with its name, type (e.g. *MacBook Air 15″ (M3)*, *Apple TV 4K*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and top services, for the last hour, day, week, month or year.
-- **Device detail**: a traffic chart over time, and what it talked to — by service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (WireGuard)*…), by site name, and by protocol/port.
-- **Services**: every service the house used in the period, with the devices that used it; search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`) to see which devices used it, how much, first and last seen — including names that were only looked up in DNS.
-- **Your own names and rules**: rename any device or correct its type from the report pages (it follows the device by MAC address), or add rules that type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*. *Settings → Service names / Device rules → Built-in* shows the names and rules Loupe ships with.
-- **Dashboard widget**: the last 24 hours at a glance — totals, an hourly chart and the top devices.
+- **Devices**: every device with its name, type and icon (e.g. *MacBook Air 15″ (M3)*, *Apple TV 4K*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and its top three services, for the last hour, 3 hours, day, week, month or year.
+- **Device detail**: a traffic chart over time, and what the device talked to:
+  - by service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (NordVPN)*…), including unnamed traffic as *Other*
+  - by site name
+  - by protocol and port
+  - every name it looked up or connected to, how often, and when first and last
+- **Services**: every service the house used in the period, with the devices that used it. Search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`) to see which devices used it, how much, and when, including names that were only looked up in DNS.
+- **Sensible service names**: traffic named only for its CDN (Fastly, Akamai, CloudFront…), or with no name at all, takes the service the same device was using on the same server, marked *(same server)*. Streaming services that share another company's servers are told apart (Hulu on Disney's servers).
+- **Your own names, types and icons**: rename a device, correct its type or pick its icon from any report page. Overrides follow the device by MAC address, and an icon picked for one device applies to every device of that type. Rules type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*.
+- **Your own service names**: add domains (including patterns like `cdn-*.example.com`), addresses, ports or VPN app domains. *Settings → Service names / Device rules → Built-in* shows what Loupe ships with.
+- **Dashboard widget**: the last 24 hours at a glance, with totals, an hourly chart and the top devices.
 
 ## How it works
 
