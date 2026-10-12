@@ -31,6 +31,15 @@ OUI = {"AABBCC": "Sony Interactive Entertainment Inc.", "DDEEFF": "Apple, Inc.",
 
 
 class TestDevid(unittest.TestCase):
+    def test_icons(self):
+        r = devid.Rules({"types": {"AV receiver": {"icon": "fa-solid fa-volume-high"}}},
+                        [{"when": {"vendor": "Tuya"}, "type": "Window shade", "icon": "fa-solid fa-table-columns"}])
+        self.assertEqual(r.icon("AV receiver"), "fa-solid fa-volume-high")
+        self.assertEqual(r.icon("A/V Receiver"), "fa-solid fa-volume-high")       # typed differently
+        self.assertEqual(r.icon("Window shade"), "fa-solid fa-table-columns")     # from the user's rule
+        self.assertEqual(r.icon("Dishwasher"), "")
+        self.assertEqual(r.icon(None), "")
+
     def test_mdns_model_wins(self):
         t = devid.classify("dd:ee:ff:00:00:01", "Family-Room", {"mdns_models": ["model=AppleTV14,1"]}, (), OUI)
         self.assertEqual(t, ("Apple TV", "mdns model AppleTV14,1", "Apple, Inc."))

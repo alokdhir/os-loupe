@@ -116,7 +116,17 @@ class SettingsController extends ApiMutableModelControllerBase
 
     public function getRuleAction($uuid = null)
     {
-        return $this->getBase('rule', 'rules.rule', $uuid);
+        return $this->withIcons($this->getBase('rule', 'rules.rule', $uuid), 'rule');
+    }
+
+    /* show each icon choice as the icon itself (the dropdown renders an option's data-content) */
+    private function withIcons(array $result, string $key)
+    {
+        foreach ($result[$key]['icon'] ?? [] as $value => $option) {
+            $html = $value === '' ? '' : '<i class="' . htmlspecialchars($value) . ' fa-fw"></i> ';
+            $result[$key]['icon'][$value]['data'] = ['content' => $html . htmlspecialchars($option['value'])];
+        }
+        return $result;
     }
 
     /**
@@ -160,12 +170,12 @@ class SettingsController extends ApiMutableModelControllerBase
 
     public function searchDeviceAction()
     {
-        return $this->searchBase('devices.device', ['mac', 'name', 'type'], 'name');
+        return $this->searchBase('devices.device', ['mac', 'name', 'type', 'icon'], 'name');
     }
 
     public function getDeviceAction($uuid = null)
     {
-        return $this->getBase('device', 'devices.device', $uuid);
+        return $this->withIcons($this->getBase('device', 'devices.device', $uuid), 'device');
     }
 
     public function addDeviceAction()
@@ -184,7 +194,7 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /**
-     * Set (or clear, when name and type are both empty) the name/type for one MAC address,
+     * Set (or clear, when name, type and icon are all empty) the name/type/icon for one MAC address,
      * as used by the edit button on the report pages. Takes effect without a service restart.
      */
     public function overrideAction()
@@ -196,6 +206,7 @@ class SettingsController extends ApiMutableModelControllerBase
         $mac = strtolower(trim((string)$this->request->getPost('mac')));
         $name = trim((string)$this->request->getPost('name'));
         $type = trim((string)$this->request->getPost('type'));
+        $icon = trim((string)$this->request->getPost('icon'));
         if (!preg_match('/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/', $mac)) {
             return ['result' => 'failed', 'message' => gettext('Invalid MAC address')];
         }
@@ -208,7 +219,7 @@ class SettingsController extends ApiMutableModelControllerBase
                 break;
             }
         }
-        if ($name === '' && $type === '') {
+        if ($name === '' && $type === '' && $icon === '') {
             if ($found !== null) {
                 $devices->del($found);
             }
@@ -218,6 +229,7 @@ class SettingsController extends ApiMutableModelControllerBase
             $node->mac = $mac;
             $node->name = $name;
             $node->type = $type;
+            $node->icon = $icon;
             $result = $this->validateAndSave($node, 'device');
         }
         if (($result['result'] ?? '') === 'saved') {

@@ -41,7 +41,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib.devid import is_private, rules  # noqa: E402
+from lib.devid import is_private, rules, set_user_rules  # noqa: E402
 from lib.services import HOSTING, PORTS, ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
@@ -55,6 +55,7 @@ def load():
             conf = json.load(f)
     except (OSError, ValueError):
         conf = {}
+    set_user_rules(conf.get("rules", []))          # their icons
     db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     return db, ServiceMap(conf.get("services")), {k.lower().replace("-", ":"): v for k, v in conf.get("devices", {}).items()}
 
@@ -89,13 +90,15 @@ def devices_info(db, overrides):
         o = overrides.get(mac, {})
         vendor, vnote = vendor_of(mac, vendor, o.get("type") or dtype)
         out[mac] = {"mac": mac, "ip": ip, "name": o.get("name") or name or hostname or "", "vendor": vendor,
-                    "vendor_note": vnote, "icon": rules().icon(o.get("type") or dtype),
+                    "vendor_note": vnote, "icon": o.get("icon") or rules().icon(o.get("type") or dtype),
+                    "icon_set": o.get("icon") or "",
                     "model": model or "",
                     "type": o.get("type") or dtype or "", "type_source": "set by you" if o.get("type") else (src or ""),
                     "first_seen": first, "last_seen": last, "custom": bool(o)}
     for mac, o in overrides.items():   # named before loupe recorded the device
         out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "vendor_note": "",
-                             "icon": rules().icon(o.get("type") or ""), "type": o.get("type") or "",
+                             "icon": o.get("icon") or rules().icon(o.get("type") or ""), "icon_set": o.get("icon") or "",
+                             "type": o.get("type") or "",
                              "type_source": "set by you" if o.get("type") else "", "model": "", "first_seen": 0, "last_seen": 0,
                              "custom": True})
     return out
@@ -179,7 +182,7 @@ def cmd_devices(hours):
         r = rows.get(key)
         if r is None:
             d = info.get(mac, {})
-            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "type", "type_source", "model")},
+            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model")},
                              "custom": d.get("custom", False),
                              "mac": mac, "ip": ip, "down": 0, "up": 0, "conns": 0, "last": 0}
         r["down"] += down

@@ -18,6 +18,12 @@
         <help>The device type to show, e.g. Window shade. Your rules are checked before the built-in ones; an override for one device still wins.</help>
     </field>
     <field>
+        <id>rule.icon</id>
+        <label>Icon</label>
+        <type>dropdown</type>
+        <help>Shown next to the type. Automatic uses the icon of a built-in type with the same name.</help>
+    </field>
+    <field>
         <id>rule.description</id>
         <label>Description</label>
         <type>text</type>

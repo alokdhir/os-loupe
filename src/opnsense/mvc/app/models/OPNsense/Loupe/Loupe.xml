@@ -76,6 +76,67 @@
                 <type type="TextField">
                     <Required>Y</Required>
                 </type>
+                <icon type="OptionField">
+                    <BlankDesc>Automatic (from the type)</BlankDesc>
+                    <OptionValues>
+                        <apple value="fa-brands fa-apple">Apple</apple>
+                        <windows value="fa-brands fa-windows">Windows</windows>
+                        <android value="fa-brands fa-android">Android</android>
+                        <linux value="fa-brands fa-linux">Linux</linux>
+                        <google value="fa-brands fa-google">Google</google>
+                        <amazon value="fa-brands fa-amazon">Amazon</amazon>
+                        <playstation value="fa-brands fa-playstation">PlayStation</playstation>
+                        <xbox value="fa-brands fa-xbox">Xbox</xbox>
+                        <radio value="fa-solid fa-radio">Receiver / radio</radio>
+                        <volume value="fa-solid fa-volume-high">Speaker</volume>
+                        <music value="fa-solid fa-music">Music</music>
+                        <headphones value="fa-solid fa-headphones">Headphones</headphones>
+                        <vinyl value="fa-solid fa-record-vinyl">Turntable</vinyl>
+                        <tv value="fa-solid fa-tv">TV</tv>
+                        <film value="fa-solid fa-film">Media player</film>
+                        <broadcast value="fa-solid fa-tower-broadcast">Antenna / tuner</broadcast>
+                        <dish value="fa-solid fa-satellite-dish">Satellite</dish>
+                        <video value="fa-solid fa-video">Camera</video>
+                        <camera value="fa-solid fa-camera">Photo camera</camera>
+                        <gamepad value="fa-solid fa-gamepad">Game console</gamepad>
+                        <desktop value="fa-solid fa-desktop">Computer</desktop>
+                        <laptop value="fa-solid fa-laptop">Laptop</laptop>
+                        <mobile value="fa-solid fa-mobile-screen-button">Phone</mobile>
+                        <tablet value="fa-solid fa-tablet-screen-button">Tablet</tablet>
+                        <server value="fa-solid fa-server">Server</server>
+                        <harddrive value="fa-solid fa-hard-drive">Storage / NAS</harddrive>
+                        <print value="fa-solid fa-print">Printer</print>
+                        <keyboard value="fa-solid fa-keyboard">KVM / keyboard</keyboard>
+                        <microchip value="fa-solid fa-microchip">Embedded device</microchip>
+                        <wifi value="fa-solid fa-wifi">Access point</wifi>
+                        <network value="fa-solid fa-network-wired">Network gear</network>
+                        <phone value="fa-solid fa-phone">Phone line</phone>
+                        <house value="fa-solid fa-house-signal">Smart home</house>
+                        <lightbulb value="fa-solid fa-lightbulb">Light</lightbulb>
+                        <fan value="fa-solid fa-fan">Fan</fan>
+                        <plug value="fa-solid fa-plug">Plug</plug>
+                        <thermostat value="fa-solid fa-temperature-half">Thermostat</thermostat>
+                        <lock value="fa-solid fa-lock">Lock</lock>
+                        <bell value="fa-solid fa-bell">Doorbell</bell>
+                        <door value="fa-solid fa-door-open">Door / garage</door>
+                        <shade value="fa-solid fa-table-columns">Shade / curtain</shade>
+                        <solar value="fa-solid fa-solar-panel">Solar</solar>
+                        <bolt value="fa-solid fa-bolt">Power / energy</bolt>
+                        <charger value="fa-solid fa-charging-station">EV charger</charger>
+                        <car value="fa-solid fa-car">Car</car>
+                        <droplet value="fa-solid fa-droplet">Water / sprinkler</droplet>
+                        <kitchen value="fa-solid fa-kitchen-set">Kitchen appliance</kitchen>
+                        <soap value="fa-solid fa-soap">Dishwasher / washer</soap>
+                        <stove value="fa-solid fa-fire-burner">Stove / oven</stove>
+                        <shirt value="fa-solid fa-shirt">Laundry</shirt>
+                        <robot value="fa-solid fa-robot">Robot / vacuum</robot>
+                        <clock value="fa-solid fa-clock">Clock</clock>
+                        <book value="fa-solid fa-book">E-reader</book>
+                        <paw value="fa-solid fa-paw">Pet device</paw>
+                        <baby value="fa-solid fa-baby">Baby monitor</baby>
+                        <shield value="fa-solid fa-shield-halved">Security</shield>
+                    </OptionValues>
+                </icon>
                 <description type="TextField"/>
             </rule>
         </rules>
@@ -86,6 +147,67 @@
                 </mac>
                 <name type="TextField"/>
                 <type type="TextField"/>
+                <icon type="OptionField">
+                    <BlankDesc>Automatic (from the type)</BlankDesc>
+                    <OptionValues>
+                        <apple value="fa-brands fa-apple">Apple</apple>
+                        <windows value="fa-brands fa-windows">Windows</windows>
+                        <android value="fa-brands fa-android">Android</android>
+                        <linux value="fa-brands fa-linux">Linux</linux>
+                        <google value="fa-brands fa-google">Google</google>
+                        <amazon value="fa-brands fa-amazon">Amazon</amazon>
+                        <playstation value="fa-brands fa-playstation">PlayStation</playstation>
+                        <xbox value="fa-brands fa-xbox">Xbox</xbox>
+                        <radio value="fa-solid fa-radio">Receiver / radio</radio>
+                        <volume value="fa-solid fa-volume-high">Speaker</volume>
+                        <music value="fa-solid fa-music">Music</music>
+                        <headphones value="fa-solid fa-headphones">Headphones</headphones>
+                        <vinyl value="fa-solid fa-record-vinyl">Turntable</vinyl>
+                        <tv value="fa-solid fa-tv">TV</tv>
+                        <film value="fa-solid fa-film">Media player</film>
+                        <broadcast value="fa-solid fa-tower-broadcast">Antenna / tuner</broadcast>
+                        <dish value="fa-solid fa-satellite-dish">Satellite</dish>
+                        <video value="fa-solid fa-video">Camera</video>
+                        <camera value="fa-solid fa-camera">Photo camera</camera>
+                        <gamepad value="fa-solid fa-gamepad">Game console</gamepad>
+                        <desktop value="fa-solid fa-desktop">Computer</desktop>
+                        <laptop value="fa-solid fa-laptop">Laptop</laptop>
+                        <mobile value="fa-solid fa-mobile-screen-button">Phone</mobile>
+                        <tablet value="fa-solid fa-tablet-screen-button">Tablet</tablet>
+                        <server value="fa-solid fa-server">Server</server>
+                        <harddrive value="fa-solid fa-hard-drive">Storage / NAS</harddrive>
+                        <print value="fa-solid fa-print">Printer</print>
+                        <keyboard value="fa-solid fa-keyboard">KVM / keyboard</keyboard>
+                        <microchip value="fa-solid fa-microchip">Embedded device</microchip>
+                        <wifi value="fa-solid fa-wifi">Access point</wifi>
+                        <network value="fa-solid fa-network-wired">Network gear</network>
+                        <phone value="fa-solid fa-phone">Phone line</phone>
+                        <house value="fa-solid fa-house-signal">Smart home</house>
+                        <lightbulb value="fa-solid fa-lightbulb">Light</lightbulb>
+                        <fan value="fa-solid fa-fan">Fan</fan>
+                        <plug value="fa-solid fa-plug">Plug</plug>
+                        <thermostat value="fa-solid fa-temperature-half">Thermostat</thermostat>
+                        <lock value="fa-solid fa-lock">Lock</lock>
+                        <bell value="fa-solid fa-bell">Doorbell</bell>
+                        <door value="fa-solid fa-door-open">Door / garage</door>
+                        <shade value="fa-solid fa-table-columns">Shade / curtain</shade>
+                        <solar value="fa-solid fa-solar-panel">Solar</solar>
+                        <bolt value="fa-solid fa-bolt">Power / energy</bolt>
+                        <charger value="fa-solid fa-charging-station">EV charger</charger>
+                        <car value="fa-solid fa-car">Car</car>
+                        <droplet value="fa-solid fa-droplet">Water / sprinkler</droplet>
+                        <kitchen value="fa-solid fa-kitchen-set">Kitchen appliance</kitchen>
+                        <soap value="fa-solid fa-soap">Dishwasher / washer</soap>
+                        <stove value="fa-solid fa-fire-burner">Stove / oven</stove>
+                        <shirt value="fa-solid fa-shirt">Laundry</shirt>
+                        <robot value="fa-solid fa-robot">Robot / vacuum</robot>
+                        <clock value="fa-solid fa-clock">Clock</clock>
+                        <book value="fa-solid fa-book">E-reader</book>
+                        <paw value="fa-solid fa-paw">Pet device</paw>
+                        <baby value="fa-solid fa-baby">Baby monitor</baby>
+                        <shield value="fa-solid fa-shield-halved">Security</shield>
+                    </OptionValues>
+                </icon>
             </device>
         </devices>
     </items>

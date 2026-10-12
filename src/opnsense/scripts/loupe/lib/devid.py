@@ -75,17 +75,26 @@ def check_rule(r):
     return None
 
 
+def _loose(text):
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
 class Rules:
     """Shipped rules (data/devices.json) plus the user's own, which are all checked first."""
 
     def __init__(self, data, user=()):
         self.types = data.get("types", {})
         self.apple_models = data.get("apple_models", {})
+        self.user_icons = {r["type"]: r["icon"] for r in user if r.get("icon") and r.get("type")}
+        self.loose = {_loose(t): v["icon"] for t, v in self.types.items() if v.get("icon")}
         self.user = _tiers(user)
         self.tiers = _tiers(data.get("rules", []))
 
     def icon(self, dtype):
-        return self.types.get(dtype, {}).get("icon", "")
+        """The icon a rule of the user's gave this type, else the built-in type's: "A/V Receiver" is "AV receiver"."""
+        dtype = dtype or ""
+        return (self.user_icons.get(dtype) or self.types.get(dtype, {}).get("icon") or self.loose.get(_loose(dtype))
+                or "")
 
     def vendor(self, dtype):
         return self.types.get(dtype, {}).get("vendor", "")

@@ -55,7 +55,7 @@ POSSIBILITY OF SUCH DAMAGE.
         function editButton(r) {
             if (!r.mac) return '';
             return '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Name this device") }}" data-mac="' + esc(r.mac)
-                + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '"></i>';
+                + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '') + '"></i>';
         }
 
         /* click a cell to copy its value (the cursor says so); it flashes green when copied */
@@ -366,12 +366,18 @@ POSSIBILITY OF SUCH DAMAGE.
             e.stopPropagation();
             const $b = $(this);
             clearFormValidation('frm_' + dialog);
-            $('#device\\.mac').val($b.data('mac')).prop('readonly', true);
-            $('#device\\.name').val($b.data('name'));
-            $('#device\\.type').val($b.data('type'));
+            /* a blank record first, for the icon choices */
+            mapDataToFormUI({['frm_' + dialog]: '/api/loupe/settings/get_device'}).done(function () {
+                $('#device\\.mac').val($b.data('mac')).prop('readonly', true);
+                $('#device\\.name').val($b.data('name'));
+                $('#device\\.type').val($b.data('type'));
+                $('#device\\.icon').selectpicker('refresh').selectpicker('val', String($b.data('ic') || ''));
+                $('#' + dialog).modal('show');
+            });
             $('#btn_' + dialog + '_save').unbind('click').click(function () {
                 ajaxCall('/api/loupe/settings/override', {
-                    mac: $('#device\\.mac').val(), name: $('#device\\.name').val(), type: $('#device\\.type').val()
+                    mac: $('#device\\.mac').val(), name: $('#device\\.name').val(), type: $('#device\\.type').val(),
+                    icon: $('#device\\.icon').val()
                 }, function (data) {
                     if (data.result === 'saved') {
                         $('#' + dialog).modal('hide');
@@ -382,7 +388,6 @@ POSSIBILITY OF SUCH DAMAGE.
                     }
                 });
             });
-            $('#' + dialog).modal('show');
         });
         $('#' + dialog).on('shown.bs.modal', function () { $('#device\\.name').focus().select(); })
             .on('hidden.bs.modal', function () { $('#device\\.mac').prop('readonly', false); });
