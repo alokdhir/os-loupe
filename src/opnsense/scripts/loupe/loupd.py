@@ -126,7 +126,7 @@ class Loupe:
         k = (local_day(ts), ip, name, source)
         v = self.lookups.get(k)
         if v is None:
-            self.lookups[k] = [1, int(ts), int(ts)]
+            self.lookups[k] = [1, int(ts), int(ts), self.ip_mac.get(ip, "")]
         else:
             v[0] += 1
             v[2] = int(ts)
@@ -202,6 +202,9 @@ class Loupe:
                 d = self.devices[v[0]]
                 d.setdefault("ip", ip)
                 d["ts"] = max(d.get("ts", 0), now)
+        for (_d, ip, *_rest), v in self.lookups.items():
+            if not v[3]:
+                v[3] = self.ip_mac.get(ip, "")
         devices = {m: d for m, d in self.devices.items() if "ts" in d}
         try:
             self.store.write(self.flows, self.lookups, devices, now)

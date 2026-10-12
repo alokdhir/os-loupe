@@ -134,7 +134,8 @@ class TestVpnLabels(unittest.TestCase):
             s.write({(b, "10.9.1.30", "203.0.113.50", 51820, "udp", ""): ["02:00:00:00:00:30", "", 0, 10, 100, 3, 1],
                      (b, "10.9.1.30", "203.0.113.50", 993, "tcp", ""): ["02:00:00:00:00:30", "", 0, 1, 2, 1, 1],
                      (b, "10.9.1.31", "203.0.113.60", 51820, "udp", ""): ["02:00:00:00:00:31", "", 0, 1, 2, 1, 1]},
-                    {(0, "10.9.1.30", "api.nordvpn.com", "dns"): [1, b, b]}, {})
+                    {(0, "10.9.1.30", "api.nordvpn.com", "dns"): [1, b, b, ""],
+                     (0, "2001:db8::32", "api.mullvad.net", "dns"): [1, b, b, "02:00:00:00:00:32"]}, {})
             s.close()
             db = sqlite3.connect(path)
             try:
@@ -144,6 +145,9 @@ class TestVpnLabels(unittest.TestCase):
                 self.assertEqual(lab.service("10.9.1.30", "", "203.0.113.70", 993, "tcp"), "Email (IMAP)")
                 self.assertEqual(lab.service("10.9.1.31", "", "203.0.113.60", 51820, "udp"), "VPN (WireGuard)")
                 self.assertEqual(lab.service("10.9.1.30", "www.youtube.com", "203.0.113.50", 443, "tcp"), "YouTube")
+                # looked up from its IPv6 address, tunnel over IPv4: the same device by MAC
+                self.assertEqual(lab.service("10.9.1.32", "", "203.0.113.80", 51820, "udp", "02:00:00:00:00:32"),
+                                 "VPN (Mullvad)")
             finally:
                 db.close()
 

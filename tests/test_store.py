@@ -90,11 +90,11 @@ class TestStore(unittest.TestCase):
             path = os.path.join(d, "x", "loupe.db")
             s = store.Store(path)
             k = (3600 + 300, "10.9.1.20", "203.0.113.10", 443, "tcp", "www.example")
-            s.write({k: ["02:00:00:00:00:01", "sni", 0, 10, 100, 3, 1]}, {(0, "10.9.1.20", "www.example", "sni"): [1, 5, 5]},
+            s.write({k: ["02:00:00:00:00:01", "sni", 0, 10, 100, 3, 1]}, {(0, "10.9.1.20", "www.example", "sni"): [1, 5, 5, ""]},
                     {"02:00:00:00:00:01": {"ip": "10.9.1.20", "ts": 5, "hostname": "box",
                                            "info": {"mdns_models": ["model=X"]}}})
             k2 = (3600 + 600, *k[1:])
-            s.write({k2: ["", "sni", 0, 1, 2, 1, 0]}, {(0, "10.9.1.20", "www.example", "sni"): [2, 6, 9]},
+            s.write({k2: ["", "sni", 0, 1, 2, 1, 0]}, {(0, "10.9.1.20", "www.example", "sni"): [2, 6, 9, "02:00:00:00:00:01"]},
                     {"02:00:00:00:00:01": {"ts": 9, "info": {"mdns_models": ["model=Y"]}}})
             db = sqlite3.connect(path)
             self.addCleanup(db.close)
@@ -102,7 +102,8 @@ class TestStore(unittest.TestCase):
             self.assertEqual(db.execute("SELECT count(*), sum(down) FROM flows_5m").fetchone(), (2, 102))
             self.assertEqual(db.execute("SELECT bucket, mac, up, down, conns FROM flows_1h").fetchall(),
                              [(3600, "02:00:00:00:00:01", 11, 102, 1)])
-            self.assertEqual(db.execute("SELECT count, first_seen, last_seen FROM lookups").fetchone(), (3, 5, 9))
+            self.assertEqual(db.execute("SELECT count, first_seen, last_seen, mac FROM lookups").fetchone(),
+                             (3, 5, 9, "02:00:00:00:00:01"))
             row = db.execute("SELECT ip, hostname, info, first_seen, last_seen FROM devices").fetchone()
             self.assertEqual(row, ("10.9.1.20", "box", '{"mdns_models": ["model=X", "model=Y"]}', 5, 9))
             k3 = (3600 + 900, *k[1:])
@@ -115,6 +116,37 @@ class TestStore(unittest.TestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM flows_1m").fetchone(), (0,))
             self.assertEqual(db.execute("SELECT count(*) FROM flows_5m").fetchone(), (0,))
             self.assertEqual(db.execute("SELECT count(*) FROM flows_1h").fetchone(), (1,))
+
+
+    def test_lookups_by_mac(self):
+        """Names follow the device across addresses; rows without a MAC still count by address."""
+        with tempfile.TemporaryDirectory() as d:
+            s = store.Store(os.path.join(d, "loupe.db"))
+            self.addCleanup(s.close)
+            mac = "02:00:00:00:00:02"
+            s.write({}, {(0, "10.9.1.21", "a.example", "dns"): [1, 5, 5, mac],
+                         (0, "2001:db8::21", "b.example", "dns"): [1, 5, 5, mac],
+                         (0, "10.9.1.99", "c.example", "dns"): [1, 5, 5, ""]},
+                    {mac: {"ip": "10.9.1.99", "ts": 5}})
+            [(m, ip, _hn, _info, names)] = s.devices_with_names(0)
+            self.assertEqual((m, ip, names), (mac, "10.9.1.99", ["a.example", "b.example", "c.example"]))
+
+    def test_lookups_mac_migration(self):
+        """An older database gets the column, filled from the traffic rows of that day."""
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            db = sqlite3.connect(path)
+            db.executescript(store.SCHEMA.replace("    mac TEXT NOT NULL DEFAULT '',   -- the device at that address then ('' = not known)\n", ""))
+            db.execute("INSERT INTO lookups VALUES (86400, '10.9.1.22', 'a.example', 'dns', 1, 86400, 86400)")
+            db.execute("INSERT INTO lookups VALUES (86400, '10.9.1.23', 'b.example', 'dns', 1, 86400, 86400)")
+            db.execute("INSERT INTO flows_1h (bucket, ip, mac, server, port, proto) "
+                       "VALUES (90000, '10.9.1.22', '02:00:00:00:00:03', '203.0.113.1', 443, 'tcp')")
+            db.commit()
+            db.close()
+            s = store.Store(path)
+            self.addCleanup(s.close)
+            self.assertEqual(s.db.execute("SELECT ip, mac FROM lookups ORDER BY ip").fetchall(),
+                             [("10.9.1.22", "02:00:00:00:00:03"), ("10.9.1.23", "")])
 
 
 class TestDhcp(unittest.TestCase):

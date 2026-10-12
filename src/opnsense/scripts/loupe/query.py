@@ -117,14 +117,13 @@ class Labels:
 
     def __init__(self, db, svc, table, start):
         self.svc = svc
-        self.provider = {}
-        counts = collections.defaultdict(collections.Counter)
-        for ip, name, n in db.execute("SELECT ip, name, sum(count) FROM lookups WHERE day >= ? AND last_seen >= ? "
-                                      "GROUP BY ip, name", (start - 86400, start - 86400)):
+        counts = collections.defaultdict(collections.Counter)      # by MAC; lookups without one by address
+        for mac, ip, name, n in db.execute("SELECT mac, ip, name, sum(count) FROM lookups WHERE day >= ? AND last_seen >= ? "
+                                           "GROUP BY mac, ip, name", (start - 86400, start - 86400)):
             p = svc.vpn_provider(name)
             if p:
-                counts[ip][p] += n
-        self.provider = {ip: c.most_common(1)[0][0] for ip, c in counts.items()}
+                counts[mac or ip][p] += n
+        self.provider = {k: c.most_common(1)[0][0] for k, c in counts.items()}
         self.tunnels = {}
         cond = " OR ".join("(proto = ? AND port = ?)" for _ in VPN_PORTS)
         for ip, server, proto, port in db.execute(
@@ -139,24 +138,26 @@ class Labels:
                 owners[(ip, server)].add(s)
         self.shared = {k: v.pop() for k, v in owners.items() if len(v) == 1}
 
-    def _own(self, ip, name, server, port, proto):
+    def _own(self, ip, name, server, port, proto, mac):
         s = self.svc.by_my_address(server) or self.svc.by_name(name)
         if s:
             return s
         s = self.tunnels.get((ip, server)) or self.svc.service(name, server, port, proto)
-        if s and s.startswith("VPN (") and ip in self.provider:
-            return f"VPN ({self.provider[ip]})"
+        if s and s.startswith("VPN ("):
+            p = self.provider.get(mac) or self.provider.get(ip)
+            if p:
+                return f"VPN ({p})"
         return s
 
-    def service(self, ip, name, server, port, proto):
-        s = self._own(ip, name, server, port, proto)
+    def service(self, ip, name, server, port, proto, mac=""):
+        s = self._own(ip, name, server, port, proto, mac)
         if not s or s in HOSTING:
             return self.shared.get((ip, server)) or s
         return s
 
-    def inferred(self, ip, name, server, port, proto):
+    def inferred(self, ip, name, server, port, proto, mac=""):
         """True when service() named this traffic from other traffic on the same server."""
-        s = self._own(ip, name, server, port, proto)
+        s = self._own(ip, name, server, port, proto, mac)
         return (not s or s in HOSTING) and (ip, server) in self.shared
 
 
@@ -186,7 +187,7 @@ def cmd_devices(hours):
         r["conns"] += conns
         if last > r["last"]:
             r["last"], r["ip"] = last, ip       # the address it used most recently
-        tops[key][lab.service(ip, name, server, port, proto) or "Other"] += up + down
+        tops[key][lab.service(ip, name, server, port, proto, mac) or "Other"] += up + down
     for key, r in rows.items():
         r["top"] = [s for s, _ in tops[key].most_common(3)]     # "Other" too: an unnamed stream can be the biggest
         # traffic is filed under its 5-minute bucket; loupd also stamps each device it saw (every minute)
@@ -217,10 +218,10 @@ def cmd_device(arg, hours):
                                              "servers": set()})
     ports = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0})
     timeline = collections.defaultdict(lambda: [0, 0])
-    for bucket, last, ip, name, server, port, proto, inbound, up, down, conns in db.execute(
-            f"SELECT bucket, last, ip, name, server, port, proto, inbound, up, down, conns FROM {table} "
+    for bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns in db.execute(
+            f"SELECT bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns FROM {table} "
             f"WHERE {col} = ? AND bucket >= ?", (val, start)):
-        s = lab.service(ip, name, server, port, proto) or "Other"
+        s = lab.service(ip, name, server, port, proto, mac) or "Other"
         sv = services[s]
         sv["down"] += down
         sv["up"] += up
@@ -232,7 +233,7 @@ def cmd_device(arg, hours):
         site["conns"] += conns
         site["last"] = max(site["last"], bucket, last)
         site["service"] = s
-        site["inferred"] = lab.inferred(ip, name, server, port, proto)
+        site["inferred"] = lab.inferred(ip, name, server, port, proto, mac)
         site["servers"].add(server)
         p = ports[f"{proto}/{port}" + (" in" if inbound else "")]
         p["down"] += down
@@ -274,7 +275,7 @@ def cmd_sites(hours, text=""):
     for ip, mac, name, server, port, proto, up, down, conns, last in db.execute(
             f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(max(bucket), max(last)) FROM {table} "
             f"WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
-        s = lab.service(ip, name, server, port, proto)
+        s = lab.service(ip, name, server, port, proto, mac)
         hit = bool(text) and (matches(text, name, s) or server == text)
         if not s:
             if not hit:
@@ -310,14 +311,14 @@ def cmd_lookup(text, hours, exact=False):
     for ip, mac, name, server, port, proto, up, down, conns, first, last in db.execute(
             f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), min(bucket), max(max(bucket), max(last)) "
             f"FROM {table} WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
-        s = lab.service(ip, name, server, port, proto) or ""
+        s = lab.service(ip, name, server, port, proto, mac) or ""
         if exact:
             if (s or name or server).lower() != text:
                 continue
         elif not (matches(text, name, s) or server == text):
             continue
         r = rows[(mac or ip, name or (s and "\0" + s) or server)]     # nameless traffic: one row per service
-        r.update(ip=ip, mac=mac, name=name, service=s, inferred=bool(s) and lab.inferred(ip, name, server, port, proto))
+        r.update(ip=ip, mac=mac, name=name, service=s, inferred=bool(s) and lab.inferred(ip, name, server, port, proto, mac))
         r["down"] += down
         r["up"] += up
         r["conns"] += conns
@@ -326,16 +327,16 @@ def cmd_lookup(text, hours, exact=False):
         r["servers"].add(server)
     looked = []
     day0 = start - 86400
-    for ip, name, source, count, first, last in db.execute(
-            "SELECT ip, name, source, sum(count), min(first_seen), max(last_seen) FROM lookups "
-            "WHERE day >= ? AND last_seen >= ? GROUP BY ip, name, source", (day0, start)):
+    for ip, mac, name, source, count, first, last in db.execute(
+            "SELECT ip, mac, name, source, sum(count), min(first_seen), max(last_seen) FROM lookups "
+            "WHERE day >= ? AND last_seen >= ? GROUP BY ip, mac, name, source", (day0, start)):
         if exact:
             if (svc.by_name(name) or name).lower() != text:
                 continue
         elif not matches(text, name, svc.by_name(name)):
             continue
-        dev = next((d for d in info.values() if d["ip"] == ip), None)
-        looked.append({"ip": ip, "device": label(dev, ip), "type": (dev or {}).get("type", ""), "name": name,
+        dev = info.get(mac) or next((d for d in info.values() if d["ip"] == ip), None)
+        looked.append({"ip": ip, "mac": mac, "device": label(dev, ip), "type": (dev or {}).get("type", ""), "name": name,
                        "source": source, "count": count, "first": first, "last": last})
     out = []
     for (key, _name), r in rows.items():

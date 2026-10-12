@@ -96,6 +96,7 @@ CREATE INDEX IF NOT EXISTS flows_1h_name ON flows_1h (name, bucket);
 CREATE TABLE IF NOT EXISTS lookups (
     day INTEGER NOT NULL,
     ip TEXT NOT NULL,
+    mac TEXT NOT NULL DEFAULT '',   -- the device at that address then ('' = not known)
     name TEXT NOT NULL,
     source TEXT NOT NULL,           -- sni | quic | dns
     count INTEGER NOT NULL DEFAULT 0,
@@ -148,6 +149,26 @@ class Store:
         for table in ("flows_1m", "flows_5m", "flows_1h"):
             if "last" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN last INTEGER NOT NULL DEFAULT 0")
+        if "mac" not in {r[1] for r in self.db.execute("PRAGMA table_info(lookups)")}:
+            self._add_lookups_mac()
+        self.db.execute("CREATE INDEX IF NOT EXISTS lookups_mac ON lookups (mac, day)")
+
+    def _add_lookups_mac(self):
+        """Added later: older lookups get the device that used the address that day, from the traffic rows
+        (one query per address and day, not per row: a busy device has thousands of traffic rows an hour)."""
+        db = self.db
+        db.execute("BEGIN")
+        try:
+            db.execute("ALTER TABLE lookups ADD COLUMN mac TEXT NOT NULL DEFAULT ''")
+            for ip, day in db.execute("SELECT DISTINCT ip, day FROM lookups").fetchall():
+                row = db.execute("SELECT mac FROM flows_1h WHERE ip = ? AND bucket >= ? AND bucket < ? AND mac != '' "
+                                 "GROUP BY mac ORDER BY count(*) DESC LIMIT 1", (ip, day, day + 90000)).fetchone()
+                if row:         # 25 h: a day with a clock change is 23 or 25 hours long
+                    db.execute("UPDATE lookups SET mac = ? WHERE day = ? AND ip = ?", (row[0], day, ip))
+            db.execute("COMMIT")
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
 
     def close(self):
         self.db.close()
@@ -155,7 +176,7 @@ class Store:
     def write(self, flows, lookups, devices, now=None):
         """flows: {(bucket1m, ip, server, port, proto, name): [mac, source, inbound, up, down, pkts, conns]}
         (minute buckets; the 5-minute and hourly rows are derived)
-        lookups: {(day, ip, name, source): [count, first, last]}
+        lookups: {(day, ip, name, source): [count, first, last, mac]}
         devices: {mac: {"ip", "ts", "hostname"?, "info"?: {...}}}"""
         db = self.db
         db.execute("BEGIN")
@@ -167,9 +188,10 @@ class Store:
             db.executemany(UPSERT.format(t="flows_5m"), [(r[0] - r[0] % 300, *r[1:]) for r in rows])
             db.executemany(UPSERT.format(t="flows_1h"), [(r[0] - r[0] % 3600, *r[1:]) for r in rows])
             db.executemany(
-                "INSERT INTO lookups (day, ip, name, source, count, first_seen, last_seen) VALUES (?,?,?,?,?,?,?) "
+                "INSERT INTO lookups (day, ip, name, source, count, first_seen, last_seen, mac) VALUES (?,?,?,?,?,?,?,?) "
                 "ON CONFLICT (day, ip, name, source) DO UPDATE SET count = count + excluded.count, "
-                "last_seen = max(last_seen, excluded.last_seen)",
+                "last_seen = max(last_seen, excluded.last_seen), "
+                "mac = CASE WHEN excluded.mac != '' THEN excluded.mac ELSE mac END",
                 [(d, ip, n, s, *v) for (d, ip, n, s), v in lookups.items()])
             for mac, d in devices.items():
                 old = db.execute("SELECT info FROM devices WHERE mac = ?", (mac,)).fetchone()
@@ -191,11 +213,14 @@ class Store:
             raise
 
     def devices_with_names(self, since):
-        """[(mac, ip, hostname, info dict, [names looked up since `since`])]"""
-        names = {}
-        for ip, name in self.db.execute("SELECT DISTINCT ip, name FROM lookups WHERE day >= ?", (since,)):
-            names.setdefault(ip, []).append(name)
-        return [(mac, ip, hn, json.loads(info), names.get(ip, []))
+        """[(mac, ip, hostname, info dict, [names looked up since `since`])] - by MAC; rows without one by address"""
+        by_mac, by_ip = {}, {}
+        for mac, ip, name in self.db.execute("SELECT DISTINCT mac, ip, name FROM lookups WHERE day >= ?", (since,)):
+            if mac:
+                by_mac.setdefault(mac, set()).add(name)
+            else:
+                by_ip.setdefault(ip, set()).add(name)
+        return [(mac, ip, hn, json.loads(info), sorted(by_mac.get(mac, set()) | by_ip.get(ip, set())))
                 for mac, ip, hn, info in self.db.execute("SELECT mac, ip, hostname, info FROM devices")]
 
     def set_device_types(self, rows):
