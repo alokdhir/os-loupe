@@ -34,6 +34,29 @@ Each connection gets the name from its own handshake first, then from the DNS an
 
 **Saving.** Once a minute they are written to SQLite (`/var/db/loupe/loupe.db`) in a single transaction, into three tables at once: per minute, per 5 minutes and per hour. There is no separate roll-up job, so the coarser tables are always current.
 
+**Keeping and reading.** Old rows are pruned hourly.
+
+| Detail | Retention | Reports use it for |
+|---|---|---|
+| Per minute | 4&nbsp;hours | periods up to 3 hours |
+| Per 5 minutes | 30&nbsp;days | periods up to 2 days |
+| Per hour | 1&nbsp;year | longer periods, charted by the day past 90 days |
+| Site lookups | 30&nbsp;days | the Lookups tab and search |
+
+Site lookups are kept per device per day, with a count and the first and last time seen. Retention for all but the minute rows is set under *Settings → General*: **Keep 5-minute detail**, **Keep hourly totals** and **Keep site lookups** (in days). Past 2 days, reports read hourly rows even where 5-minute rows still exist: a week or a month by the hour is plenty, and far fewer rows to read.
+
+**Names.** A kernel BPF filter passes only a handful of packet types to the service: the first packet of each TLS connection (the *ClientHello*, which carries the site name in plain text — SNI), QUIC/HTTP-3 *Initial* packets (decrypted with the public keys the protocol defines, RFC 9001/9369), DNS answers from the router to each device, DHCP requests, and mDNS/Bonjour announcements. Bulk traffic never reaches userland.
+2. **Bytes.** Every connection through the router has a pf state with exact byte counters for both directions, recorded on the LAN side *before* NAT. Loupe reads the state table every 10 seconds and records the difference per device, server and port. pf keeps a closed connection around for at least 30–45 seconds, so every connection's final count is seen.
+3. **Devices.** The MAC vendor (IEEE registry), the DHCP request (hostname, vendor class, parameter list), Bonjour announcements (Apple model identifiers like `Mac15,13`, AirPlay/Cast/printer services), the device's own DHCP lease name, and the services it talks to (`playstation.net` → PlayStation).
+
+Each connection gets the name from its own handshake first, then from the DNS answer that device received for that address, then from any device's DNS answer. Service names come from a built-in map of ~300 domains (plus address-range and port fallbacks for nameless traffic) that you can extend in the settings; they are applied when reports are built, so changes cover all history.
+
+### Data collection and retention
+
+**Collecting.** Byte counts are read every 10 seconds and added up in memory per device, server, port and site name for each minute.
+
+**Saving.** Once a minute they are written to SQLite (`/var/db/loupe/loupe.db`) in a single transaction, into three tables at once: per minute, per 5 minutes and per hour. There is no separate roll-up job, so the coarser tables are always current.
+
 **Keeping and reading.** Old rows are pruned hourly. How long each kind is kept, and which one reports read:
 
 | Detail | Kept for | Setting (*Settings → General*, days) | Reports use it for |
