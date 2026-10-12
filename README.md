@@ -28,13 +28,13 @@ Loupe runs as a small service on the router and combines three sources:
 
 Each connection gets the name from its own handshake first, then from the DNS answer that device received for that address, then from any device's DNS answer. Service names come from a built-in map of ~300 domains (plus address-range and port fallbacks for nameless traffic) that you can extend in the settings; they are applied when reports are built, so changes cover all history.
 
-### How the data is kept
+### Data collection and retention
 
 Byte counts are read every 10 seconds and added up in memory per device, server, port and site name for each minute. Once a minute they are written to SQLite (`/var/db/loupe/loupe.db`) in a single transaction, into three tables at once: per minute, per 5 minutes and per hour. There is no separate roll-up job, so the coarser tables are always current. Old rows are pruned hourly: minute rows after 4 hours, 5-minute rows after 30 days, hourly rows after a year and site lookups after 30 days. All but the minute rows can be changed under *Settings → General*: **Keep 5-minute detail**, **Keep hourly totals** and **Keep site lookups** (in days). Reports read minute rows for periods up to 3 hours, 5-minute rows up to 2 days and hourly rows for anything longer, even where finer rows still exist (a week or a month by the hour is plenty, and far fewer rows to read); charts beyond 90 days are by the day. Site lookups are kept per device per day, with a count and the first and last time seen. Names and device types are applied when a report is built, not stored with the traffic, so renaming a device or a service changes its whole history.
 
 The design, the alternatives considered and the known limits are in [docs/DESIGN.md](docs/DESIGN.md).
 
-### Knowing the devices
+### Identifying devices
 
 OPNsense's own reports, Insight (NetFlow) and Unbound's DNS reporting, name a device by looking up its IP address in DNS. That gives a name only if the DHCP server registered one, never a type, and the history belongs to the address: a new DHCP lease, a private Wi-Fi address or IPv6's rotating addresses split one device into several, or hand its history to another.
 
