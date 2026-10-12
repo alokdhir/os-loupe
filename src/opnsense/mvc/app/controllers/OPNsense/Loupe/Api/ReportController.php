@@ -92,6 +92,7 @@ class ReportController extends ApiControllerBase
         'services' => ['service', 'names'],
         'sites' => ['name', 'service', 'servers'],
         'ports' => ['port'],
+        'names' => ['name', 'service', 'sources'],
         'traffic' => ['device', 'ip', 'name', 'service', 'servers'],
         'lookups' => ['device', 'ip', 'name', 'source'],
     ];
@@ -140,6 +141,11 @@ class ReportController extends ApiControllerBase
     public function searchPortsAction()
     {
         return $this->deviceSection('ports');
+    }
+
+    public function searchNamesAction()
+    {
+        return $this->deviceSection('names', 'last');
     }
 
     /* a service, site or address: any printable text except double quotes, backslash and backtick

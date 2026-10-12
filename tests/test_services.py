@@ -25,6 +25,7 @@
 import os
 import sqlite3
 import tempfile
+import time
 import unittest
 
 import helpers  # noqa: F401
@@ -122,6 +123,38 @@ class TestSharedServer(unittest.TestCase):
                 self.assertEqual(lab.service("10.9.1.41", "video.example.net", "203.0.113.10", 443, "tcp"), None)  # another device
             finally:
                 db.close()
+
+
+class TestDeviceNames(unittest.TestCase):
+    def test_by_mac_and_old_rows_by_address(self):
+        import query
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            now = int(time.time())
+            day = now - 3600
+            mac = "02:00:00:00:00:50"
+            s.write({}, {(day, "10.9.1.50", "a.example", "dns"): [2, now - 60, now - 50, mac],
+                         (day, "2001:db8::50", "a.example", "sni"): [1, now - 40, now - 40, mac],
+                         (day, "10.9.1.50", "b.example", "dns"): [1, now - 30, now - 30, ""],
+                         (day, "10.9.1.51", "c.example", "dns"): [1, now - 20, now - 20, "02:00:00:00:00:51"]},
+                    {mac: {"ip": "10.9.1.50", "ts": now}})
+            s.close()
+            old = query.DB, query.CONF, query.load
+            opened = []
+
+            def load():
+                opened.append(old[2]())
+                return opened[-1]
+            query.DB, query.CONF, query.load = path, os.path.join(d, "none.json"), load
+            try:
+                names = query.cmd_device(mac, 24)["names"]
+            finally:
+                query.DB, query.CONF, query.load = old
+                for db, *_ in opened:
+                    db.close()
+            self.assertEqual([(n["name"], n["sources"], n["count"]) for n in names],
+                             [("b.example", "dns", 1), ("a.example", "dns, sni", 3)])
 
 
 class TestVpnLabels(unittest.TestCase):

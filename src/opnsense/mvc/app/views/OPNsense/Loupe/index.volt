@@ -220,6 +220,7 @@ POSSIBILITY OF SUCH DAMAGE.
             grid('grid-services', '/api/loupe/report/search_services', dev);
             grid('grid-sites', '/api/loupe/report/search_sites', dev);
             grid('grid-ports', '/api/loupe/report/search_ports', dev);
+            grid('grid-devnames', '/api/loupe/report/search_names', dev);
         }
 
         /* Services tab: every service the house used, or what matches the search */
@@ -459,6 +460,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <li class="active"><a data-toggle="tab" href="#tab-services">{{ lang._('Services') }}</a></li>
                 <li><a data-toggle="tab" href="#tab-sites">{{ lang._('Sites') }}</a></li>
                 <li><a data-toggle="tab" href="#tab-ports">{{ lang._('Protocols and ports') }}</a></li>
+                <li><a data-toggle="tab" href="#tab-devnames">{{ lang._('Lookups') }}</a></li>
             </ul>
             <div class="tab-content">
                 <div id="tab-services" class="tab-pane fade in active">
@@ -492,6 +494,19 @@ POSSIBILITY OF SUCH DAMAGE.
                             <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                             <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
                             <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="tab-devnames" class="tab-pane fade in">
+                    <table id="grid-devnames" class="table table-condensed table-hover table-striped table-responsive">
+                        <thead><tr>
+                            <th data-column-id="name" data-identifier="true" data-formatter="site">{{ lang._('Name') }}</th>
+                            <th data-column-id="service" data-formatter="sitesvc">{{ lang._('Service') }}</th>
+                            <th data-column-id="sources" data-width="9em">{{ lang._('Seen in') }}</th>
+                            <th data-column-id="count" data-width="7em">{{ lang._('Times') }}</th>
+                            <th data-column-id="first" data-formatter="datetime">{{ lang._('First') }}</th>
+                            <th data-column-id="last" data-formatter="datetime">{{ lang._('Last') }}</th>
                         </tr></thead>
                         <tbody></tbody>
                     </table>

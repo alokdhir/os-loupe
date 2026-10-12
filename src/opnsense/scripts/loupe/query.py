@@ -242,6 +242,17 @@ def cmd_device(arg, hours):
         tl = timeline[bucket - bucket % step]
         tl[0] += down
         tl[1] += up
+    # names it looked up or connected to, by MAC (rows from before the MAC was known: by its address)
+    names = collections.defaultdict(lambda: {"count": 0, "first": None, "last": 0, "sources": set()})
+    cond, args = ("(mac = ? OR (mac = '' AND ip = ?))", (val, (dev or {}).get("ip") or "")) if col == "mac" else ("ip = ?", (val,))
+    for name, source, count, first_seen, last_seen in db.execute(
+            f"SELECT name, source, sum(count), min(first_seen), max(last_seen) FROM lookups "
+            f"WHERE {cond} AND day >= ? AND last_seen >= ? GROUP BY name, source", (*args, start - 86400, start)):
+        n = names[name]
+        n["count"] += count
+        n["first"] = first_seen if n["first"] is None else min(n["first"], first_seen)
+        n["last"] = max(n["last"], last_seen)
+        n["sources"].add(source)
     now = int(time.time())
     first = start - start % step
     return {
@@ -253,6 +264,9 @@ def cmd_device(arg, hours):
                           "servers": sorted(v["servers"])[:5]} for k, v in sites.items()),
                         key=lambda r: -(r["down"] + r["up"]))[:500],
         "ports": sorted(({"port": k, **v} for k, v in ports.items()), key=lambda r: -(r["down"] + r["up"]))[:50],
+        "names": sorted(({"name": k, "service": svc.by_name(k) or "", "sources": ", ".join(sorted(v["sources"])),
+                          **{x: v[x] for x in ("count", "first", "last")}} for k, v in names.items()),
+                        key=lambda r: -r["last"])[:2000],
         "step": step,
         "timeline": [[b, *timeline.get(b, [0, 0])] for b in range(first, now + 1, step)],
     }
