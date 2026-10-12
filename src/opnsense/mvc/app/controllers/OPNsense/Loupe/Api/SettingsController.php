@@ -160,7 +160,18 @@ class SettingsController extends ApiMutableModelControllerBase
 
     public function searchDeviceAction()
     {
-        return $this->searchBase('devices.device', ['mac', 'name', 'type', 'icon'], 'name');
+        $result = $this->searchBase('devices.device', ['mac', 'name', 'type', 'icon'], 'name');
+        /* the Type column shows the icon: the one picked here, else the automatic one for the type */
+        $picked = [];
+        foreach ($this->getModel()->devices->device->iterateItems() as $uuid => $dev) {
+            $picked[$uuid] = (string)$dev->icon;
+        }
+        $auto = json_decode((new Backend())->configdpRun('loupe query', ['icons']) ?? '', true);
+        foreach ($result['rows'] as &$row) {
+            $mac = str_replace('-', ':', strtolower($row['mac']));
+            $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: ($auto[$mac] ?? '');
+        }
+        return $result;
     }
 
     public function getDeviceAction($uuid = null)

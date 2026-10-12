@@ -275,7 +275,11 @@ POSSIBILITY OF SUCH DAMAGE.
                     get: '/api/loupe/settings/get_device/',
                     set: '/api/loupe/settings/set_device/',
                     add: '/api/loupe/settings/add_device/',
-                    del: '/api/loupe/settings/del_device/'
+                    del: '/api/loupe/settings/del_device/',
+                    options: {formatters: {
+                        devtype: (column, row) => (row.icon_class ? '<i class="' + esc(row.icon_class) + ' fa-fw text-muted"></i> '
+                            : '<i class="fa fa-fw"></i> ') + esc(row.type)
+                    }}
                 });
                 clearable('{{ formGridOverrides['table_id'] }}');
             }

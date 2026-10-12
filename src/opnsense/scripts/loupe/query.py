@@ -365,6 +365,16 @@ def cmd_lookup(text, hours, exact=False):
             "lookups": sorted(looked, key=lambda r: -r["last"])[:2000]}
 
 
+def cmd_icons():
+    """The automatic icon of each overridden device (from its type), for the Overrides grid."""
+    db, _svc, ov = load()
+    try:
+        info = devices_info(db, ov)
+    finally:
+        db.close()
+    return {mac: rules().icon(info[mac]["type"]) for mac in ov}
+
+
 def cmd_widget():
     db, _svc, _ov = load()
     now = int(time.time())
@@ -396,6 +406,8 @@ def main(argv):
             out = cmd_sites(hours_arg(argv[2]), (argv[3] if len(argv) > 3 else "").strip().lower())
         elif cmd == "lookup":
             out = cmd_lookup(argv[2], hours_arg(argv[3]), len(argv) > 4 and argv[4] == "exact")
+        elif cmd == "icons":
+            out = cmd_icons()
         elif cmd == "widget":
             out = cmd_widget()
         else:

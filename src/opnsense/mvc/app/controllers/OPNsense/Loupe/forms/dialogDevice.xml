@@ -13,12 +13,18 @@
         <id>device.type</id>
         <label>Type</label>
         <type>text</type>
+        <grid_view>
+            <formatter>devtype</formatter>
+        </grid_view>
         <help>Overrides the detected device type. Leave both Name and Type empty to go back to what Loupe detects.</help>
     </field>
     <field>
         <id>device.icon</id>
         <label>Icon</label>
         <type>dropdown</type>
+        <grid_view>
+            <visible>false</visible>
+        </grid_view>
         <help>Shown next to the type. Automatic uses the icon of a built-in type with the same name.</help>
     </field>
 </form>
