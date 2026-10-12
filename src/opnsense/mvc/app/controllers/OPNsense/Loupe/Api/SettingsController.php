@@ -40,6 +40,10 @@ class SettingsController extends ApiMutableModelControllerBase
     private const SERVICE_KINDS = ['domain' => 'Domain', 'address' => 'Address or range', 'port' => 'Port',
                                    'vpn' => 'VPN app domain'];
 
+    /* a host name: labels of letters, digits, _ and -, up to 253 characters, optional final dot */
+    private const LABEL = '[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?';
+    private const DOMAIN = '/^(?=.{1,253}$)(' . self::LABEL . '\.)*' . self::LABEL . '\.?$/i';
+
     public function searchServiceAction()
     {
         $result = $this->searchBase('services.service', ['kind', 'suffix', 'name'], 'suffix');
@@ -70,15 +74,17 @@ class SettingsController extends ApiMutableModelControllerBase
         if ($kind === 'address') {
             [$ip, $bits] = array_pad(explode('/', $text, 2), 2, null);
             $v6 = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
-            if (filter_var($ip, FILTER_VALIDATE_IP) === false
-                || ($bits !== null && !(ctype_digit($bits) && (int)$bits <= ($v6 ? 128 : 32)))) {
+            if (
+                filter_var($ip, FILTER_VALIDATE_IP) === false
+                || ($bits !== null && !(ctype_digit($bits) && (int)$bits <= ($v6 ? 128 : 32)))
+            ) {
                 $error = gettext('Enter a valid IP address or range, e.g. 192.0.2.10 or 203.0.113.0/24.');
             }
         } elseif ($kind === 'port') {
             if (!preg_match('/^(tcp|udp)\/([0-9]{1,5})$/i', $text, $m) || (int)$m[2] < 1 || (int)$m[2] > 65535) {
                 $error = gettext('Enter a protocol and port, e.g. tcp/8443 or udp/51820.');
             }
-        } elseif (!preg_match('/^(?=.{1,253}$)([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.)*[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.?$/i', $text)) {
+        } elseif (!preg_match(self::DOMAIN, $text)) {
             $error = gettext('Enter a domain, e.g. example.com.');
         }
         return $error === null ? null : ['result' => 'failed', 'validations' => ['service.suffix' => $error]];
@@ -131,16 +137,21 @@ class SettingsController extends ApiMutableModelControllerBase
         if ($field === 'mac_prefix' && $pattern !== '') {
             foreach (explode(',', $pattern) as $prefix) {
                 if (!preg_match('/^[0-9a-f]{2}([:.-]?[0-9a-f]{2}){0,5}$/i', trim($prefix))) {
-                    return ['result' => 'failed', 'validations' => ['rule.pattern' => gettext('Enter MAC prefixes like 52:54:00, separated by commas.')]];
+                    return $this->ruleError(gettext('Enter MAC prefixes like 52:54:00, separated by commas.'));
                 }
             }
         }
         if (in_array($field, ['hostname', 'mdns_model', 'dhcp_vendor']) && $pattern !== '') {
             if (@preg_match('/' . str_replace('/', '\\/', $pattern) . '/u', '') === false) {
-                return ['result' => 'failed', 'validations' => ['rule.pattern' => gettext('This is not a valid regular expression.')]];
+                return $this->ruleError(gettext('This is not a valid regular expression.'));
             }
         }
         return null;
+    }
+
+    private function ruleError(string $message)
+    {
+        return ['result' => 'failed', 'validations' => ['rule.pattern' => $message]];
     }
 
     public function addRuleAction()
@@ -177,7 +188,8 @@ class SettingsController extends ApiMutableModelControllerBase
         foreach ($result['rows'] as &$row) {
             $mac = str_replace('-', ':', strtolower($row['mac']));
             $type = $loose(html_entity_decode($row['type']));
-            $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: (($type !== '' ? $byType[$type] ?? '' : '') ?: ($auto[$mac] ?? ''));
+            $sameType = $type !== '' ? ($byType[$type] ?? '') : '';
+            $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: ($sameType ?: ($auto[$mac] ?? ''));
         }
         return $result;
     }

@@ -43,6 +43,7 @@ import time
 from . import netif, pfnl
 from typing import NamedTuple
 
+
 class State(NamedTuple):
     key: tuple          # (id, creatorid)
     origif: str

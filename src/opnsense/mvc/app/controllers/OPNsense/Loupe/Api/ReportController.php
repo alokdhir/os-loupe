@@ -204,7 +204,9 @@ class ReportController extends ApiControllerBase
             $rows[] = ['pattern' => $r[0], 'name' => $r[1], 'kind' => gettext('Address range')];
         }
         foreach ($data['ports'] ?? [] as $p) {
-            $rows[] = ['pattern' => "{$p[0]}/{$p[1]}", 'name' => $p[2], 'kind' => gettext('Port, when nothing else names it')];
+            $rows[] = [
+                'pattern' => "{$p[0]}/{$p[1]}", 'name' => $p[2], 'kind' => gettext('Port, when nothing else names it')
+            ];
         }
         foreach ($data['vpn_providers'] ?? [] as $domain => $provider) {
             $rows[] = ['pattern' => $domain, 'name' => "VPN ({$provider})", 'kind' => gettext('VPN app domain')];

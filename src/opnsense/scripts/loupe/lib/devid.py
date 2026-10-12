@@ -93,8 +93,8 @@ class Rules:
     def icon(self, dtype):
         """The icon a rule of the user's gave this type, else the built-in type's: "A/V Receiver" is "AV receiver"."""
         dtype = dtype or ""
-        return (self.user_icons.get(dtype) or self.types.get(dtype, {}).get("icon") or self.loose_icons.get(loose(dtype))
-                or "")
+        builtin = self.types.get(dtype, {}).get("icon") or self.loose_icons.get(loose(dtype))
+        return self.user_icons.get(dtype) or builtin or ""
 
     def vendor(self, dtype):
         return self.types.get(dtype, {}).get("vendor", "")

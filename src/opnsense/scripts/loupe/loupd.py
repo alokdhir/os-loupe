@@ -42,7 +42,6 @@ from capture import Capture  # noqa: E402
 from lib import devid, names, neighbours, pfstate, store, unbound  # noqa: E402
 
 
-
 def local_day(ts):
     t = time.localtime(ts)
     return int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))

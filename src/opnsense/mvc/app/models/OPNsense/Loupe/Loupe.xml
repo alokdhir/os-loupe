@@ -11,6 +11,7 @@
             <interfaces type="InterfaceField">
                 <Multiple>Y</Multiple>
                 <Default>lan</Default>
+                <Required>Y</Required>
                 <filters>
                     <enable>/^(?!0).*$/</enable>
                 </filters>
@@ -38,6 +39,7 @@
             <service type="ArrayField">
                 <kind type="OptionField">
                     <Default>domain</Default>
+                    <Required>Y</Required>
                     <OptionValues>
                         <domain>Domain</domain>
                         <address>Address or range</address>

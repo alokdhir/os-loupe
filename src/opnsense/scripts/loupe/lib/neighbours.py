@@ -40,8 +40,8 @@ RTA_DST, RTA_GATEWAY = 0x1, 0x2
 
 class _RtMetrics(ctypes.Structure):          # struct rt_metrics (net/route.h)
     _fields_ = [(n, ctypes.c_ulong) for n in ("locks", "mtu", "hopcount", "expire", "recvpipe", "sendpipe",
-                                               "ssthresh", "rtt", "rttvar", "pksent", "weight", "nhidx")] + \
-               [("filler", ctypes.c_ulong * 2)]
+                                              "ssthresh", "rtt", "rttvar", "pksent", "weight", "nhidx")]
+    _fields_ += [("filler", ctypes.c_ulong * 2)]
 
 
 class _RtMsghdr(ctypes.Structure):           # struct rt_msghdr (net/route.h)

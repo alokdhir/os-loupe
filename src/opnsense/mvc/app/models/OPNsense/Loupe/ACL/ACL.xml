@@ -4,6 +4,7 @@
         <patterns>
             <pattern>ui/loupe/*</pattern>
             <pattern>api/loupe/*</pattern>
+            <pattern>api/loupe/report/widget</pattern>
         </patterns>
     </page-reporting-loupe>
 </acl>
