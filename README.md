@@ -8,7 +8,7 @@ Devices are identified automatically, not left as IP addresses. A layered, evide
 
 ## Features
 
-- **Device identification**: a multi-tier rule engine names each device and works out what it is from the evidence it gives off, strongest first (see [Identifying devices](#identifying-devices)). Every guess shows where it came from.
+- **Device identification**: a multi-tier rule engine names each device and works out what it is from the evidence it gives off, strongest first (see [Identifying devices](#identifying-devices)). Every identification shows the evidence it rests on.
 - **Devices**: every device with its name, type and icon (e.g. *MacBook Air 15″ (M3)*, *Apple TV 4K*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and its top three services, for the last hour, 3 hours, day, week, month or year.
 - **Device detail**: a traffic chart over time, and what the device talked to:
   - by service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (NordVPN)*…), including unnamed traffic as *Other*
@@ -63,7 +63,7 @@ Loupe keys everything on the device's MAC address and works out what it is from 
 - **The type and maker**, from DHCP fingerprints (vendor class and parameter list), the MAC vendor, and the services it talks to (`playstation.net` → PlayStation, `ring.com` → Ring device).
 - **Your corrections**: a name, type or icon you set follows the device by MAC, and your rules type whole groups at once.
 
-Each guess records where it came from, shown as a tooltip on the type.
+Each identification records the evidence it rests on, shown as a tooltip on the type.
 
 ### Why not just NetFlow / Insight?
 
