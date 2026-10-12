@@ -66,6 +66,10 @@ Each guess records where it came from, shown as a tooltip on the type.
 
 OPNsense's NetFlow on a bridged LAN misses LAN→internet packets on ingress — uploads only show up after NAT, with the router's public address — so per-device upload totals in Insight are wrong. NetFlow also exports long connections only every 30 minutes and has no site names. Loupe's pf counters are exact in both directions and per device.
 
+### Site lookups and Unbound's DNS reporting
+
+Both show which device looked up which name, but Loupe needs its own record anyway: it uses the DNS answers a device received to name that device's connections, the domains it talks to to recognise its type, and VPN providers' domains to label its tunnels. Loupe also sees names in TLS and QUIC connection setup, so it catches devices that bypass the router's DNS (DNS over HTTPS, hard-coded resolvers), it works with dnsmasq as well as Unbound, it ties lookups to the device by MAC, and it keeps them 30 days (Unbound's report keeps 7). Unbound's report is the place for per-query detail: query types, response times and blocklist results.
+
 ### Compared with ntopng and Zenarmor
 
 Those are broader tools — deep packet inspection, alerts, policies, live flows — and they're good at it. Loupe does one narrower job: per-device history by site and service, with good device identification, built into OPNsense's own Reporting menu, free, and light enough to leave running on a small box.
