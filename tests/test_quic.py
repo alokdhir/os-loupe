@@ -95,6 +95,19 @@ class QuicTests(unittest.TestCase):
         self.assertEqual(h.sni, "split.example.org")
         self.assertIsNone(r.feed("10.0.0.5", p2, now=1.2))  # retransmit after completion ignored
 
+    def test_flood_of_tiny_frames_is_bounded(self):
+        """Many 1-byte CRYPTO frames that never complete a hello: kept chunks are capped, so reassembly stays cheap,
+        and a stale handshake starts over."""
+        dcid = os.urandom(8)
+        r = quic.Reassembler()
+        for pn in range(40):
+            frames = b"".join(crypto_frame(1 + pn * 20 + i * 2, b"x") for i in range(10))   # gaps: never contiguous
+            self.assertIsNone(r.feed("10.0.0.6", initial(quic.V1, dcid, frames, pn=pn), now=1.0))
+        entry = r.pending[("10.0.0.6", dcid)]
+        self.assertLessEqual(len(entry[1]), quic.MAX_CHUNKS)
+        r.feed("10.0.0.6", initial(quic.V1, dcid, crypto_frame(5000, b"y"), pn=99), now=1.0 + quic.PENDING_TTL + 1)
+        self.assertEqual(list(r.pending[("10.0.0.6", dcid)][1]), [5000])
+
     def test_garbage(self):
         self.assertIsNone(quic.Reassembler().feed("10.0.0.5", b"\xc0\x00\x00\x00\x01" + os.urandom(1200), now=1.0))
 

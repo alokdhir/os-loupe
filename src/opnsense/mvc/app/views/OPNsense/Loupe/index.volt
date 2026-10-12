@@ -423,6 +423,9 @@ POSSIBILITY OF SUCH DAMAGE.
         $('#reconfigureAct').SimpleActionButton({
             onPreAction: function () {
                 const dfObj = new $.Deferred();
+                if (!started.general) {
+                    return dfObj.resolve();     /* General never loaded on this visit: nothing of it to save */
+                }
                 saveFormToEndpoint('/api/loupe/settings/set', 'frm_settings', function () { dfObj.resolve(); });
                 return dfObj;
             },

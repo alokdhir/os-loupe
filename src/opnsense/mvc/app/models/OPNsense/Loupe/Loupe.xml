@@ -52,7 +52,7 @@
                 </kind>
                 <suffix type="TextField">
                     <Required>Y</Required>
-                    <Mask>/^[a-zA-Z0-9.\-_:\/]+$/</Mask>
+                    <Mask>/^[a-zA-Z0-9.\-_:\/*]+$/</Mask>
                     <ValidationMessage>Enter a domain (example.com), an address or range (203.0.113.0/24) or a port (tcp/8443).</ValidationMessage>
                 </suffix>
                 <name type="TextField">
@@ -149,6 +149,12 @@
             <device type="ArrayField">
                 <mac type="MacAddressField">
                     <Required>Y</Required>
+                    <Constraints>
+                        <check001>
+                            <ValidationMessage>This device already has an override.</ValidationMessage>
+                            <type>UniqueConstraint</type>
+                        </check001>
+                    </Constraints>
                 </mac>
                 <name type="TextField"/>
                 <type type="TextField"/>

@@ -195,6 +195,10 @@ class TestVpnLabels(unittest.TestCase):
                 self.assertEqual(lab.service("10.9.1.30", "", "203.0.113.70", 993, "tcp"), "Email (IMAP)")
                 self.assertEqual(lab.service("10.9.1.31", "", "203.0.113.60", 51820, "udp"), "VPN (WireGuard)")
                 self.assertEqual(lab.service("10.9.1.30", "www.youtube.com", "203.0.113.50", 443, "tcp"), "YouTube")
+                # the user's own name for a VPN port wins over the shipped one
+                mine = query.Labels(db, services.ServiceMap([{"kind": "port", "pattern": "udp/51820",
+                                                              "name": "VPN (Home)"}]), "flows_5m", b)
+                self.assertEqual(mine.service("10.9.1.31", "", "203.0.113.60", 51820, "udp"), "VPN (Home)")
                 # looked up from its IPv6 address, tunnel over IPv4: the same device by MAC
                 self.assertEqual(lab.service("10.9.1.32", "", "203.0.113.80", 51820, "udp", "02:00:00:00:00:32"),
                                  "VPN (Mullvad)")

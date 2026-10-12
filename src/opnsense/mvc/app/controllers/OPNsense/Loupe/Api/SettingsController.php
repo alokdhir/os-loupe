@@ -40,9 +40,10 @@ class SettingsController extends ApiMutableModelControllerBase
     private const SERVICE_KINDS = ['domain' => 'Domain', 'address' => 'Address or range', 'port' => 'Port',
                                    'vpn' => 'VPN app domain'];
 
-    /* a host name: labels of letters, digits, _ and -, up to 253 characters, optional final dot */
+    /* a host name: labels of letters, digits, _ and -, up to 253 characters, optional final dot; it may start
+       with a label prefix ("cdn-*.example.com": names under example.com whose next label starts with cdn-) */
     private const LABEL = '[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?';
-    private const DOMAIN = '/^(?=.{1,253}$)(' . self::LABEL . '\.)*' . self::LABEL . '\.?$/i';
+    private const DOMAIN = '/^(?=.{1,253}$)([a-z0-9_-]{1,62}\*\.)?(' . self::LABEL . '\.)*' . self::LABEL . '\.?$/i';
 
     public function searchServiceAction()
     {

@@ -58,9 +58,10 @@ class Loupe:
         self.names = names.Names()
         self.tracker = pfstate.Tracker(fresh=poll)
         self.poll_every, self.flush_every, self.retention = poll, flush, retention
-        self.next_poll = self.next_flush = 0
-        self.next_prune = time.time() + 300
-        self.next_classify = time.time() + 30
+        self.next_poll = self.next_flush = 0        # schedule: time.monotonic() (a clock step must not stall it)
+        self.next_prune = time.monotonic() + 300
+        self.next_classify = time.monotonic() + 30
+        self.stopping = False
         self.oui = devid.load_oui()
         self.ip_mac = {}
         self.flows = {}
@@ -132,20 +133,27 @@ class Loupe:
 
     # ---- periodic work --------------------------------------------------------------
     def tick(self, now):
-        if now >= self.next_poll:
-            self.next_poll = now + self.poll_every
+        """`now` is wall-clock time for the data; the schedule runs on the monotonic clock."""
+        mono = time.monotonic()
+        if self.stopping:               # the final write happens here, never inside the signal handler
+            try:
+                self.guarded("final flush", self.flush, now)
+            finally:
+                sys.exit(0)
+        if mono >= self.next_poll:
+            self.next_poll = mono + self.poll_every
             self.guarded("pf poll", self.poll, now)
         # a database or system error is logged and retried later; it must not stop the daemon
         # (flush keeps its buffered minute until a write succeeds)
-        if now >= self.next_flush:
-            self.next_flush = now + self.flush_every
+        if mono >= self.next_flush:
+            self.next_flush = mono + self.flush_every
             self.guarded("flush", self.flush, now)
-        if now >= self.next_classify:
-            self.next_classify = now + 600
+        if mono >= self.next_classify:
+            self.next_classify = mono + 600
             self.guarded("networks", self.refresh_networks)
             self.guarded("classify", self.classify, now)
-        if now >= self.next_prune:
-            self.next_prune = now + 3600
+        if mono >= self.next_prune:
+            self.next_prune = mono + 3600
             self.guarded("prune", self.store.prune, now, *self.retention)
 
     @staticmethod
@@ -199,12 +207,14 @@ class Loupe:
                 v[0] = self.ip_mac.get(ip, "")
             if v[0]:
                 d = self.devices[v[0]]
-                d.setdefault("ip", ip)
+                if ":" not in ip:
+                    d.setdefault("ip", ip)      # IPv4 only: static mappings and fallbacks match IPv4
                 d["ts"] = max(d.get("ts", 0), now)
         for (_d, ip, *_rest), v in self.lookups.items():
             if not v[3]:
                 v[3] = self.ip_mac.get(ip, "")
         devices = {m: d for m, d in self.devices.items() if "ts" in d}
+        self.names.expire(self.live, now)      # also while the database fails: it must not grow
         try:
             self.store.write(self.flows, self.lookups, devices, now)
         except Exception:
@@ -215,7 +225,6 @@ class Loupe:
             raise
         self.flows, self.lookups = {}, {}
         self.devices = collections.defaultdict(dict)
-        self.names.expire(self.live, now)
 
 
 def main():
@@ -243,8 +252,7 @@ def main():
     cap = Capture(lp.emit)
 
     def stop(*_):
-        lp.flush(time.time())
-        sys.exit(0)
+        lp.stopping = True              # tick() does the final write and exits (within a second)
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     syslog.syslog(syslog.LOG_NOTICE, f"loupe: started on {' '.join(ifaces)}")

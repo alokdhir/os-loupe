@@ -52,6 +52,7 @@ INITIAL_TYPE = {V1: 0, V2: 1}
 MAX_PENDING = 4096
 PENDING_TTL = 10.0
 MAX_CRYPTO = 16384
+MAX_CHUNKS = 64         # CRYPTO frames kept per handshake (a real ClientHello needs a handful)
 
 
 def _expand_label(secret, label, length):
@@ -178,13 +179,15 @@ class Reassembler:
         if key in self.done:
             return None
         entry = self.pending.get(key)
+        if entry is not None and now - entry[0] > PENDING_TTL:
+            entry = None                # too old: start over (bounds what one handshake can hold)
         if entry is None:
             if len(self.pending) >= MAX_PENDING:
                 self._expire(now, force=True)
             entry = self.pending[key] = [now, {}]
         try:
             for coff, cdata in _crypto_frames(plain):
-                if coff < MAX_CRYPTO:
+                if coff < MAX_CRYPTO and (coff in entry[1] or len(entry[1]) < MAX_CHUNKS):
                     entry[1][coff] = cdata
         except (IndexError, struct.error):
             pass

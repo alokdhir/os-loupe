@@ -42,7 +42,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
-from lib.services import HOSTING, PORTS, ServiceMap  # noqa: E402
+from lib.services import HOSTING, ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
 CONF = "/usr/local/etc/loupe.json"
@@ -113,9 +113,6 @@ def devices_info(db, overrides):
     return out
 
 
-VPN_PORTS = [(proto, port) for (proto, port), s in PORTS.items() if s.startswith("VPN (")]
-
-
 class Labels:
     """Service names for one report window, with VPN tunnels told apart.
 
@@ -137,11 +134,13 @@ class Labels:
                 counts[mac or ip][p] += n
         self.provider = {k: c.most_common(1)[0][0] for k, c in counts.items()}
         self.tunnels = {}
-        cond = " OR ".join("(proto = ? AND port = ?)" for _ in VPN_PORTS)
+        # VPN ports from the service map (the user's port names replace the shipped ones)
+        vpn_ports = [pp for pp, s in svc.ports.items() if s.startswith("VPN (")]
+        cond = " OR ".join("(proto = ? AND port = ?)" for _ in vpn_ports) or "0"
         for ip, server, proto, port in db.execute(
                 f"SELECT DISTINCT ip, server, proto, port FROM {table} WHERE bucket >= ? AND name = '' AND ({cond})",
-                (start, *[x for pp in VPN_PORTS for x in pp])):
-            self.tunnels[(ip, server)] = PORTS[(proto, port)]
+                (start, *[x for pp in vpn_ports for x in pp])):
+            self.tunnels[(ip, server)] = svc.ports[(proto, port)]
         owners = collections.defaultdict(set)
         for ip, server, name in db.execute(f"SELECT DISTINCT ip, server, name FROM {table} WHERE bucket >= ? AND name != ''",
                                            (start,)):
