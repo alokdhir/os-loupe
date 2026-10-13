@@ -38,9 +38,11 @@ OUI_LEN = {"MA-L": 6, "MA-M": 7, "MA-S": 9}
 RULES_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "devices.json")
 
 # strongest evidence first; a rule's tier is its "tier", else the field of its first condition
-# (the DHCP fingerprint beats talks_to: a phone running a smart-home app talks to the same cloud as the device)
+# (the DHCP fingerprint beats talks_to: a phone running a smart-home app talks to the same cloud as the device;
+# "fallback" holds fingerprints too generic to beat specific evidence, like BusyBox's udhcp - but still better
+# than guessing from a private MAC)
 TIERS = ("mac_prefix", "mdns_model", "hostname", "role", "strong_service", "dhcp_vendor", "dhcp_params", "talks_to",
-         "mdns_service", "vendor", "private_mac")
+         "mdns_service", "vendor", "fallback", "private_mac")
 
 
 REGEX_FIELDS = ("hostname", "mdns_model", "dhcp_vendor")
@@ -63,7 +65,7 @@ def check_rule(r):
             return "no type"
         for cond in conds:
             for field, want in cond.items():
-                if field not in TIERS or field in ("role", "strong_service"):
+                if field not in TIERS or field in ("role", "strong_service", "fallback"):
                     return f"unknown field {field}"
                 for w in (want if isinstance(want, list) else [want]):
                     if field in REGEX_FIELDS:

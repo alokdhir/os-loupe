@@ -84,6 +84,15 @@ class TestDevid(unittest.TestCase):
         self.assertNotEqual(devid.classify("ac:00:00:00:00:14", hostname="kvm-host-1")[0], "NanoKVM")
 
 
+    def test_generic_fingerprint_is_last_resort(self):
+        info = {"dhcp_vendor_class": "udhcp 1.31.1", "dhcp_params": "1,3,6,12,15,28,42"}
+        self.assertEqual(devid.classify("02:00:00:00:00:21", info=info, names=["p2p.reolink.com"])[:2],
+                         ("Camera", "talks to reolink.com"))
+        self.assertEqual(devid.classify("02:00:00:00:00:22", info=info)[0], "Embedded Linux device")
+        self.assertEqual(devid.classify("02:00:00:00:00:23", hostname="NVR", info=info, names=["p2p.reolink.com"])[0], "NVR")
+        info = {"dhcp_vendor_class": "dhcpcd-10.0.6:Linux-6.6:aarch64"}       # a Linux box running a camera's app stays Linux
+        self.assertEqual(devid.classify("02:00:00:00:00:24", info=info, names=["p2p.reolink.com"])[0], "Linux device")
+
     def test_app_traffic_does_not_beat_fingerprint(self):
         info = {"dhcp_params": "1,121,3,6,15,108,114,119,162,252"}
         self.assertEqual(devid.classify("02:00:00:00:00:20", info=info, names=["a1.tuyaus.com"])[0], "iPhone/iPad/Mac")

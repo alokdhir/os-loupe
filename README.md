@@ -4,7 +4,7 @@ Which device on your network talked to which site or service, how much data move
 
 Loupe answers questions like *"what was the PlayStation doing at 2 a.m.?"*, *"who's using all the bandwidth?"*, *"which devices talk to this address?"* and *"what is this unknown thing on my Wi-Fi?"* — with site and service names and exact upload/download bytes, per device.
 
-Devices are identified automatically, not left as IP addresses. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and picks the most trustworthy clue, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 133 rules covering 69 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
+Devices are identified automatically, not left as IP addresses. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and picks the most trustworthy clue, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 134 rules covering 70 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
 
 ## Features
 
@@ -99,7 +99,7 @@ A rule matches when all of its conditions do (`when`, or several in `all`); a li
 | `vendor` | a whole word in the maker's name for the MAC prefix |
 | `private_mac` | `true` for a randomized (private) MAC |
 
-Evidence is trusted in a fixed order — Bonjour model, host name, hosting role, strong Bonjour services, DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker — and the first matching rule wins (file order within a tier). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
+Evidence is trusted in a fixed order — Bonjour model, host name, hosting role, strong Bonjour services, DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching rule wins (file order within a tier). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
 
 **For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones), and *Settings → Service names* takes your own names.
 
