@@ -119,7 +119,7 @@ What this means for the long periods:
 
 - **Calendar days.** "7 days" is today and the six days before it, not the last 168 hours.
 - **Today lags up to 10 minutes.**
-- **Shared-server naming is per day.** Nameless traffic takes its service from named traffic to the same server on the same day (see Known limits), not from anywhere in the period. A device that looks up a name once and keeps using the server for days has its later traffic shown as "Other"; on a test week that was ~0.2% of bytes. Naming each day with a week of earlier traffic as context barely changed that and doubled the build time.
+- **Shared-server naming is per day.** Nameless traffic takes its service from named traffic to the same server on the same day (see Known limits), not from anywhere in the period. A device that looks up a name once and keeps using the server for days has its later traffic shown as "Other"; on a test week that was ~0.2% of bytes.
 
 ### Cached lists
 
