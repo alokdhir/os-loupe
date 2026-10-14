@@ -22,29 +22,33 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""Traffic named by service for a report window: shared by the reports (query.py) and loupd's daily summary."""
+"""Traffic named by service, with the evidence of its local day: shared by the reports (query.py) and loupd's
+summaries (per hour for recent days, per day for all of them).
+
+A row's service can depend on other traffic: nameless traffic takes the service of named traffic to the same server,
+and a VPN tunnel is told apart by the provider's domain the device looked up. That evidence is gathered per local
+day, so the same traffic gets the same name in every report period. loupd stores each day's evidence with its
+summaries; reports use it, adding the evidence of minutes loupd hasn't summarized yet.
+"""
 import collections
 import hashlib
 import json
+import sqlite3
 import time
 
 from .services import DATA_JSON, HOSTING
 
-SUMMARY_VERSION = 1     # raise when the labelling changes, so loupd builds the daily summary again
+SUMMARY_VERSION = 2     # raise when the naming changes, so loupd builds the summaries again
+HOURLY_DAYS = 3         # days kept in the hourly summary (report periods up to 48 hours)
+SETTLE = 120            # seconds until loupd has written a minute's traffic (it writes once a minute)
 
 
-def summarize_day(db, svc, day):
-    """One local day of the daily summary, from the hourly rows. Labelled from that day alone: nameless traffic
-    takes a service from named traffic to the same server that day, not from other days (see DESIGN.md)."""
-    return summarize(db, svc, "flows_1h", day, next_day(day))
-
-
-def map_fingerprint(extra):
-    """Changes when the shipped service map, the user's entries or the labelling code change."""
+def map_fingerprint(svc):
+    """Changes when the shipped service map, the user's entries or the naming code change."""
     h = hashlib.sha256(str(SUMMARY_VERSION).encode())
     with open(DATA_JSON, "rb") as f:
         h.update(f.read())
-    h.update(json.dumps(extra, sort_keys=True).encode())
+    h.update(json.dumps(svc.extra, sort_keys=True).encode())
     return h.hexdigest()[:16]
 
 
@@ -66,25 +70,38 @@ def days(first, last):
         d = next_day(d)
 
 
+def pieces(start, end):
+    """[start, end) cut at local midnights: (day, piece start, piece end)."""
+    d = local_day(start)
+    while d < end:
+        n = next_day(d)
+        yield d, max(start, d), min(end, n)
+        d = n
+
+
 class Labels:
-    """Service names for one report window, with VPN tunnels told apart.
+    """Service names from a set of evidence, with VPN tunnels told apart.
 
     A device that looked up a VPN provider's domain gets "VPN (NordVPN)" instead of "VPN (WireGuard)", and other
     nameless traffic to a server it uses as a VPN (e.g. a TCP fallback) is counted as that VPN too.
 
     Traffic with no service, or one that only names the hosting company (Fastly CDN), takes the service of the
-    other traffic between the same device and server in the window, if that is exactly one service: a stream from a
-    video vendor's domain on the servers the NFL app's own names used is NFL. `inferred()` tells such rows apart.
+    other traffic between the same device and server, if that is exactly one service: a stream from a video
+    vendor's domain on the servers the NFL app's own names used is NFL. `inferred()` tells such rows apart.
+
+    Built from a window's traffic (the constructor), or from a day's stored evidence (`from_evidence`).
     """
 
-    def __init__(self, db, svc, table, start, flows=None, end=None):
-        """`flows`: the window's rows from flow_totals(), when the caller has them (saves two scans of the table).
-        `end`: the window ends there instead of now (a past day being summarized)."""
+    def __init__(self, db, svc, table, start, flows=None, end=None, lookups_from=None):
+        """The evidence in [start, end) of `table`. `flows`: that window's rows from flow_totals() (or any rows
+        starting ip, mac, name, server, port, proto), when the caller has them (saves two scans of the table).
+        VPN providers come from lookups since a day before the window, or since `lookups_from`."""
         self.svc = svc
         counts = collections.defaultdict(collections.Counter)      # by MAC; lookups without one by address
         end = end or 1 << 62
+        since = start - 86400 if lookups_from is None else lookups_from
         for mac, ip, name, n in db.execute("SELECT mac, ip, name, sum(count) FROM lookups WHERE day >= ? AND last_seen >= ? "
-                                           "AND first_seen < ? GROUP BY mac, ip, name", (start - 86400, start - 86400, end)):
+                                           "AND first_seen < ? GROUP BY mac, ip, name", (since - 86400, since, end)):
             p = svc.vpn_provider(name)
             if p:
                 counts[mac or ip][p] += n
@@ -104,12 +121,49 @@ class Labels:
             named = {(f[0], f[3], f[2]) for f in flows if f[2]}
         for ip, server, proto, port in sorted(tunnels):      # same answer every run if a server has two
             self.tunnels[(ip, server)] = svc.ports[(proto, port)]
-        owners = collections.defaultdict(set)
+        self.owners = collections.defaultdict(set)
         for ip, server, name in named:
             s = svc.by_my_address(server) or svc.by_name(name)
             if s and s not in HOSTING:
-                owners[(ip, server)].add(s)
-        self.shared = {k: v.pop() for k, v in owners.items() if len(v) == 1}
+                self.owners[(ip, server)].add(s)
+        self._share()
+
+    @classmethod
+    def from_evidence(cls, svc, rows):
+        """rows: (kind, ip, server, value) as evidence() gives them."""
+        self = cls.__new__(cls)
+        self.svc, self.provider, self.tunnels, self.owners = svc, {}, {}, collections.defaultdict(set)
+        for kind, ip, server, value in rows:
+            if kind == "owner":
+                self.owners[(ip, server)].add(value)
+            elif kind == "tunnel":
+                self.tunnels[(ip, server)] = value
+            elif kind == "provider":
+                self.provider[ip] = value
+        self._share()
+        return self
+
+    def evidence(self):
+        """What a day's names were decided from: (kind, ip, server, value). 'provider' rows hold the MAC (or the
+        address, for lookups without one) in `ip`."""
+        out = [("owner", ip, server, s) for (ip, server), v in self.owners.items() for s in v]
+        out += [("tunnel", ip, server, t) for (ip, server), t in self.tunnels.items()]
+        out += [("provider", k, "", p) for k, p in self.provider.items()]
+        return out
+
+    def merged(self, newer):
+        """This evidence plus `newer`'s (traffic since it was stored): its own picks stand, new servers are added."""
+        out = Labels.from_evidence(self.svc, ())
+        out.provider = {**newer.provider, **self.provider}
+        out.tunnels = {**newer.tunnels, **self.tunnels}
+        for src in (self.owners, newer.owners):
+            for k, v in src.items():
+                out.owners[k] |= v
+        out._share()
+        return out
+
+    def _share(self):
+        self.shared = {k: next(iter(v)) for k, v in self.owners.items() if len(v) == 1}
 
     def _own(self, ip, name, server, port, proto, mac):
         s = self.svc.by_my_address(server) or self.svc.by_name(name)
@@ -134,28 +188,107 @@ class Labels:
         return (not s or s in HOSTING) and (ip, server) in self.shared
 
 
-def flow_totals(db, table, start, end=None):
+class Namer:
+    """Labels for traffic by its local day: the evidence loupd stored for that day (when built with this service
+    map), else gathered from the day's hourly rows (slower), plus the evidence of the window being named."""
+
+    def __init__(self, db, svc):
+        self.db, self.svc, self.fingerprint = db, svc, map_fingerprint(svc)
+        self._built, self._days = None, {}
+
+    def built(self, day):
+        """When loupd last summarized `day` with this service map (0: not, or with another map)."""
+        if self._built is None:
+            try:
+                self._built = {d: b for d, b in self.db.execute("SELECT day, built FROM summary_days WHERE map = ?",
+                                                                (self.fingerprint,))}
+            except sqlite3.OperationalError:        # loupd hasn't created the summary yet (just updated)
+                self._built = {}
+        return self._built.get(day, 0)
+
+    def day(self, day, keys=None):
+        """The day's evidence; `keys` (a tuple of addresses and MACs) limits it to those devices."""
+        k = (day, keys)
+        if k not in self._days:
+            if self.built(day):
+                sql, args = "SELECT kind, ip, server, value FROM day_names WHERE day = ?", (day,)
+                if keys is not None:
+                    sql += " AND ip IN (%s)" % ",".join("?" * len(keys))
+                    args += keys
+                self._days[k] = Labels.from_evidence(self.svc, self.db.execute(sql, args))
+            else:
+                self._days[k] = Labels(self.db, self.svc, "flows_1h", day, None, next_day(day))
+        return self._days[k]
+
+    def labels(self, day, table, start, end, flows, keys=None):
+        """For rows of `table` in [start, end) (within `day`); `flows`: those rows, as for Labels. Stored evidence
+        covers what loupd had written when it built the day; traffic since then adds its own."""
+        built = self.built(day)
+        stored = self.day(day, keys)
+        if built and end <= built - SETTLE:
+            return stored
+        return stored.merged(Labels(self.db, self.svc, table, start, flows, end, built - SETTLE if built else None))
+
+
+def flow_totals(db, table, start, end=None, where="", args=()):
     """The window's traffic summed per device, server, port and name:
     (ip, mac, name, server, port, proto, up, down, conns, last)."""
     return db.execute(f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), "
-                      f"max(max(bucket), max(last)) FROM {table} WHERE bucket >= ? AND bucket < ? "
-                      f"GROUP BY ip, mac, name, server, port, proto", (start, end or 1 << 62)).fetchall()
+                      f"max(max(bucket), max(last)) FROM {table} WHERE bucket >= ? AND bucket < ? {where} "
+                      f"GROUP BY ip, mac, name, server, port, proto", (start, end or 1 << 62, *args)).fetchall()
 
 
-def summarize(db, svc, table, start, end=None):
-    """The window's traffic per device and service ('' = none): [(ip, mac, service, up, down, conns, last)].
-    What the device and service lists are made from, and what loupd keeps per day for long periods."""
-    flows = flow_totals(db, table, start, end)
-    lab = Labels(db, svc, table, start, flows, end)
-    out = {}
-    for ip, mac, name, server, port, proto, up, down, conns, last in flows:
-        k = (ip, mac, lab.service(ip, name, server, port, proto, mac) or "")
-        r = out.get(k)
-        if r is None:
-            out[k] = [up, down, conns, last]
+def add(out, key, up, down, conns, last):
+    r = out.get(key)
+    if r is None:
+        out[key] = [up, down, conns, last]
+    else:
+        r[0] += up
+        r[1] += down
+        r[2] += conns
+        r[3] = max(r[3], last)
+
+
+def build_day(db, svc, day, end=None):
+    """One local day from the hourly rows, named with that day's evidence:
+    ({(ip, mac, service): [up, down, conns, last]}, {(hour, ip, mac, service): [...]}, Labels)."""
+    end = end or next_day(day)
+    rows = db.execute("SELECT bucket, ip, mac, name, server, port, proto, up, down, conns, max(bucket, last) FROM flows_1h "
+                      "WHERE bucket >= ? AND bucket < ?", (day, end)).fetchall()
+    lab = Labels(db, svc, "flows_1h", day, [r[1:7] for r in rows], end)
+    daily, hourly = {}, {}
+    for bucket, ip, mac, name, server, port, proto, up, down, conns, last in rows:
+        s = lab.service(ip, name, server, port, proto, mac) or ""
+        add(daily, (ip, mac, s), up, down, conns, last)
+        add(hourly, (bucket, ip, mac, s), up, down, conns, last)
+    return daily, hourly, lab
+
+
+def recent_rows(namer, table, start, end):
+    """Traffic per device and service in [start, end) (up to two days): [(ip, mac, service, up, down, conns, last)].
+    Hours loupd has summarized come from the hourly summary; the rest is named here with the day's evidence."""
+    db, out = namer.db, {}
+    for day, a, b in pieces(start, end):
+        built = namer.built(day)
+        first = -(-a // 3600) * 3600                    # the first whole hour in the piece
+        done = first
+        while done + 3600 <= b and done + 3600 + SETTLE <= built:      # summarized after the hour ended
+            done += 3600
+        if done > first:
+            for ip, mac, s, up, down, conns, last in db.execute(
+                    "SELECT ip, mac, service, sum(up), sum(down), sum(conns), max(last) FROM services_1h "
+                    "WHERE hour >= ? AND hour < ? GROUP BY ip, mac, service", (first, done)):
+                add(out, (ip, mac, s), up, down, conns, last)
+            ranges = [(a, first), (done, b)]
         else:
-            r[0] += up
-            r[1] += down
-            r[2] += conns
-            r[3] = max(r[3], last)
+            ranges = [(a, b)]
+        for x, y in ranges:
+            if x >= y:
+                continue
+            flows = flow_totals(db, table, x, y)
+            if not flows:
+                continue
+            lab = namer.labels(day, table, x, y, flows)
+            for ip, mac, name, server, port, proto, up, down, conns, last in flows:
+                add(out, (ip, mac, lab.service(ip, name, server, port, proto, mac) or ""), up, down, conns, last)
     return [(*k, *v) for k, v in out.items()]

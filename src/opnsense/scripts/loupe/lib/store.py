@@ -22,10 +22,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""SQLite storage: 1-minute, 5-minute and hourly traffic per device and server, a daily summary per device and
-service, devices, and names seen.
+"""SQLite storage: 1-minute, 5-minute and hourly traffic per device and server, hourly and daily summaries per
+device and service with each day's naming evidence, devices, and names seen.
 
-The traffic resolutions are written on every flush; the daily summary is built from the hourly rows (loupd);
+The traffic resolutions are written on every flush; the summaries are built from the hourly rows (loupd);
 old rows are pruned by age.
 """
 import json
@@ -121,8 +121,27 @@ CREATE TABLE IF NOT EXISTS devices (
     last_seen INTEGER NOT NULL
 );
 
--- traffic per device and service per local day, for long report periods: loupd builds it from flows_1h with the
--- reports' own labelling (lib/report.py), and builds a day again when the service map changes
+-- traffic per device and service per hour (recent days) and per local day, named with the day's evidence, and that
+-- evidence: loupd builds them from flows_1h (lib/report.py), and builds a day again when the service map changes
+CREATE TABLE IF NOT EXISTS services_1h (
+    hour INTEGER NOT NULL,
+    ip TEXT NOT NULL,
+    mac TEXT NOT NULL DEFAULT '',
+    service TEXT NOT NULL,          -- '' = none
+    up INTEGER NOT NULL DEFAULT 0,
+    down INTEGER NOT NULL DEFAULT 0,
+    conns INTEGER NOT NULL DEFAULT 0,
+    last INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (hour, ip, mac, service)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS day_names (
+    day INTEGER NOT NULL,
+    kind TEXT NOT NULL,             -- owner: a service named on this server | tunnel: its VPN | provider: the VPN app
+    ip TEXT NOT NULL,               -- the device's address (provider: its MAC, or address without one)
+    server TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (day, ip, kind, server, value)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS services_1d (
     day INTEGER NOT NULL,           -- local midnight
     ip TEXT NOT NULL,
@@ -144,6 +163,7 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 KEEP_1M = 4 * 3600       # seconds of 1-minute detail (the short report periods use up to 3 hours)
+KEEP_1H_SUMMARY = 3 * 86400     # seconds of the hourly summary (report periods up to 48 hours)
 
 UPSERT = """
 INSERT INTO {t} (bucket, ip, mac, server, port, proto, name, source, inbound, up, down, pkts, conns, last)
@@ -265,14 +285,22 @@ class Store:
         """{day: (service map fingerprint, built at)} for the summarized days from `since`."""
         return {d: (m, b) for d, m, b in self.db.execute("SELECT day, map, built FROM summary_days WHERE day >= ?", (since,))}
 
-    def replace_day(self, day, rows, fingerprint, now):
-        """rows: [(ip, mac, service, up, down, conns, last)], the whole day."""
+    def replace_day(self, day, end, daily, hourly, evidence, fingerprint, now):
+        """A whole day [day, end): daily {(ip, mac, service): [up, down, conns, last]}, hourly {(hour, ip, mac,
+        service): [...]} (None: not kept for this day), evidence [(kind, ip, server, value)]."""
         db = self.db
         db.execute("BEGIN")
         try:
             db.execute("DELETE FROM services_1d WHERE day = ?", (day,))
             db.executemany("INSERT INTO services_1d (day, ip, mac, service, up, down, conns, last) VALUES (?,?,?,?,?,?,?,?)",
-                           [(day, *r) for r in rows])
+                           [(day, *k, *v) for k, v in daily.items()])
+            db.execute("DELETE FROM services_1h WHERE hour >= ? AND hour < ?", (day, end))
+            if hourly is not None:
+                db.executemany("INSERT INTO services_1h (hour, ip, mac, service, up, down, conns, last) "
+                               "VALUES (?,?,?,?,?,?,?,?)", [(*k, *v) for k, v in hourly.items()])
+            db.execute("DELETE FROM day_names WHERE day = ?", (day,))
+            db.executemany("INSERT INTO day_names (day, kind, ip, server, value) VALUES (?,?,?,?,?)",
+                           [(day, *e) for e in evidence])
             db.execute("INSERT OR REPLACE INTO summary_days (day, map, built) VALUES (?,?,?)", (day, fingerprint, int(now)))
             db.execute("COMMIT")
         except BaseException:
@@ -286,5 +314,7 @@ class Store:
         db.execute("DELETE FROM flows_1h WHERE bucket < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM services_1d WHERE day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM summary_days WHERE day < ?", (now - days_1h * 86400,))
+        db.execute("DELETE FROM day_names WHERE day < ?", (now - days_1h * 86400,))
+        db.execute("DELETE FROM services_1h WHERE hour < ?", (now - KEEP_1H_SUMMARY,))
         db.execute("DELETE FROM lookups WHERE day < ?", (now - days_lookups * 86400,))
         db.execute("PRAGMA optimize")

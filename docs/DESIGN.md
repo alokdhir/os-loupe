@@ -19,7 +19,7 @@ flowchart TB
     subgraph daemon["loupd"]
         names["Names and device clues"]
         bytes["Byte changes per connection<br/>every 10 s"]
-        flush["Write every minute<br/>classify devices every minute<br/>daily summary when due<br/>prune hourly"]
+        flush["Write every minute<br/>classify devices every minute<br/>summaries when due<br/>prune hourly"]
     end
     db[("SQLite<br/>/var/db/loupe")]
     data["Shipped rules (data/*.json)<br/>settings (loupe.json)"]
@@ -85,9 +85,9 @@ SQLite at `/var/db/loupe/loupe.db`, WAL mode: `loupd` is the only writer; `query
 - `flows_1m` / `flows_5m` / `flows_1h`: per bucket, device, server, port, protocol and name — bytes up/down, packets, connections, and when loupd last added to the row. All three are written in the same transaction each minute (no separate roll-up). Kept 4 hours / 30 days / 365 days (the last two are settings).
 - `lookups`: names each device looked up or connected to, per day and device (address and MAC), including ones that moved no data. 30 days by default.
 - `devices`: detected facts only.
-- `services_1d` / `summary_days`: per local day, device and service — bytes, connections, last seen — and which service map each day was built with. Built by loupd from `flows_1h` for the long report periods (see Performance). Pruned with `flows_1h`.
+- `services_1h` / `services_1d`: per hour (the last 3 days) and per local day, device and service — bytes, connections, last seen. `day_names`: the evidence each day's traffic was named with. `summary_days`: when each day was built, and with which service map. loupd builds them from `flows_1h` (see Performance); the daily rows and evidence are pruned with `flows_1h`.
 
-Names, user overrides and service labels are applied **when a report is built**: editing a device's name or type, or resetting it, shows everywhere immediately. The one exception is the daily summary, which stores the service each day's traffic was labelled with; when the service map changes (your entries, or the shipped file in an update) loupd builds the days again, newest first, so an edit reaches the 7-day list within minutes and a year of history within a few hours.
+Device names, types and icons are applied **when a report is built**, so editing or resetting a device shows everywhere immediately. Service names are stored in the summaries; when the service map changes (your entries, or the shipped file in an update) loupd builds the days again, newest first, and the reports name traffic directly until a day is rebuilt — see Performance.
 
 ## GUI
 
@@ -95,31 +95,31 @@ Standard OPNsense MVC: one page with tabs (Devices, Services, Settings), UIBootg
 
 ## Performance
 
-The device and service lists show a row per device or service, but they're made from traffic rows: one per device, server, port and name in each time slot. A phone or laptop talks to thousands of servers a week, so on a home network of about a hundred devices a day adds ~55,000 hourly rows, and a week sums to ~78,000 device/server/port/name combinations. Each needs a service name before it can be added up per device or service, and that naming is most of what a report costs. How a report gets its rows depends on the period.
+The device and service lists show a row per device or service, but they're made from traffic rows: one per device, server, port and name in each time slot. A phone or laptop talks to thousands of servers a week, so on a home network of about a hundred devices a day adds ~55,000 hourly rows, and a week sums to ~78,000 device/server/port/name combinations. Each needs a service name before it can be added up, and naming is most of what a report costs. Loupe names traffic once, in loupd, and keeps the result.
+
+### Naming by day
+
+Some traffic is named from other traffic: nameless traffic takes the service of named traffic between the same device and server, and a VPN tunnel takes the provider whose domain the device looked up. The evidence for that is gathered per local day — every report, whatever its period, names traffic with the evidence of the day it happened. So the same traffic has the same name in the 1-hour, 24-hour and 30-day views, and an hour of a thermostat's nameless traffic is named from the lookup it made that morning.
+
+loupd builds each day from `flows_1h` with the reports' naming code (`build_day` in `lib/report.py`) and stores:
+
+- `services_1h`: per hour, device and service (the last 3 days, for periods up to 48 hours);
+- `services_1d`: per day, device and service;
+- `day_names`: the day's evidence — which services were named on each device/server pair, which pairs carry VPN tunnels, which VPN apps each device used.
+
+Today is built every 10 minutes (~0.6 s), each day once more after it ends, and every day again when the service map changes: each day records a fingerprint of the map it was built with (`summary_days`), and days with another fingerprint are built again, newest first, with at most ~1 s of work a minute. Until a day is rebuilt the short periods, the device page and searches gather that day's evidence themselves (slower, same names), and the long periods show the day as it was built.
+
+### Where each report gets its rows
 
 | Report | Made from | Time (Intel N150, ~100 devices) |
 |---|---|---|
-| Lists, up to 2 days (1 h, 3 h, 24 h) | traffic rows, named when the report runs | ~0.3 s (3 h), ~0.7 s (24 h) |
-| Lists, longer (7 days, 30 days, a year) | the daily summary, already named | ~0.02 s, whatever the period |
+| Lists, up to 2 days (1 h, 3 h, 24 h, 48 h) | stored hours, plus the minutes since loupd's last build named with the stored evidence | ~0.12–0.17 s |
+| Lists, longer (7 days, 30 days, a year) | stored days | ~0.01 s, whatever the period |
 | Sorting, paging, searching a list | configd's cached copy | ~0.04 s |
-| Device page, service search | traffic rows for that device or search | grows with the period |
+| Device page | that device's traffic rows, named with its stored evidence | ~0.07 s (1 h), ~0.6 s (7 days) |
+| Services search, lookup | all traffic rows in the period, a day at a time | ~0.8 s (24 h), ~2.3 s (7 days) |
 
-So the 7-day list is faster than the 24-hour one: it adds up a few hundred stored rows a day, while the 24-hour list names tens of thousands of rows as it runs. The short periods are named over the whole window, current to the minute, so traffic to a shared server takes its name from anywhere in the period (see Daily summary for what a stored day gives up).
-
-### Daily summary
-
-`services_1d` holds, per local day, device and service: bytes up and down, connections and when the device was last seen. loupd builds a day from the hourly rows with the same naming code the reports use (`summarize_day` in `lib/report.py`):
-
-- today every 10 minutes (~0.5 s), and each day once more after it ends, so it holds the whole day;
-- every day again when the service map changes (your entries, or the shipped `services.json` in an update): each day records a fingerprint of the map it was built with (`summary_days`), and days with another fingerprint are built again, newest first, with at most ~1 s of work a minute. An edit reaches the 7-day list within minutes and a year within a few hours.
-
-A report covers whole local days, today included. A day not built yet (just installed or updated) is made from the hourly rows when a report needs it: slower, same numbers.
-
-What this means for the long periods:
-
-- **Calendar days.** "7 days" is today and the six days before it, not the last 168 hours.
-- **Today lags up to 10 minutes.**
-- **Shared-server naming is per day.** Nameless traffic takes its service from named traffic to the same server on the same day (see Known limits), not from anywhere in the period. A device that looks up a name once and keeps using the server for days has its later traffic shown as "Other"; on a test week that was ~0.2% of bytes.
+The short lists are a rolling window, current to the minute. The long ones are whole local days: "7 days" is today and the six days before it, and today is up to 10 minutes behind.
 
 ### Cached lists
 
@@ -128,11 +128,11 @@ The grids sort, page and search on the server, so each click and keystroke asks 
 ### Naming traffic
 
 - **Address ranges.** Nameless traffic is named by who owns the server's address (Apple, Google…). The ranges are held per prefix length (`AddressTable` in `lib/services.py`): one dictionary lookup per length rather than a test against each range, and the answer is kept per address, since a report asks about the same servers many times. The result is the same as taking the first matching range in the list.
-- **One read of the window.** Naming needs the whole window first (which servers carry VPN tunnels, which are shared by exactly one service), then the rows are summed. Both use the same rows, read once (`flow_totals`).
+- **Evidence for recent minutes.** Traffic loupd hasn't built yet is named with the day's stored evidence plus its own (`Namer` in `lib/report.py`), so a report reads those rows once and only the lookups made since the last build; traffic loupd has built uses the stored evidence alone.
 
 ### Storage growth
 
-`flows_1h` grows ~13 MB a day with its indexes, ~4.6 GB at the default 365-day retention. The long lists don't read it once the summary is built, so a shorter retention mainly limits how far back the device page and a summary rebuild can go.
+`flows_1h` grows ~13 MB a day with its indexes, ~4.6 GB at the default 365-day retention; `day_names` ~0.6 MB a day (~10,000 device/server pairs). The lists don't read `flows_1h` once the summaries are built, so a shorter retention mainly limits how far back the device page, searches and a rebuild can go.
 
 ## Alternatives considered
 
@@ -152,7 +152,8 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 ## Known limits
 
 - **Hidden names:** Encrypted Client Hello, DNS-over-HTTPS that bypasses the router, VPNs and relays (iCloud Private Relay) hide the real site. Loupe labels VPNs (and the provider when the device looked up its domain) and Private Relay as what they are.
-- **Shared servers:** traffic with no name, or named only for its hosting company (Fastly, Akamai, CloudFront…), takes the service of the device's other traffic to the same server in the report window, when that is exactly one service; reports mark it "(same server)". In periods longer than two days that's decided per day (see Performance). A video vendor's domain on its own servers (e.g. `lura.live` on Google Cloud) stays "Other".
+- **Shared servers:** traffic with no name, or named only for its hosting company (Fastly, Akamai, CloudFront…), takes the service of the device's other traffic to the same server that day, when that is exactly one service; reports mark it "(same server)". A device that looks up a name once and keeps using the server for days has its traffic on the later days shown as "Other" (~0.2% of bytes on a test week). A video vendor's domain on its own servers (e.g. `lura.live` on Google Cloud) stays "Other".
+- **An address taken over within a time slot:** traffic rows are keyed by address. If a device takes an address another device used earlier in the same hour (DHCP changes, reservations moved), that hour's traffic on the address is credited to one of them in the hourly rows and everything built from them.
 - **Containers and VMs behind one MAC** look like one device; a distro rule can be swayed by a container's update traffic.
 - **Private MACs** can rotate, which splits a device's history until the user names it or turns the private address off for the network.
 - **Multicast and broadcast** traffic is not counted.

@@ -33,7 +33,7 @@ import ipaddress
 import random
 
 import helpers  # noqa: F401
-from lib import services, store
+from lib import report, services, store
 
 
 class TestServices(unittest.TestCase):
@@ -141,7 +141,7 @@ class TestSharedServer(unittest.TestCase):
             s.close()
             db = sqlite3.connect(path)
             try:
-                lab = query.Labels(db, services.ServiceMap(), "flows_5m", b)
+                lab = report.Labels(db, services.ServiceMap(), "flows_5m", b)
                 for name, proto in (("video.example.net", "tcp"), ("", "udp"), ("x.fastly.net", "tcp")):
                     self.assertEqual(lab.service("10.9.1.40", name, "203.0.113.10", 443, proto), "NFL")
                     self.assertTrue(lab.inferred("10.9.1.40", name, "203.0.113.10", 443, proto))
@@ -258,14 +258,14 @@ class TestVpnLabels(unittest.TestCase):
             s.close()
             db = sqlite3.connect(path)
             try:
-                lab = query.Labels(db, services.ServiceMap(), "flows_5m", b)
+                lab = report.Labels(db, services.ServiceMap(), "flows_5m", b)
                 self.assertEqual(lab.service("10.9.1.30", "", "203.0.113.50", 51820, "udp"), "VPN (NordVPN)")
                 self.assertEqual(lab.service("10.9.1.30", "", "203.0.113.50", 993, "tcp"), "VPN (NordVPN)")
                 self.assertEqual(lab.service("10.9.1.30", "", "203.0.113.70", 993, "tcp"), "Email (IMAP)")
                 self.assertEqual(lab.service("10.9.1.31", "", "203.0.113.60", 51820, "udp"), "VPN (WireGuard)")
                 self.assertEqual(lab.service("10.9.1.30", "www.youtube.com", "203.0.113.50", 443, "tcp"), "YouTube")
                 # the user's own name for a VPN port wins over the shipped one
-                mine = query.Labels(db, services.ServiceMap([{"kind": "port", "pattern": "udp/51820",
+                mine = report.Labels(db, services.ServiceMap([{"kind": "port", "pattern": "udp/51820",
                                                               "name": "VPN (Home)"}]), "flows_5m", b)
                 self.assertEqual(mine.service("10.9.1.31", "", "203.0.113.60", 51820, "udp"), "VPN (Home)")
                 # looked up from its IPv6 address, tunnel over IPv4: the same device by MAC
@@ -313,7 +313,8 @@ class TestDailySummary(unittest.TestCase):
                 flows[(t, "10.9.2.62", "192.0.2.20", 443, "tcp", "")] = [b, "", 0, 5, 9 + back, 2, 2]
         self.store.write(flows, {}, {a: {"ip": "10.9.2.61", "ts": now}, b: {"ip": "10.9.2.62", "ts": now}}, now)
         self.now = now
-        self.daemon = type("D", (), {"store": self.store, "svc": services.ServiceMap(), "map_fingerprint": "one"})()
+        svc = services.ServiceMap()
+        self.daemon = type("D", (), {"store": self.store, "svc": svc, "map_fingerprint": report.map_fingerprint(svc)})()
         self.old = query.DB, query.CONF, query.load
         self.opened = []
 
@@ -333,14 +334,15 @@ class TestDailySummary(unittest.TestCase):
         self.loupd.Loupe.summarize(self.daemon, self.now, budget)
 
     def lists(self):
-        return self.query.cmd_devices(72)["rows"], self.query.cmd_sites(72)["rows"]
+        return [(self.query.cmd_devices(h)["rows"], self.query.cmd_sites(h)["rows"]) for h in (3, 24, 48, 72)]
 
     def test_same_lists_from_the_summary(self):
-        unsummarized = self.lists()           # no day summarized yet: built from the hourly rows
+        unsummarized = self.lists()           # nothing summarized yet: named from the traffic rows
         self.summarize()
         state = self.store.summary_state(0)
         self.assertEqual(len(state), 3)
         self.assertEqual(self.lists(), unsummarized)
+        unsummarized = unsummarized[-1]
         devices = {r["mac"]: r for r in unsummarized[0]}
         self.assertEqual(devices["02:00:00:00:00:61"]["down"], 3 * (1000 + 1001 + 1002) + 9 * 70)
         self.assertEqual(devices["02:00:00:00:00:61"]["top"][0], "Netflix")
@@ -355,3 +357,48 @@ class TestDailySummary(unittest.TestCase):
         self.daemon.map_fingerprint = "two"
         self.summarize(budget=0)
         self.assertEqual({d: fp for d, (fp, _) in self.store.summary_state(0).items() if fp == "two"}, {self.today: "two"})
+
+
+class TestNamedByDay(unittest.TestCase):
+    """Nameless traffic takes its service from named traffic to the same server that day, whatever the period."""
+
+    def test_one_hour_uses_the_day(self):
+        import query
+        now = int(time.time())
+        today = report.local_day(now)
+        if now - today < 3 * 3600:
+            self.skipTest("needs a few hours of today")
+        mac = "02:00:00:00:00:71"
+        early = today + 60
+        late = now - now % 60 - 60
+        flows = {(early, "10.9.3.71", "192.0.2.30", 443, "tcp", "www.netflix.com"): [mac, "sni", 0, 10, 5000, 3, 1],
+                 (late, "10.9.3.71", "192.0.2.30", 443, "tcp", ""): [mac, "", 0, 10, 7000, 3, 1]}
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            s.write(flows, {}, {mac: {"ip": "10.9.3.71", "ts": now}}, now)
+            old = query.DB, query.CONF, query.load
+            opened = []
+
+            def load():
+                opened.append(old[2]())
+                return opened[-1]
+            query.DB, query.CONF, query.load = path, os.path.join(d, "none.json"), load
+            try:
+                for summarized in (False, True):
+                    if summarized:
+                        daemon = type("D", (), {"store": s, "svc": services.ServiceMap()})()
+                        daemon.map_fingerprint = report.map_fingerprint(daemon.svc)
+                        import loupd
+                        loupd.Loupe.summarize(daemon, now, 10.0)
+                    for hours in (1, 24, 168):
+                        row = next(r for r in query.cmd_devices(hours)["rows"] if r["mac"] == mac)
+                        self.assertEqual(row["top"], ["Netflix"], (summarized, hours))
+                    page = query.cmd_device(mac, 1)
+                    self.assertEqual([(x["service"], x["down"]) for x in page["services"]], [("Netflix", 7000)])
+                    self.assertTrue(page["sites"][0]["inferred"])
+            finally:
+                query.DB, query.CONF, query.load = old
+                for db, *_ in opened:
+                    db.close()
+                s.close()

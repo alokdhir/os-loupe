@@ -43,7 +43,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
-from lib.report import Labels, days, flow_totals, local_day, summarize, summarize_day  # noqa: E402
+from lib.report import Namer, add, build_day, days, local_day, pieces, recent_rows  # noqa: E402
 from lib.services import ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
@@ -126,12 +126,13 @@ def label(dev, ip):
 
 
 def service_rows(db, svc, hours):
-    """The period's traffic per device and service: [(ip, mac, service, up, down, conns, last)]. Up to two days from
-    the detail tables; longer periods are whole days (today and the days before it) from loupd's daily summary."""
+    """The period's traffic per device and service: [(ip, mac, service, up, down, conns, last)]. Up to two days:
+    the last `hours`, from loupd's hourly summary and the detail tables; longer periods are whole days (today and
+    the days before it) from loupd's daily summary."""
     table, start, _ = window(hours)
-    if table != "flows_1h":
-        return summarize(db, svc, table, start)
     now = time.time()
+    if table != "flows_1h":
+        return recent_rows(Namer(db, svc), table, start, int(now) + 1)
     first = local_day(now - (max(1, round(hours / 24)) - 1) * 86400)
     oldest = db.execute("SELECT min(bucket) FROM flows_1h").fetchone()[0]
     try:
@@ -145,12 +146,11 @@ def service_rows(db, svc, hours):
     if not missing:
         return rows
     out = {}
-    for ip, mac, service, up, down, conns, last in rows + [r for d in missing for r in summarize_day(db, svc, d)]:
-        r = out.setdefault((ip, mac, service), [0, 0, 0, 0])
-        r[0] += up
-        r[1] += down
-        r[2] += conns
-        r[3] = max(r[3], last)
+    for ip, mac, service, up, down, conns, last in rows:
+        add(out, (ip, mac, service), up, down, conns, last)
+    for d in missing:
+        for k, v in build_day(db, svc, d)[0].items():
+            add(out, k, *v)
     return [(*k, *v) for k, v in out.items()]
 
 
@@ -182,6 +182,21 @@ def cmd_devices(hours):
     return {"hours": hours, "rows": sorted(rows.values(), key=lambda r: -(r["down"] + r["up"]))}
 
 
+def named_flows(db, svc, hours, first=False):
+    """The period's traffic per device, server, port and name, a day at a time: (Labels for that day, row) with
+    rows as flow_totals() gives them (plus the first bucket before `last` when `first`)."""
+    table, start, _ = window(hours)
+    namer = Namer(db, svc)
+    cols = "sum(up), sum(down), sum(conns), " + ("min(bucket), " if first else "") + "max(max(bucket), max(last))"
+    for day, a, b in pieces(start, int(time.time()) + 1):
+        flows = db.execute(f"SELECT ip, mac, name, server, port, proto, {cols} FROM {table} WHERE bucket >= ? AND bucket < ? "
+                           f"GROUP BY ip, mac, name, server, port, proto", (a, b)).fetchall()
+        if flows:
+            lab = namer.labels(day, table, a, b, flows)
+            for f in flows:
+                yield lab, f
+
+
 def device_filter(arg):
     """A device is chosen by MAC (stable) or IP."""
     return ("mac", arg.lower()) if arg.count(":") == 5 and len(arg) == 17 else ("ip", str(ipaddress.ip_address(arg)))
@@ -192,7 +207,7 @@ def cmd_device(arg, hours):
     col, val = device_filter(arg)
     table, start, step = window(hours)
     info = devices_info(db, ov)
-    lab = Labels(db, svc, table, start)
+    namer = Namer(db, svc)
     dev = None
     if col == "mac":
         dev = info.get(val)
@@ -203,30 +218,35 @@ def cmd_device(arg, hours):
                                              "servers": set()})
     ports = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0})
     timeline = collections.defaultdict(lambda: [0, 0])
-    for bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns in db.execute(
-            f"SELECT bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns FROM {table} "
-            f"WHERE {col} = ? AND bucket >= ?", (val, start)):
-        s = lab.service(ip, name, server, port, proto, mac) or "Other"
-        sv = services[s]
-        sv["down"] += down
-        sv["up"] += up
-        sv["conns"] += conns
-        sv["names"][name or server] += up + down
-        site = sites[name or server]
-        site["down"] += down
-        site["up"] += up
-        site["conns"] += conns
-        site["last"] = max(site["last"], bucket, last)
-        site["service"] = s
-        site["inferred"] = lab.inferred(ip, name, server, port, proto, mac)
-        site["servers"].add(server)
-        p = ports[f"{proto}/{port}" + (" in" if inbound else "")]
-        p["down"] += down
-        p["up"] += up
-        p["conns"] += conns
-        tl = timeline[bucket - bucket % step]
-        tl[0] += down
-        tl[1] += up
+    for day, a, b in pieces(start, int(time.time()) + 1):       # each day's traffic named with that day's evidence
+        rows = db.execute(f"SELECT bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns FROM {table} "
+                          f"WHERE {col} = ? AND bucket >= ? AND bucket < ?", (val, a, b)).fetchall()
+        if not rows:
+            continue
+        keys = tuple(sorted({r[2] for r in rows} | {r[3] for r in rows if r[3]}))
+        lab = namer.labels(day, table, a, b, [r[2:8] for r in rows], keys)
+        for bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns in rows:
+            s = lab.service(ip, name, server, port, proto, mac) or "Other"
+            sv = services[s]
+            sv["down"] += down
+            sv["up"] += up
+            sv["conns"] += conns
+            sv["names"][name or server] += up + down
+            site = sites[name or server]
+            site["down"] += down
+            site["up"] += up
+            site["conns"] += conns
+            site["last"] = max(site["last"], bucket, last)
+            site["service"] = s
+            site["inferred"] = lab.inferred(ip, name, server, port, proto, mac)
+            site["servers"].add(server)
+            p = ports[f"{proto}/{port}" + (" in" if inbound else "")]
+            p["down"] += down
+            p["up"] += up
+            p["conns"] += conns
+            tl = timeline[bucket - bucket % step]
+            tl[0] += down
+            tl[1] += up
     # names it looked up or connected to, by MAC (rows from before the MAC was known: by its address)
     names = collections.defaultdict(lambda: {"count": 0, "first": None, "last": 0, "sources": set()})
     cond, args = ("(mac = ? OR (mac = '' AND ip = ?))", (val, (dev or {}).get("ip") or "")) if col == "mac" else ("ip = ?", (val,))
@@ -270,11 +290,8 @@ def cmd_sites(hours, text=""):
     info = devices_info(db, ov)
     rows = {}
     if text:
-        table, start, _ = window(hours)
-        flows = flow_totals(db, table, start)
-        lab = Labels(db, svc, table, start, flows)
         flows = ((ip, mac, name, server, lab.service(ip, name, server, port, proto, mac), up, down, conns, last)
-                 for ip, mac, name, server, port, proto, up, down, conns, last in flows)
+                 for lab, (ip, mac, name, server, port, proto, up, down, conns, last) in named_flows(db, svc, hours))
     else:       # the whole list: per service is enough
         flows = ((ip, mac, "", "", s, up, down, conns, last) for ip, mac, s, up, down, conns, last in service_rows(db, svc, hours))
     for ip, mac, name, server, s, up, down, conns, last in flows:
@@ -306,14 +323,11 @@ def cmd_lookup(text, hours, exact=False):
 
     exact: one row of the services list - its service, or for nameless traffic its site name or address."""
     db, svc, ov = load()
-    table, start, _ = window(hours)
+    _table, start, _ = window(hours)
     info = devices_info(db, ov)
-    lab = Labels(db, svc, table, start)
     text = text.strip().lower()
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
-    for ip, mac, name, server, port, proto, up, down, conns, first, last in db.execute(
-            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), min(bucket), max(max(bucket), max(last)) "
-            f"FROM {table} WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
+    for lab, (ip, mac, name, server, port, proto, up, down, conns, first, last) in named_flows(db, svc, hours, first=True):
         s = lab.service(ip, name, server, port, proto, mac) or ""
         if exact:
             if (s or name or server).lower() != text:

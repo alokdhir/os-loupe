@@ -59,7 +59,7 @@ class Loupe:
         self.next_classify = time.monotonic() + 30
         self.next_summary = time.monotonic() + 45
         self.svc = services.ServiceMap(service_map)
-        self.map_fingerprint = report.map_fingerprint(service_map)
+        self.map_fingerprint = report.map_fingerprint(self.svc)
         self.stopping = False
         self.oui = devid.load_oui()
         self.ip_mac = {}
@@ -189,8 +189,8 @@ class Loupe:
         self.store.set_device_types(rows)
 
     def summarize(self, now, budget=1.0):
-        """Keep the daily summary (long report periods) current: today every 10 minutes, a day again once it has
-        ended, and every day after the service map changed - newest first, about `budget` seconds of work a call."""
+        """Keep the summaries current: today every 10 minutes, a day again once it has ended, and every day after
+        the service map changed - newest first, about `budget` seconds of work a call."""
         oldest = self.store.oldest_hour()
         if oldest is None:
             return
@@ -199,12 +199,14 @@ class Loupe:
         due = []
         for d in reversed(list(report.days(first, today))):
             fp, built = state.get(d, (None, 0))
-            if fp != self.map_fingerprint or (now - built >= 600 if d == today else built < report.next_day(d) + 120):
+            if fp != self.map_fingerprint or (now - built >= 600 if d == today else built < report.next_day(d) + report.SETTLE):
                 due.append(d)
         t0 = time.monotonic()
+        recent = local_day(now - report.HOURLY_DAYS * 86400)
         for d in due:
-            rows = report.summarize_day(self.store.db, self.svc, d)
-            self.store.replace_day(d, rows, self.map_fingerprint, now)
+            end = report.next_day(d)
+            daily, hourly, lab = report.build_day(self.store.db, self.svc, d, end)
+            self.store.replace_day(d, end, daily, hourly if d >= recent else None, lab.evidence(), self.map_fingerprint, now)
             if time.monotonic() - t0 >= budget:
                 break
 

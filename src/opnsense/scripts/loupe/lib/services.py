@@ -100,6 +100,7 @@ class ServiceMap:
         """`extra`: the user's entries, the same kinds as the shipped file - a list of {"kind": domain | address |
         port | vpn, "pattern", "name"} (an older {pattern: name} dict means domains and addresses). Addresses are
         checked before any name; the user's domains, ports and VPN app domains win over the shipped ones."""
+        self.extra = extra
         self.suffixes = dict(SUFFIXES)
         self.ports = dict(PORTS)
         self.vpn = dict(VPN_PROVIDERS)
