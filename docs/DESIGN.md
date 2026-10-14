@@ -95,28 +95,44 @@ Standard OPNsense MVC: one page with tabs (Devices, Services, Settings), UIBootg
 
 ## Performance
 
-The device and service lists show a few hundred rows, but they're built from traffic rows: one per device, server, port and name in each time slot. A phone or laptop talks to thousands of servers in a week, so on a home network of about a hundred devices a week of hourly rows is ~270,000 rows, ~78,000 once summed per device, server, port and name. Naming each of those with a service, and summing per device, is what costs time. Measured on an Intel N150 (October 2026, ~55,000 hourly rows a day):
+The device and service lists show a row per device or service, but they're made from traffic rows: one per device, server, port and name in each time slot. A phone or laptop talks to thousands of servers a week, so on a home network of about a hundred devices a day adds ~55,000 hourly rows, and a week sums to ~78,000 device/server/port/name combinations. Each needs a service name before it can be added up per device or service, and that naming is most of what a report costs. How a report gets its rows depends on the period.
 
-| | Before | After |
+| Report | Made from | Time (Intel N150, ~100 devices) |
 |---|---|---|
-| Devices list, 24 hours | 1.2 s | 0.7 s |
-| Devices list, 7 days | 3.1 s | 0.02 s (daily summary) |
-| Sorting, paging, searching a list | the whole report again | ~0.04 s (cached) |
+| Lists, up to 2 days (1 h, 3 h, 24 h) | traffic rows, named when the report runs | ~0.3 s (3 h), ~0.7 s (24 h) |
+| Lists, longer (7 days, 30 days, a year) | the daily summary, already named | ~0.02 s, whatever the period |
+| Sorting, paging, searching a list | configd's cached copy | ~0.04 s |
+| Device page, service search | traffic rows for that device or search | grows with the period |
 
-What was slow and what changed:
+So the 7-day list is faster than the 24-hour one: it adds up a few hundred stored rows a day, while the 24-hour list names tens of thousands of rows as it runs. The short periods are left that way because they're a rolling window, current to the minute, which a daily summary can't give. An hourly summary would (stored hours plus the current hour named live, ~0.1 s), at the cost of a second summary table about 24 times the size of the daily one; it isn't built, as 0.7 s on opening the page or changing the period is acceptable and the clicks in between come from the cache.
 
-- **Address ranges.** Traffic with no name is named by the owner of the server's address (Apple, Google…). That parsed the address and tested it against each range in turn, ~36,000 times for a week. Ranges are now looked up by prefix length (one dictionary lookup per length) and the answer is kept per address (`AddressTable` in `lib/services.py`), with the same first-match-in-list result as before.
-- **One read of the window.** A list read the window's rows three times: twice to find VPN tunnels and servers shared by one service (`Labels`), once to sum them. It now reads them once (`flow_totals`) and passes them on.
-- **Cached lists.** The grids sort, page and search on the server, so each click or keystroke ran the report again. The lists go through a configd action with a 60-second cache (`loupe list`, keyed by its arguments: report and period). The page asks for a fresh copy (configd's `!` prefix) when it opens, when the period changes and after a save, so only the clicks in between use the cache.
-- **Daily summary for long periods.** Periods longer than two days (7 days, 30 days, a year) are made of whole local days, today included, from `services_1d`: a few hundred rows a day instead of tens of thousands, so a year is about as fast as a week. loupd builds a day from the hourly rows with the same labelling code the reports use (`lib/report.py`). Today is rebuilt every 10 minutes (~0.5 s), each day once more after it ends, and every day again when the service map's fingerprint changes (at most ~1 s of work a minute, newest days first). Days not summarized yet (just installed or updated) are built from the hourly rows when a report needs them, which is slower but gives the same numbers. Periods up to two days still come from the 1-minute and 5-minute rows directly.
+### Daily summary
 
-What the summary changes:
+`services_1d` holds, per local day, device and service: bytes up and down, connections and when the device was last seen. loupd builds a day from the hourly rows with the same naming code the reports use (`summarize_day` in `lib/report.py`):
 
-- **Long periods are calendar days.** "7 days" is today and the six days before it, not the last 168 hours.
-- **Shared-server naming is per day.** In a long period, nameless traffic takes its service from named traffic to the same server on the same day, not anywhere in the period. On a test week this left ~0.2% of bytes as "Other" that the whole-period report had named (devices that look up a name once and keep using the server for days). Labelling each day with a week of context before it barely changed that and doubled the build cost, so it isn't done.
-- **Today lags up to 10 minutes** in the long periods; the short periods are live.
+- today every 10 minutes (~0.5 s), and each day once more after it ends, so it holds the whole day;
+- every day again when the service map changes (your entries, or the shipped `services.json` in an update): each day records a fingerprint of the map it was built with (`summary_days`), and days with another fingerprint are built again, newest first, with at most ~1 s of work a minute. An edit reaches the 7-day list within minutes and a year within a few hours.
 
-Still open: the device page and the services search read the detail tables for any period (one device, or the rows matching a search, so they're smaller); `flows_1h` grows ~13 MB a day with its indexes, ~4.6 GB at the default 365-day retention.
+A report covers whole local days, today included. A day not built yet (just installed or updated) is made from the hourly rows when a report needs it: slower, same numbers.
+
+What this means for the long periods:
+
+- **Calendar days.** "7 days" is today and the six days before it, not the last 168 hours.
+- **Today lags up to 10 minutes.**
+- **Shared-server naming is per day.** Nameless traffic takes its service from named traffic to the same server on the same day (see Known limits), not from anywhere in the period. A device that looks up a name once and keeps using the server for days has its later traffic shown as "Other"; on a test week that was ~0.2% of bytes. Naming each day with a week of earlier traffic as context barely changed that and doubled the build time.
+
+### Cached lists
+
+The grids sort, page and search on the server, so each click and keystroke asks for the report again. The device and service lists go through a configd action with a 60-second cache (`loupe list`), which configd keys by its arguments (report and period). The page asks for a fresh copy (configd's `!` prefix) when it opens, when the period changes and after a save; the requests in between get the cached one. A search in the services list isn't cached: it matches site names and addresses, so it reads the traffic rows.
+
+### Naming traffic
+
+- **Address ranges.** Nameless traffic is named by who owns the server's address (Apple, Google…). The ranges are held per prefix length (`AddressTable` in `lib/services.py`): one dictionary lookup per length rather than a test against each range, and the answer is kept per address, since a report asks about the same servers many times. The result is the same as taking the first matching range in the list.
+- **One read of the window.** Naming needs the whole window first (which servers carry VPN tunnels, which are shared by exactly one service), then the rows are summed. Both use the same rows, read once (`flow_totals`).
+
+### Storage growth
+
+`flows_1h` grows ~13 MB a day with its indexes, ~4.6 GB at the default 365-day retention. The long lists don't read it once the summary is built, so a shorter retention mainly limits how far back the device page and a summary rebuild can go.
 
 ## Alternatives considered
 
