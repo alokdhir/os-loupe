@@ -22,9 +22,11 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""SQLite storage: 5-minute and hourly traffic per device and server, devices, and names seen.
+"""SQLite storage: 1-minute, 5-minute and hourly traffic per device and server, a daily summary per device and
+service, devices, and names seen.
 
-Both resolutions are written on every flush (no rollup job); old rows are pruned by age.
+The traffic resolutions are written on every flush; the daily summary is built from the hourly rows (loupd);
+old rows are pruned by age.
 """
 import json
 import os
@@ -117,6 +119,25 @@ CREATE TABLE IF NOT EXISTS devices (
     info TEXT NOT NULL DEFAULT '{}',  -- JSON: dhcp, mdns, ... clues for device identification
     first_seen INTEGER NOT NULL,
     last_seen INTEGER NOT NULL
+);
+
+-- traffic per device and service per local day, for long report periods: loupd builds it from flows_1h with the
+-- reports' own labelling (lib/report.py), and builds a day again when the service map changes
+CREATE TABLE IF NOT EXISTS services_1d (
+    day INTEGER NOT NULL,           -- local midnight
+    ip TEXT NOT NULL,
+    mac TEXT NOT NULL DEFAULT '',
+    service TEXT NOT NULL,          -- '' = none
+    up INTEGER NOT NULL DEFAULT 0,
+    down INTEGER NOT NULL DEFAULT 0,
+    conns INTEGER NOT NULL DEFAULT 0,
+    last INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, ip, mac, service)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS summary_days (
+    day INTEGER PRIMARY KEY,
+    map TEXT NOT NULL,              -- fingerprint of the service map it was built with
+    built INTEGER NOT NULL          -- when
 );
 
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -237,10 +258,33 @@ class Store:
             self.db.execute("ROLLBACK")      # never leave the shared connection inside a transaction
             raise
 
+    def oldest_hour(self):
+        return self.db.execute("SELECT min(bucket) FROM flows_1h").fetchone()[0]
+
+    def summary_state(self, since):
+        """{day: (service map fingerprint, built at)} for the summarized days from `since`."""
+        return {d: (m, b) for d, m, b in self.db.execute("SELECT day, map, built FROM summary_days WHERE day >= ?", (since,))}
+
+    def replace_day(self, day, rows, fingerprint, now):
+        """rows: [(ip, mac, service, up, down, conns, last)], the whole day."""
+        db = self.db
+        db.execute("BEGIN")
+        try:
+            db.execute("DELETE FROM services_1d WHERE day = ?", (day,))
+            db.executemany("INSERT INTO services_1d (day, ip, mac, service, up, down, conns, last) VALUES (?,?,?,?,?,?,?,?)",
+                           [(day, *r) for r in rows])
+            db.execute("INSERT OR REPLACE INTO summary_days (day, map, built) VALUES (?,?,?)", (day, fingerprint, int(now)))
+            db.execute("COMMIT")
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
+
     def prune(self, now, days_5m=30, days_1h=365, days_lookups=30):
         db = self.db
         db.execute("DELETE FROM flows_1m WHERE bucket < ?", (now - KEEP_1M,))
         db.execute("DELETE FROM flows_5m WHERE bucket < ?", (now - days_5m * 86400,))
         db.execute("DELETE FROM flows_1h WHERE bucket < ?", (now - days_1h * 86400,))
+        db.execute("DELETE FROM services_1d WHERE day < ?", (now - days_1h * 86400,))
+        db.execute("DELETE FROM summary_days WHERE day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM lookups WHERE day < ?", (now - days_lookups * 86400,))
         db.execute("PRAGMA optimize")

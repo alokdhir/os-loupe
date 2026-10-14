@@ -43,7 +43,8 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
-from lib.services import HOSTING, ServiceMap  # noqa: E402
+from lib.report import Labels, days, flow_totals, local_day, summarize, summarize_day  # noqa: E402
+from lib.services import ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
 CONF = "/usr/local/etc/loupe.json"
@@ -120,92 +121,45 @@ def devices_info(db, overrides, macs=None):
     return out
 
 
-class Labels:
-    """Service names for one report window, with VPN tunnels told apart.
-
-    A device that looked up a VPN provider's domain gets "VPN (NordVPN)" instead of "VPN (WireGuard)", and other
-    nameless traffic to a server it uses as a VPN (e.g. a TCP fallback) is counted as that VPN too.
-
-    Traffic with no service, or one that only names the hosting company (Fastly CDN), takes the service of the
-    other traffic between the same device and server in the window, if that is exactly one service: a stream from a
-    video vendor's domain on the servers the NFL app's own names used is NFL. `inferred()` tells such rows apart.
-    """
-
-    def __init__(self, db, svc, table, start, flows=None):
-        """`flows`: the window's rows from flow_totals(), when the caller has them (saves two scans of the table)."""
-        self.svc = svc
-        counts = collections.defaultdict(collections.Counter)      # by MAC; lookups without one by address
-        for mac, ip, name, n in db.execute("SELECT mac, ip, name, sum(count) FROM lookups WHERE day >= ? AND last_seen >= ? "
-                                           "GROUP BY mac, ip, name", (start - 86400, start - 86400)):
-            p = svc.vpn_provider(name)
-            if p:
-                counts[mac or ip][p] += n
-        self.provider = {k: c.most_common(1)[0][0] for k, c in counts.items()}
-        self.tunnels = {}
-        # VPN ports from the service map (the user's port names replace the shipped ones)
-        vpn_ports = [pp for pp, s in svc.ports.items() if s.startswith("VPN (")]
-        if flows is None:
-            cond = " OR ".join("(proto = ? AND port = ?)" for _ in vpn_ports) or "0"
-            tunnels = db.execute(f"SELECT DISTINCT ip, server, proto, port FROM {table} WHERE bucket >= ? AND name = '' "
-                                 f"AND ({cond})", (start, *[x for pp in vpn_ports for x in pp]))
-            named = db.execute(f"SELECT DISTINCT ip, server, name FROM {table} WHERE bucket >= ? AND name != ''", (start,))
-        else:
-            vpn_ports = set(vpn_ports)
-            tunnels = {(f[0], f[3], f[5], f[4]) for f in flows if not f[2] and (f[5], f[4]) in vpn_ports}
-            named = {(f[0], f[3], f[2]) for f in flows if f[2]}
-        for ip, server, proto, port in sorted(tunnels):      # same answer every run if a server has two
-            self.tunnels[(ip, server)] = svc.ports[(proto, port)]
-        owners = collections.defaultdict(set)
-        for ip, server, name in named:
-            s = svc.by_my_address(server) or svc.by_name(name)
-            if s and s not in HOSTING:
-                owners[(ip, server)].add(s)
-        self.shared = {k: v.pop() for k, v in owners.items() if len(v) == 1}
-
-    def _own(self, ip, name, server, port, proto, mac):
-        s = self.svc.by_my_address(server) or self.svc.by_name(name)
-        if s:
-            return s
-        s = self.tunnels.get((ip, server)) or self.svc.service(name, server, port, proto)
-        if s and s.startswith("VPN ("):
-            p = self.provider.get(mac) or self.provider.get(ip)
-            if p:
-                return f"VPN ({p})"
-        return s
-
-    def service(self, ip, name, server, port, proto, mac=""):
-        s = self._own(ip, name, server, port, proto, mac)
-        if not s or s in HOSTING:
-            return self.shared.get((ip, server)) or s
-        return s
-
-    def inferred(self, ip, name, server, port, proto, mac=""):
-        """True when service() named this traffic from other traffic on the same server."""
-        s = self._own(ip, name, server, port, proto, mac)
-        return (not s or s in HOSTING) and (ip, server) in self.shared
-
-
-def flow_totals(db, table, start):
-    """The window's traffic summed per device, server, port and name:
-    (ip, mac, name, server, port, proto, up, down, conns, last)."""
-    return db.execute(f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), "
-                      f"max(max(bucket), max(last)) FROM {table} WHERE bucket >= ? "
-                      f"GROUP BY ip, mac, name, server, port, proto", (start,)).fetchall()
-
-
 def label(dev, ip):
     return (dev or {}).get("name") or ip
 
 
+def service_rows(db, svc, hours):
+    """The period's traffic per device and service: [(ip, mac, service, up, down, conns, last)]. Up to two days from
+    the detail tables; longer periods are whole days (today and the days before it) from loupd's daily summary."""
+    table, start, _ = window(hours)
+    if table != "flows_1h":
+        return summarize(db, svc, table, start)
+    now = time.time()
+    first = local_day(now - (max(1, round(hours / 24)) - 1) * 86400)
+    oldest = db.execute("SELECT min(bucket) FROM flows_1h").fetchone()[0]
+    try:
+        rows = db.execute("SELECT ip, mac, service, sum(up), sum(down), sum(conns), max(last) FROM services_1d "
+                          "WHERE day >= ? GROUP BY ip, mac, service", (first,)).fetchall()
+        built = {d for (d,) in db.execute("SELECT day FROM summary_days WHERE day >= ?", (first,))}
+    except sqlite3.OperationalError:        # loupd hasn't created the summary yet (just updated)
+        rows, built = [], set()
+    # days loupd hasn't summarized yet (just installed or upgraded): from the hourly table, slower
+    missing = [d for d in days(max(first, local_day(oldest or now)), local_day(now)) if d not in built]
+    if not missing:
+        return rows
+    out = {}
+    for ip, mac, service, up, down, conns, last in rows + [r for d in missing for r in summarize_day(db, svc, d)]:
+        r = out.setdefault((ip, mac, service), [0, 0, 0, 0])
+        r[0] += up
+        r[1] += down
+        r[2] += conns
+        r[3] = max(r[3], last)
+    return [(*k, *v) for k, v in out.items()]
+
+
 def cmd_devices(hours):
     db, svc, ov = load()
-    table, start, _ = window(hours)
     info = devices_info(db, ov)
-    flows = flow_totals(db, table, start)
-    lab = Labels(db, svc, table, start, flows)
     rows = {}
     tops = collections.defaultdict(collections.Counter)
-    for ip, mac, name, server, port, proto, up, down, conns, last in flows:
+    for ip, mac, service, up, down, conns, last in service_rows(db, svc, hours):
         key = mac or ip
         r = rows.get(key)
         if r is None:
@@ -218,7 +172,7 @@ def cmd_devices(hours):
         r["conns"] += conns
         if last > r["last"]:
             r["last"], r["ip"] = last, ip       # the address it used most recently
-        tops[key][lab.service(ip, name, server, port, proto, mac) or "Other"] += up + down
+        tops[key][service or "Other"] += up + down
     for key, r in rows.items():
         r["top"] = [s for s, _ in tops[key].most_common(3)]     # "Other" too: an unnamed stream can be the biggest
         # traffic is filed under its 5-minute bucket; loupd also stamps each device it saw (every minute)
@@ -313,13 +267,18 @@ def cmd_sites(hours, text=""):
     With TEXT, only services where the service, a site name or an address matches; traffic with no
     service that matches is listed under its site name or address."""
     db, svc, ov = load()
-    table, start, _ = window(hours)
     info = devices_info(db, ov)
-    flows = flow_totals(db, table, start)
-    lab = Labels(db, svc, table, start, flows)
     rows = {}
-    for ip, mac, name, server, port, proto, up, down, conns, last in flows:
-        s = lab.service(ip, name, server, port, proto, mac)
+    if text:
+        table, start, _ = window(hours)
+        flows = flow_totals(db, table, start)
+        lab = Labels(db, svc, table, start, flows)
+        flows = ((ip, mac, name, server, lab.service(ip, name, server, port, proto, mac), up, down, conns, last)
+                 for ip, mac, name, server, port, proto, up, down, conns, last in flows)
+    else:       # the whole list: per service is enough
+        flows = ((ip, mac, "", "", s, up, down, conns, last) for ip, mac, s, up, down, conns, last in service_rows(db, svc, hours))
+    for ip, mac, name, server, s, up, down, conns, last in flows:
+        s = s or None
         hit = bool(text) and (matches(text, name, s) or server == text)
         if not s:
             if not hit:

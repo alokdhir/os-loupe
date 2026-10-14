@@ -286,3 +286,72 @@ class TestVpnLabels(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDailySummary(unittest.TestCase):
+    """loupd's per-day, per-service summary gives the long-period lists the same numbers as the hourly rows."""
+
+    def setUp(self):
+        import loupd
+        import query
+        from lib import report
+        self.loupd, self.query, self.report = loupd, query, report
+        self.dir = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.dir.name, "loupe.db")
+        self.store = store.Store(self.path)
+        now = int(time.time())
+        self.today = report.local_day(now)
+        flows = {}
+        a, b = "02:00:00:00:00:61", "02:00:00:00:00:62"
+        for back in range(3):               # today and the two days before, a few hours each
+            day = report.local_day(self.today - back * 86400 + 3600)
+            for h in range(3):
+                t = max(day, min(day + h * 3600 + 120, now - 120))
+                t -= t % 60
+                flows[(t, "10.9.2.61", "192.0.2.10", 443, "tcp", "www.netflix.com")] = [a, "sni", 0, 10, 1000 + h, 3, 1]
+                flows[(t, "10.9.2.61", "198.51.100.7", 51820, "udp", "")] = [a, "", 0, 50, 70, 4, 1]
+                flows[(t, "10.9.2.62", "192.0.2.20", 443, "tcp", "")] = [b, "", 0, 5, 9 + back, 2, 2]
+        self.store.write(flows, {}, {a: {"ip": "10.9.2.61", "ts": now}, b: {"ip": "10.9.2.62", "ts": now}}, now)
+        self.now = now
+        self.daemon = type("D", (), {"store": self.store, "svc": services.ServiceMap(), "map_fingerprint": "one"})()
+        self.old = query.DB, query.CONF, query.load
+        self.opened = []
+
+        def load():
+            self.opened.append(self.old[2]())
+            return self.opened[-1]
+        query.DB, query.CONF, query.load = self.path, os.path.join(self.dir.name, "none.json"), load
+
+    def tearDown(self):
+        self.query.DB, self.query.CONF, self.query.load = self.old
+        for db, *_ in self.opened:
+            db.close()
+        self.store.close()
+        self.dir.cleanup()
+
+    def summarize(self, budget=10.0):
+        self.loupd.Loupe.summarize(self.daemon, self.now, budget)
+
+    def lists(self):
+        return self.query.cmd_devices(72)["rows"], self.query.cmd_sites(72)["rows"]
+
+    def test_same_lists_from_the_summary(self):
+        unsummarized = self.lists()           # no day summarized yet: built from the hourly rows
+        self.summarize()
+        state = self.store.summary_state(0)
+        self.assertEqual(len(state), 3)
+        self.assertEqual(self.lists(), unsummarized)
+        devices = {r["mac"]: r for r in unsummarized[0]}
+        self.assertEqual(devices["02:00:00:00:00:61"]["down"], 3 * (1000 + 1001 + 1002) + 9 * 70)
+        self.assertEqual(devices["02:00:00:00:00:61"]["top"][0], "Netflix")
+
+    def test_newest_first_and_rebuilt_when_the_map_changes(self):
+        self.summarize(budget=0)                # one day a call
+        self.assertEqual(list(self.store.summary_state(0)), [self.today])
+        self.summarize()
+        built = self.store.summary_state(0)
+        self.summarize()                        # nothing due: the same build times
+        self.assertEqual(self.store.summary_state(0), built)
+        self.daemon.map_fingerprint = "two"
+        self.summarize(budget=0)
+        self.assertEqual({d: fp for d, (fp, _) in self.store.summary_state(0).items() if fp == "two"}, {self.today: "two"})

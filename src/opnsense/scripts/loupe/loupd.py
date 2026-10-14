@@ -39,19 +39,15 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, names, neighbours, pfstate, store, unbound  # noqa: E402
-
-
-def local_day(ts):
-    t = time.localtime(ts)
-    return int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+from lib import devid, names, neighbours, pfstate, report, services, store, unbound  # noqa: E402
+from lib.report import local_day  # noqa: E402
 
 
 MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
 
 
 class Loupe:
-    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30)):
+    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), service_map=None):
         self.ifaces = set(ifaces)
         self.is_local = pfstate.local_matcher(pfstate.interface_networks(ifaces))
         self.store = store.Store(db)
@@ -61,6 +57,9 @@ class Loupe:
         self.next_poll = self.next_flush = 0        # schedule: time.monotonic() (a clock step must not stall it)
         self.next_prune = time.monotonic() + 300
         self.next_classify = time.monotonic() + 30
+        self.next_summary = time.monotonic() + 45
+        self.svc = services.ServiceMap(service_map)
+        self.map_fingerprint = report.map_fingerprint(service_map)
         self.stopping = False
         self.oui = devid.load_oui()
         self.ip_mac = {}
@@ -156,6 +155,9 @@ class Loupe:
             self.next_classify = mono + self.flush_every
             self.guarded("networks", self.refresh_networks)
             self.guarded("classify", self.classify, now)
+        if mono >= self.next_summary:
+            self.next_summary = mono + self.flush_every
+            self.guarded("summary", self.summarize, now)
         if mono >= self.next_prune:
             self.next_prune = mono + 3600
             self.guarded("prune", self.store.prune, now, *self.retention)
@@ -185,6 +187,26 @@ class Loupe:
             t, src, ven = devid.classify(mac, name or hostname, info, seen, self.oui)
             rows.append((devid.display_name(name, hostname, devid.mdns_name(info)), ven, t, src, devid.model(info), mac))
         self.store.set_device_types(rows)
+
+    def summarize(self, now, budget=1.0):
+        """Keep the daily summary (long report periods) current: today every 10 minutes, a day again once it has
+        ended, and every day after the service map changed - newest first, about `budget` seconds of work a call."""
+        oldest = self.store.oldest_hour()
+        if oldest is None:
+            return
+        first, today = local_day(oldest), local_day(now)
+        state = self.store.summary_state(first)
+        due = []
+        for d in reversed(list(report.days(first, today))):
+            fp, built = state.get(d, (None, 0))
+            if fp != self.map_fingerprint or (now - built >= 600 if d == today else built < report.next_day(d) + 120):
+                due.append(d)
+        t0 = time.monotonic()
+        for d in due:
+            rows = report.summarize_day(self.store.db, self.svc, d)
+            self.store.replace_day(d, rows, self.map_fingerprint, now)
+            if time.monotonic() - t0 >= budget:
+                break
 
     def refresh_macs(self):
         self.ip_mac.update(neighbours.table())
@@ -253,7 +275,7 @@ def main():
         syslog.syslog(syslog.LOG_WARNING, f"loupe: skipping device rule {json.dumps(rule)}: {problem}")
     r = conf.get("retention", {})
     lp = Loupe(ifaces, args.db, args.poll, args.flush,
-               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_lookups", 30)))
+               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_lookups", 30)), conf.get("services"))
     cap = Capture(lp.emit)
 
     def stop(*_):
