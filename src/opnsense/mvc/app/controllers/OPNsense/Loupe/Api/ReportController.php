@@ -32,9 +32,9 @@ use OPNsense\Core\Backend;
 
 class ReportController extends ApiControllerBase
 {
-    private function query(array $args)
+    private function query(array $args, $event = 'loupe query')
     {
-        $out = (new Backend())->configdpRun('loupe query', $args);
+        $out = (new Backend())->configdpRun($event, $args);
         $data = json_decode($out ?? '', true);
         return is_array($data) ? $data : ['error' => 'no response from loupe'];
     }
@@ -93,6 +93,15 @@ class ReportController extends ApiControllerBase
         return $this->hours($this->request->getPost('hours', null, 24));
     }
 
+    /* a whole-house list (devices, services): configd keeps it for a minute, so sorting, paging and searching the
+       grid don't run the report again; the page asks for a fresh one when it loads or the period changes ("!" makes
+       configd run it again) */
+    private function cachedList($report)
+    {
+        $fresh = $this->request->getPost('fresh', null, '') === '1';
+        return $this->query([$report, $this->postHours()], ($fresh ? '!' : '') . 'loupe list');
+    }
+
     private function postDevice()
     {
         $id = (string)$this->request->getPost('device', null, '');
@@ -121,7 +130,7 @@ class ReportController extends ApiControllerBase
 
     public function searchDevicesAction()
     {
-        $data = $this->query(['devices', $this->postHours()]);
+        $data = $this->cachedList('devices');
         $rows = [];
         foreach ($data['rows'] ?? [] as $r) {
             $r['id'] = $r['mac'] ?: $r['ip'];
@@ -169,14 +178,13 @@ class ReportController extends ApiControllerBase
     public function searchHouseAction()
     {
         $text = trim((string)$this->request->getPost('searchPhrase', null, ''));
-        $args = ['sites', $this->postHours()];
-        if ($text !== '') {
-            if (!preg_match(self::TEXT, $text)) {
-                return $this->searchRecordsetBase([]);
-            }
-            $args[] = $text;
+        if ($text === '') {
+            $data = $this->cachedList('sites');
+        } elseif (preg_match(self::TEXT, $text)) {
+            $data = $this->query(['sites', $this->postHours(), $text]);
+        } else {
+            return $this->searchRecordsetBase([]);
         }
-        $data = $this->query($args);
         return $this->grid($data['rows'] ?? [], 'down', ['']);
     }
 

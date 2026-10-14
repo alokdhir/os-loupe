@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
         let hours = parseFloat(localStorage.getItem('loupe.hours') || '24');
         let chart = null, current = null, q = '';
         const grids = {};
+        const fresh = new Set();      /* lists to fetch anew (not configd's cached copy) on their next request */
         /* values from the network (host names, vendor classes) also land in attributes: escape quotes too.
            The API HTML-escapes what it sends the GUI (& arrives as &amp;): decode first, so it isn't escaped twice */
         const ESC = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
@@ -162,6 +163,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     multiSelect: false,
                     requestHandler: function (request) {
                         request.hours = hours;
+                        if (fresh.delete(id)) request.fresh = '1';
                         return Object.assign(request, extra ? extra() : {});
                     },
                     formatters: formatters
@@ -332,6 +334,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         function route() {
             const hash = window.location.hash;
+            fresh.add('grid-devices').add('grid-house');    /* opened, period changed or saved: not the cached list */
             const tab = tabOf(hash);
             $('#maintabs a[href="' + TABS[tab] + '"]').tab('show');
             $('.loupe-apply').toggle(tab === 'settings');
