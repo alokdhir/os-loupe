@@ -73,6 +73,19 @@ class ReportController extends ApiControllerBase
         return $this->query(['widget']);
     }
 
+    /**
+     * For other plugins: Loupe's name, type and icon for each of the given devices (POST macs: a comma-separated
+     * MAC list, at most 1024). {"version": 1, "devices": {mac: {name, type, icon, vendor, model}}}.
+     */
+    public function identitiesAction()
+    {
+        $macs = (string)$this->request->getPost('macs', null, $this->request->getQuery('macs', null, ''));
+        if (!preg_match('/^[0-9a-fA-F:,\s-]{1,20000}$/', $macs)) {
+            return ['error' => 'expected a comma-separated list of MAC addresses'];
+        }
+        return $this->query(['identities', preg_replace('/\s+/', '', $macs)]);
+    }
+
     /* grid endpoints (UIBootgrid search): sort, search and paging via searchRecordsetBase() */
 
     private function postHours()

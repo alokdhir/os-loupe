@@ -105,6 +105,26 @@ Evidence is trusted in a fixed order — Bonjour model, host name, hosting role,
 
 **Adding a rule to the shipped file:** add it with an `example` — made-up evidence that should come out as your type (no real MACs or names) — then run the tests. They fail if the example lands on another type, or if your rule takes over another rule's example. `tools/fmtjson.py` keeps the files one entry per line.
 
+## For other plugins
+
+Other plugins can ask Loupe what it calls a device, without reading its database:
+
+```sh
+configctl loupe query identities 02:00:00:00:00:01,02:00:00:00:00:02
+```
+
+or `POST /api/loupe/report/identities` with `macs` (the same comma-separated list, at most 1024). The answer
+covers the devices Loupe knows, with your overrides applied:
+
+```json
+{"version": 1, "devices": {"02:00:00:00:00:01": {"name": "Living room TV", "type": "Apple TV",
+  "icon": "fa-brands fa-apple", "vendor": "Apple", "model": "AppleTV14,1"}}}
+```
+
+Fields may be empty strings; `icon` is a Font Awesome class (OPNsense ships Font Awesome). The format only
+changes with a new `version`. [os-eero](https://github.com/alokdhir/os-eero) uses it to show device types
+and icons for eero Wi-Fi clients.
+
 ## Footprint
 
 On a gigabit home link running on an Intel N150: about 0.5% of one CPU core idle, ~4% during a full-speed transfer, and 30–50 MB of memory.

@@ -22,6 +22,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import json
 import os
 import sqlite3
 import tempfile
@@ -155,6 +156,47 @@ class TestDeviceNames(unittest.TestCase):
                     db.close()
             self.assertEqual([(n["name"], n["sources"], n["count"]) for n in names],
                              [("b.example", "dns", 1), ("a.example", "dns, sni", 3)])
+
+
+class TestIdentities(unittest.TestCase):
+    def run_query(self, path, conf, arg):
+        import query
+        old = query.DB, query.CONF
+        query.DB, query.CONF = path, conf
+        try:
+            return query.cmd_identities(arg)
+        finally:
+            query.DB, query.CONF = old
+
+    def test_only_the_asked_devices(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            now = int(time.time())
+            s.write({}, {}, {"02:00:00:00:00:60": {"ip": "10.9.1.60", "hostname": "tv", "ts": now},
+                             "02:00:00:00:00:61": {"ip": "10.9.1.61", "hostname": "phone", "ts": now}})
+            s.set_device_types([("Den TV", "Example", "Apple TV", "mdns", "", "02:00:00:00:00:60"),
+                                ("Phone", "", "iPhone", "mdns", "", "02:00:00:00:00:61")])
+            s.close()
+            conf = os.path.join(d, "loupe.json")
+            with open(conf, "w") as f:
+                json.dump({"devices": {"02:00:00:00:00:61": {"name": "My phone"},
+                                       "02:00:00:00:00:62": {"name": "Not seen yet", "type": "Printer"}}}, f)
+            out = self.run_query(path, conf, "02:00:00:00:00:60, 02-00-00-00-00-62,02:00:00:00:00:99")
+            self.assertEqual(out["version"], 1)
+            self.assertEqual(sorted(out["devices"]), ["02:00:00:00:00:60", "02:00:00:00:00:62"])
+            tv = out["devices"]["02:00:00:00:00:60"]
+            self.assertEqual((tv["name"], tv["type"], tv["vendor"]), ("Den TV", "Apple TV", "Example"))
+            self.assertTrue(tv["icon"])
+            self.assertEqual(sorted(tv), ["icon", "model", "name", "type", "vendor"])
+            self.assertEqual(out["devices"]["02:00:00:00:00:62"]["name"], "Not seen yet")       # an override only
+            phone = self.run_query(path, conf, "02:00:00:00:00:61")["devices"]["02:00:00:00:00:61"]
+            self.assertEqual(phone["name"], "My phone")                                        # override wins
+
+    def test_bad_lists(self):
+        for arg in ("", "nope", "02:00:00:00:00:6", ",".join(["02:00:00:00:00:01"] * 2) + ",x"):
+            with self.assertRaises(ValueError):
+                self.run_query("/nonexistent", "/nonexistent", arg)
 
 
 class TestIcons(unittest.TestCase):

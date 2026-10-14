@@ -35,6 +35,7 @@ usage:
 import collections
 import ipaddress
 import json
+import re
 import sqlite3
 import sys
 import time
@@ -88,14 +89,18 @@ def icon_for(o, dtype, picked):
     return o.get("icon") or picked.get(loose(dtype or "")) or rules().icon(dtype)
 
 
-def devices_info(db, overrides):
+def devices_info(db, overrides, macs=None):
+    """Everything known about each device, with overrides applied; only `macs` (a set) if given."""
     out = {}
     picked = {}                         # type -> icon picked on some device of that type
     for o in overrides.values():
         if o.get("type") and o.get("icon"):
             picked.setdefault(loose(o["type"]), o["icon"])
-    for mac, ip, name, hostname, vendor, dtype, src, model, first, last in db.execute(
-            "SELECT mac, ip, name, hostname, vendor, type, type_source, model, first_seen, last_seen FROM devices"):
+    sql, args = "SELECT mac, ip, name, hostname, vendor, type, type_source, model, first_seen, last_seen FROM devices", ()
+    if macs is not None:
+        args = tuple(sorted(macs))
+        sql += " WHERE mac IN (%s)" % ",".join("?" * len(args))
+    for mac, ip, name, hostname, vendor, dtype, src, model, first, last in db.execute(sql, args):
         o = overrides.get(mac, {})
         vendor, vnote = vendor_of(mac, vendor, o.get("type") or dtype)
         out[mac] = {"mac": mac, "ip": ip, "name": o.get("name") or name or hostname or "", "vendor": vendor,
@@ -105,6 +110,8 @@ def devices_info(db, overrides):
                     "type": o.get("type") or dtype or "", "type_source": "set by you" if o.get("type") else (src or ""),
                     "first_seen": first, "last_seen": last, "custom": bool(o)}
     for mac, o in overrides.items():   # named before loupe recorded the device
+        if macs is not None and mac not in macs:
+            continue
         out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "vendor_note": "",
                              "icon": icon_for(o, o.get("type"), picked), "icon_set": o.get("icon") or "",
                              "type": o.get("type") or "",
@@ -396,6 +403,26 @@ def cmd_widget():
     return {"hours": hours, "down": sum(h[1] for h in hours), "up": sum(h[2] for h in hours), "top": top}
 
 
+IDENTITY_FIELDS = ("name", "type", "icon", "vendor", "model")
+MAX_MACS = 1024
+MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+
+
+def cmd_identities(arg):
+    """For other plugins (os-eero): what Loupe calls each of these devices. `arg` is a comma-separated MAC list.
+    A stable contract: {"version": 1, "devices": {mac: {name, type, icon, vendor, model}}}, only devices Loupe
+    knows; fields may be empty strings. Icons are Font Awesome classes."""
+    macs = {m.strip().lower().replace("-", ":") for m in (arg or "").split(",") if m.strip()}
+    if not macs or len(macs) > MAX_MACS or not all(MAC.match(m) for m in macs):
+        raise ValueError("expected a comma-separated list of MAC addresses (at most %d)" % MAX_MACS)
+    db, _, overrides = load()
+    try:
+        info = devices_info(db, overrides, macs)
+    finally:
+        db.close()
+    return {"version": 1, "devices": {mac: {k: d.get(k) or "" for k in IDENTITY_FIELDS} for mac, d in info.items()}}
+
+
 def hours_arg(v):
     h = float(v)
     if not 0 < h <= MAX_HOURS:
@@ -416,6 +443,8 @@ def main(argv):
             out = cmd_lookup(argv[2], hours_arg(argv[3]), len(argv) > 4 and argv[4] == "exact")
         elif cmd == "icons":
             out = cmd_icons()
+        elif cmd == "identities":
+            out = cmd_identities(argv[2] if len(argv) > 2 else "")
         elif cmd == "widget":
             out = cmd_widget()
         else:
