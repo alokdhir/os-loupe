@@ -82,7 +82,7 @@ Identification is **data, not code**: `data/devices.json` holds the rules, the i
 
 SQLite at `/var/db/loupe/loupe.db`, WAL mode: `loupd` is the only writer; `query.py` opens it read-only from configd.
 
-- `flows_1m` / `flows_5m` / `flows_1h`: per bucket, device, server, port, protocol and name — bytes up/down, packets, connections, and when loupd last added to the row. All three are written in the same transaction each minute (no separate roll-up). Kept 4 hours / 30 days / 365 days (the last two are settings).
+- `flows_1m` / `flows_5m` / `flows_1h`: per bucket, device (address and MAC), server, port, protocol and name — bytes up/down, packets, connections, and when loupd last added to the row. All three are written in the same transaction each minute (no separate roll-up). Kept 4 hours / 30 days / 365 days (the last two are settings).
 - `lookups`: names each device looked up or connected to, per day and device (address and MAC), including ones that moved no data. 30 days by default.
 - `devices`: detected facts only.
 - `services_1h` / `services_1d`: per hour (the last 3 days) and per local day, device and service — bytes, connections, last seen. `day_names`: the evidence each day's traffic was named with. `summary_days`: when each day was built, and with which service map. loupd builds them from `flows_1h` (see Performance); the daily rows and evidence are pruned with `flows_1h`.
@@ -116,7 +116,7 @@ Today is built every 10 minutes (~0.6 s), each day once more after it ends, and 
 | Lists, up to 2 days (1 h, 3 h, 24 h, 48 h) | stored hours, plus the minutes since loupd's last build named with the stored evidence | ~0.12–0.17 s |
 | Lists, longer (7 days, 30 days, a year) | stored days | ~0.01 s, whatever the period |
 | Sorting, paging, searching a list | configd's cached copy | ~0.04 s |
-| Device page | that device's traffic rows, named with its stored evidence | ~0.07 s (1 h), ~0.6 s (7 days) |
+| Device page | that device's traffic rows, named with its stored evidence, each device/server/port/name once | ~0.05 s (1 h), ~0.5 s (7 days) |
 | Services search, lookup | all traffic rows in the period, a day at a time | ~0.8 s (24 h), ~2.3 s (7 days) |
 
 The short lists are a rolling window, current to the minute. The long ones are whole local days: "7 days" is today and the six days before it, and today is up to 10 minutes behind.
@@ -153,7 +153,6 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 
 - **Hidden names:** Encrypted Client Hello, DNS-over-HTTPS that bypasses the router, VPNs and relays (iCloud Private Relay) hide the real site. Loupe labels VPNs (and the provider when the device looked up its domain) and Private Relay as what they are.
 - **Shared servers:** traffic with no name, or named only for its hosting company (Fastly, Akamai, CloudFront…), takes the service of the device's other traffic to the same server that day, when that is exactly one service; reports mark it "(same server)". A device that looks up a name once and keeps using the server for days has its traffic on the later days shown as "Other" (~0.2% of bytes on a test week). A video vendor's domain on its own servers (e.g. `lura.live` on Google Cloud) stays "Other".
-- **An address taken over within a time slot:** traffic rows are keyed by address. If a device takes an address another device used earlier in the same hour (DHCP changes, reservations moved), that hour's traffic on the address is credited to one of them in the hourly rows and everything built from them.
 - **Containers and VMs behind one MAC** look like one device; a distro rule can be swayed by a container's update traffic.
 - **Private MACs** can rotate, which splits a device's history until the user names it or turns the private address off for the network.
 - **Multicast and broadcast** traffic is not counted.

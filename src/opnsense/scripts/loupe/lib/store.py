@@ -33,12 +33,12 @@ import os
 import sqlite3
 import time
 
-SCHEMA = """
--- 1-minute detail for the last day (short report periods)
-CREATE TABLE IF NOT EXISTS flows_1m (
-    bucket INTEGER NOT NULL,        -- unix time, start of the minute
+# traffic per time slot, device, server, port and name (flows_1m, flows_5m, flows_1h)
+FLOWS = """
+CREATE TABLE IF NOT EXISTS {t} (
+    bucket INTEGER NOT NULL,        -- unix time, start of the slot
     ip TEXT NOT NULL,               -- LAN device address
-    mac TEXT NOT NULL DEFAULT '',
+    mac TEXT NOT NULL DEFAULT '',   -- the device at that address then
     server TEXT NOT NULL,           -- remote address
     port INTEGER NOT NULL,          -- remote port
     proto TEXT NOT NULL,
@@ -50,49 +50,20 @@ CREATE TABLE IF NOT EXISTS flows_1m (
     pkts INTEGER NOT NULL DEFAULT 0,
     conns INTEGER NOT NULL DEFAULT 0,
     last INTEGER NOT NULL DEFAULT 0,    -- when loupd last added to this row (0: before this was kept)
-    PRIMARY KEY (bucket, ip, server, port, proto, name)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS flows_1m_ip ON flows_1m (ip, bucket);
+    PRIMARY KEY (bucket, ip, mac, server, port, proto, name)
+) WITHOUT ROWID
+"""
+FLOW_COLUMNS = "bucket, ip, mac, server, port, proto, name, source, inbound, up, down, pkts, conns, last"
+# 1-minute detail for the last hours, 5-minute and hourly for the settings' retention; indexed by address (the
+# device page by address) and by name (searches)
+FLOW_INDEXES = {"flows_1m": ("ip",), "flows_5m": ("ip", "name"), "flows_1h": ("ip", "name")}
 
-CREATE TABLE IF NOT EXISTS flows_5m (
-    bucket INTEGER NOT NULL,        -- unix time, start of the 5-minute slot
-    ip TEXT NOT NULL,               -- LAN device address
-    mac TEXT NOT NULL DEFAULT '',
-    server TEXT NOT NULL,           -- remote address
-    port INTEGER NOT NULL,          -- remote port
-    proto TEXT NOT NULL,
-    name TEXT NOT NULL DEFAULT '',  -- server name ('' = unknown)
-    source TEXT NOT NULL DEFAULT '',-- sni | quic | dns | dns*
-    inbound INTEGER NOT NULL DEFAULT 0, -- 1: the remote side opened the connection
-    up INTEGER NOT NULL DEFAULT 0,
-    down INTEGER NOT NULL DEFAULT 0,
-    pkts INTEGER NOT NULL DEFAULT 0,
-    conns INTEGER NOT NULL DEFAULT 0,
-    last INTEGER NOT NULL DEFAULT 0,    -- when loupd last added to this row (0: before this was kept)
-    PRIMARY KEY (bucket, ip, server, port, proto, name)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS flows_5m_ip ON flows_5m (ip, bucket);
-CREATE INDEX IF NOT EXISTS flows_5m_name ON flows_5m (name, bucket);
 
-CREATE TABLE IF NOT EXISTS flows_1h (
-    bucket INTEGER NOT NULL,
-    ip TEXT NOT NULL,
-    mac TEXT NOT NULL DEFAULT '',
-    server TEXT NOT NULL,
-    port INTEGER NOT NULL,
-    proto TEXT NOT NULL,
-    name TEXT NOT NULL DEFAULT '',
-    source TEXT NOT NULL DEFAULT '',
-    inbound INTEGER NOT NULL DEFAULT 0,
-    up INTEGER NOT NULL DEFAULT 0,
-    down INTEGER NOT NULL DEFAULT 0,
-    pkts INTEGER NOT NULL DEFAULT 0,
-    conns INTEGER NOT NULL DEFAULT 0,
-    last INTEGER NOT NULL DEFAULT 0,    -- when loupd last added to this row (0: before this was kept)
-    PRIMARY KEY (bucket, ip, server, port, proto, name)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS flows_1h_ip ON flows_1h (ip, bucket);
-CREATE INDEX IF NOT EXISTS flows_1h_name ON flows_1h (name, bucket);
+def flow_indexes(t):
+    return [f"CREATE INDEX IF NOT EXISTS {t}_{c} ON {t} ({c}, bucket)" for c in FLOW_INDEXES[t]]
+
+
+SCHEMA = ";\n".join(FLOWS.format(t=t).strip() + ";\n" + ";\n".join(flow_indexes(t)) for t in FLOW_INDEXES) + """;
 
 -- names each device asked for or connected to, per day (also names that moved no bytes we saw)
 CREATE TABLE IF NOT EXISTS lookups (
@@ -168,8 +139,7 @@ KEEP_1H_SUMMARY = 3 * 86400     # seconds of the hourly summary (report periods 
 UPSERT = """
 INSERT INTO {t} (bucket, ip, mac, server, port, proto, name, source, inbound, up, down, pkts, conns, last)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (bucket, ip, server, port, proto, name) DO UPDATE SET
-    mac = CASE WHEN excluded.mac != '' THEN excluded.mac ELSE mac END,
+ON CONFLICT (bucket, ip, mac, server, port, proto, name) DO UPDATE SET
     up = up + excluded.up, down = down + excluded.down,
     pkts = pkts + excluded.pkts, conns = conns + excluded.conns,
     last = max(last, excluded.last)
@@ -187,12 +157,38 @@ class Store:
         for col in ("name", "model"):      # added after the first release
             if col not in cols:
                 self.db.execute(f"ALTER TABLE devices ADD COLUMN {col} TEXT")
-        for table in ("flows_1m", "flows_5m", "flows_1h"):
+        rebuilt = False
+        for table in FLOW_INDEXES:
             if "last" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN last INTEGER NOT NULL DEFAULT 0")
+            if "mac" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})") if r[5]}:
+                self._key_with_mac(table)
+                rebuilt = True
+        if rebuilt:
+            # each rebuilt table landed in the space the one before it freed, scattered through the file: reports
+            # reading a day of it got ~1.7 times slower. Rewrite the file in order once, and give back the log.
+            self.db.execute("VACUUM")
+            self.db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         if "mac" not in {r[1] for r in self.db.execute("PRAGMA table_info(lookups)")}:
             self._add_lookups_mac()
         self.db.execute("CREATE INDEX IF NOT EXISTS lookups_mac ON lookups (mac, day)")
+
+    def _key_with_mac(self, table):
+        """Added later: the MAC is part of a traffic row's key, so a device that takes over an address within a
+        time slot gets its own row instead of being added to the other device's. Rows are copied as they are."""
+        db = self.db
+        db.execute("BEGIN")
+        try:
+            db.execute(FLOWS.format(t=f"{table}_new"))
+            db.execute(f"INSERT INTO {table}_new ({FLOW_COLUMNS}) SELECT {FLOW_COLUMNS} FROM {table}")
+            db.execute(f"DROP TABLE {table}")
+            db.execute(f"ALTER TABLE {table}_new RENAME TO {table}")
+            for sql in flow_indexes(table):
+                db.execute(sql)
+            db.execute("COMMIT")
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
 
     def _add_lookups_mac(self):
         """Added later: older lookups get the device that used the address that day, from the traffic rows

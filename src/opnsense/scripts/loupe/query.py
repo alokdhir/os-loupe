@@ -226,7 +226,8 @@ def cmd_device(arg, hours):
         keys = tuple(sorted({r[2] for r in rows} | {r[3] for r in rows if r[3]}))
         lab = namer.labels(day, table, a, b, [r[2:8] for r in rows], keys)
         for bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns in rows:
-            s = lab.service(ip, name, server, port, proto, mac) or "Other"
+            s, inferred = lab.named(ip, name, server, port, proto, mac)
+            s = s or "Other"
             sv = services[s]
             sv["down"] += down
             sv["up"] += up
@@ -238,7 +239,7 @@ def cmd_device(arg, hours):
             site["conns"] += conns
             site["last"] = max(site["last"], bucket, last)
             site["service"] = s
-            site["inferred"] = lab.inferred(ip, name, server, port, proto, mac)
+            site["inferred"] = inferred
             site["servers"].add(server)
             p = ports[f"{proto}/{port}" + (" in" if inbound else "")]
             p["down"] += down
@@ -328,14 +329,15 @@ def cmd_lookup(text, hours, exact=False):
     text = text.strip().lower()
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
     for lab, (ip, mac, name, server, port, proto, up, down, conns, first, last) in named_flows(db, svc, hours, first=True):
-        s = lab.service(ip, name, server, port, proto, mac) or ""
+        s, inferred = lab.named(ip, name, server, port, proto, mac)
+        s = s or ""
         if exact:
             if (s or name or server).lower() != text:
                 continue
         elif not (matches(text, name, s) or server == text):
             continue
         r = rows[(mac or ip, name or (s and "\0" + s) or server)]     # nameless traffic: one row per service
-        r.update(ip=ip, mac=mac, name=name, service=s, inferred=bool(s) and lab.inferred(ip, name, server, port, proto, mac))
+        r.update(ip=ip, mac=mac, name=name, service=s, inferred=bool(s) and inferred)
         r["down"] += down
         r["up"] += up
         r["conns"] += conns

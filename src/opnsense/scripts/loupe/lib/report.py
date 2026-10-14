@@ -164,6 +164,17 @@ class Labels:
 
     def _share(self):
         self.shared = {k: next(iter(v)) for k, v in self.owners.items() if len(v) == 1}
+        self._named = {}
+
+    def named(self, ip, name, server, port, proto, mac=""):
+        """(service(), inferred()) at once, remembered: a device's page names the same traffic every hour."""
+        k = (ip, name, server, port, proto, mac)
+        hit = self._named.get(k)
+        if hit is None:
+            s = self._own(ip, name, server, port, proto, mac)
+            inferred = (not s or s in HOSTING) and (ip, server) in self.shared
+            hit = self._named[k] = (self.shared[(ip, server)] if inferred else s, inferred)
+        return hit
 
     def _own(self, ip, name, server, port, proto, mac):
         s = self.svc.by_my_address(server) or self.svc.by_name(name)

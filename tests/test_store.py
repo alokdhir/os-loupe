@@ -100,8 +100,10 @@ class TestStore(unittest.TestCase):
             self.addCleanup(db.close)
             self.addCleanup(s.close)
             self.assertEqual(db.execute("SELECT count(*), sum(down) FROM flows_5m").fetchone(), (2, 102))
-            self.assertEqual(db.execute("SELECT bucket, mac, up, down, conns FROM flows_1h").fetchall(),
-                             [(3600, "02:00:00:00:00:01", 11, 102, 1)])
+            # a minute whose device wasn't known (no MAC) is kept apart: it isn't credited to whichever device the
+            # address had in that hour
+            self.assertEqual(sorted(db.execute("SELECT bucket, mac, up, down, conns FROM flows_1h")),
+                             [(3600, "", 1, 2, 0), (3600, "02:00:00:00:00:01", 10, 100, 1)])
             self.assertEqual(db.execute("SELECT count, first_seen, last_seen, mac FROM lookups").fetchone(),
                              (3, 5, 9, "02:00:00:00:00:01"))
             row = db.execute("SELECT ip, hostname, info, first_seen, last_seen FROM devices").fetchone()
@@ -115,7 +117,7 @@ class TestStore(unittest.TestCase):
             s.prune(3600 + 31 * 86400)
             self.assertEqual(db.execute("SELECT count(*) FROM flows_1m").fetchone(), (0,))
             self.assertEqual(db.execute("SELECT count(*) FROM flows_5m").fetchone(), (0,))
-            self.assertEqual(db.execute("SELECT count(*) FROM flows_1h").fetchone(), (1,))
+            self.assertEqual(db.execute("SELECT count(*) FROM flows_1h").fetchone(), (2,))
 
 
     def test_lookups_by_mac(self):
@@ -218,3 +220,37 @@ class TestGroup(unittest.TestCase):
         msg = bench_pfstate.message(9, "bridge0", True, ("224.0.0.251", 5353), ("10.9.1.20", 5353), "udp", (1, 0), (60, 0), 1)
         self.assertEqual(pfstate.from_netlink(pfnl.parse_states([msg], {"bridge0"}),
                                               pfstate.local_matcher(["10.9.0.0/16"]), {"bridge0"}), {})
+
+
+class TestMacInKey(unittest.TestCase):
+    OLD = """CREATE TABLE {t} (bucket INTEGER NOT NULL, ip TEXT NOT NULL, mac TEXT NOT NULL DEFAULT '', server TEXT NOT NULL,
+             port INTEGER NOT NULL, proto TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '',
+             inbound INTEGER NOT NULL DEFAULT 0, up INTEGER NOT NULL DEFAULT 0, down INTEGER NOT NULL DEFAULT 0,
+             pkts INTEGER NOT NULL DEFAULT 0, conns INTEGER NOT NULL DEFAULT 0, last INTEGER NOT NULL DEFAULT 0,
+             PRIMARY KEY (bucket, ip, server, port, proto, name)) WITHOUT ROWID"""
+
+    def test_old_tables_get_the_mac_in_their_key(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            db = sqlite3.connect(path)
+            for t in ("flows_1m", "flows_5m", "flows_1h"):
+                db.execute(self.OLD.format(t=t))
+                db.execute(f"CREATE INDEX {t}_ip ON {t} (ip, bucket)")
+                db.execute(f"INSERT INTO {t} VALUES (3600, '10.9.4.1', '02:00:00:00:00:81', '192.0.2.40', 443, 'tcp', "
+                           f"'a.example', 'sni', 0, 5, 50, 3, 1, 3700)")
+            db.commit()
+            db.close()
+            s = store.Store(path)
+            for t in ("flows_1m", "flows_5m", "flows_1h"):
+                key = [r[1] for r in sorted(s.db.execute(f"PRAGMA table_info({t})"), key=lambda r: r[5]) if r[5]]
+                self.assertEqual(key, ["bucket", "ip", "mac", "server", "port", "proto", "name"])
+                self.assertEqual(s.db.execute(f"SELECT up, down, last FROM {t}").fetchall(), [(5, 50, 3700)])
+                idx = {r[1] for r in s.db.execute(f"PRAGMA index_list({t})")}
+                self.assertIn(f"{t}_ip", idx)
+            # another device on the same address in the same hour: its own row, not added to the first one's
+            s.write({(3660, "10.9.4.1", "192.0.2.40", 443, "tcp", "a.example"): ["02:00:00:00:00:82", "sni", 0, 1, 10, 2, 1]},
+                    {}, {}, now=3720)
+            self.assertEqual(sorted(s.db.execute("SELECT mac, down FROM flows_1h")),
+                             [("02:00:00:00:00:81", 50), ("02:00:00:00:00:82", 10)])
+            s.close()
+            store.Store(path).close()       # opening again: nothing left to migrate
