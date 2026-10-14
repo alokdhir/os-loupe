@@ -104,7 +104,7 @@ The device and service lists show a row per device or service, but they're made 
 | Sorting, paging, searching a list | configd's cached copy | ~0.04 s |
 | Device page, service search | traffic rows for that device or search | grows with the period |
 
-So the 7-day list is faster than the 24-hour one: it adds up a few hundred stored rows a day, while the 24-hour list names tens of thousands of rows as it runs. The short periods are left that way because they're a rolling window, current to the minute, which a daily summary can't give. An hourly summary would (stored hours plus the current hour named live, ~0.1 s), at the cost of a second summary table about 24 times the size of the daily one; it isn't built, as 0.7 s on opening the page or changing the period is acceptable and the clicks in between come from the cache.
+So the 7-day list is faster than the 24-hour one: it adds up a few hundred stored rows a day, while the 24-hour list names tens of thousands of rows as it runs. The short periods are named over the whole window, current to the minute, so traffic to a shared server takes its name from anywhere in the period (see Daily summary for what a stored day gives up).
 
 ### Daily summary
 
