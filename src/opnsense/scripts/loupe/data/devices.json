@@ -215,6 +215,7 @@
   "Smart lock": {"icon": "fa-solid fa-lock"},
   "Azure Sphere device": {"icon": "fa-solid fa-microchip"},
   "Sub-Zero appliance": {"icon": "fa-solid fa-kitchen-set", "vendor": "Sub-Zero"},
+  "Window shade": {"icon": "fa-solid fa-table-columns"},
   "TV tuner": {"icon": "fa-solid fa-tower-broadcast", "vendor": "SiliconDust"},
   "Appliance (GE / Haier module)": {"icon": "fa-solid fa-house-signal"}
  },
