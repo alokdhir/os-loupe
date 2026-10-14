@@ -131,7 +131,8 @@ class Labels:
     video vendor's domain on the servers the NFL app's own names used is NFL. `inferred()` tells such rows apart.
     """
 
-    def __init__(self, db, svc, table, start):
+    def __init__(self, db, svc, table, start, flows=None):
+        """`flows`: the window's rows from flow_totals(), when the caller has them (saves two scans of the table)."""
         self.svc = svc
         counts = collections.defaultdict(collections.Counter)      # by MAC; lookups without one by address
         for mac, ip, name, n in db.execute("SELECT mac, ip, name, sum(count) FROM lookups WHERE day >= ? AND last_seen >= ? "
@@ -143,14 +144,19 @@ class Labels:
         self.tunnels = {}
         # VPN ports from the service map (the user's port names replace the shipped ones)
         vpn_ports = [pp for pp, s in svc.ports.items() if s.startswith("VPN (")]
-        cond = " OR ".join("(proto = ? AND port = ?)" for _ in vpn_ports) or "0"
-        for ip, server, proto, port in db.execute(
-                f"SELECT DISTINCT ip, server, proto, port FROM {table} WHERE bucket >= ? AND name = '' AND ({cond})",
-                (start, *[x for pp in vpn_ports for x in pp])):
+        if flows is None:
+            cond = " OR ".join("(proto = ? AND port = ?)" for _ in vpn_ports) or "0"
+            tunnels = db.execute(f"SELECT DISTINCT ip, server, proto, port FROM {table} WHERE bucket >= ? AND name = '' "
+                                 f"AND ({cond})", (start, *[x for pp in vpn_ports for x in pp]))
+            named = db.execute(f"SELECT DISTINCT ip, server, name FROM {table} WHERE bucket >= ? AND name != ''", (start,))
+        else:
+            vpn_ports = set(vpn_ports)
+            tunnels = {(f[0], f[3], f[5], f[4]) for f in flows if not f[2] and (f[5], f[4]) in vpn_ports}
+            named = {(f[0], f[3], f[2]) for f in flows if f[2]}
+        for ip, server, proto, port in sorted(tunnels):      # same answer every run if a server has two
             self.tunnels[(ip, server)] = svc.ports[(proto, port)]
         owners = collections.defaultdict(set)
-        for ip, server, name in db.execute(f"SELECT DISTINCT ip, server, name FROM {table} WHERE bucket >= ? AND name != ''",
-                                           (start,)):
+        for ip, server, name in named:
             s = svc.by_my_address(server) or svc.by_name(name)
             if s and s not in HOSTING:
                 owners[(ip, server)].add(s)
@@ -179,6 +185,14 @@ class Labels:
         return (not s or s in HOSTING) and (ip, server) in self.shared
 
 
+def flow_totals(db, table, start):
+    """The window's traffic summed per device, server, port and name:
+    (ip, mac, name, server, port, proto, up, down, conns, last)."""
+    return db.execute(f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), "
+                      f"max(max(bucket), max(last)) FROM {table} WHERE bucket >= ? "
+                      f"GROUP BY ip, mac, name, server, port, proto", (start,)).fetchall()
+
+
 def label(dev, ip):
     return (dev or {}).get("name") or ip
 
@@ -187,12 +201,11 @@ def cmd_devices(hours):
     db, svc, ov = load()
     table, start, _ = window(hours)
     info = devices_info(db, ov)
-    lab = Labels(db, svc, table, start)
+    flows = flow_totals(db, table, start)
+    lab = Labels(db, svc, table, start, flows)
     rows = {}
     tops = collections.defaultdict(collections.Counter)
-    for ip, mac, name, server, port, proto, up, down, conns, last in db.execute(
-            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(max(bucket), max(last)) FROM {table} "
-            f"WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
+    for ip, mac, name, server, port, proto, up, down, conns, last in flows:
         key = mac or ip
         r = rows.get(key)
         if r is None:
@@ -302,11 +315,10 @@ def cmd_sites(hours, text=""):
     db, svc, ov = load()
     table, start, _ = window(hours)
     info = devices_info(db, ov)
-    lab = Labels(db, svc, table, start)
+    flows = flow_totals(db, table, start)
+    lab = Labels(db, svc, table, start, flows)
     rows = {}
-    for ip, mac, name, server, port, proto, up, down, conns, last in db.execute(
-            f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), max(max(bucket), max(last)) FROM {table} "
-            f"WHERE bucket >= ? GROUP BY ip, mac, name, server, port, proto", (start,)):
+    for ip, mac, name, server, port, proto, up, down, conns, last in flows:
         s = lab.service(ip, name, server, port, proto, mac)
         hit = bool(text) and (matches(text, name, s) or server == text)
         if not s:

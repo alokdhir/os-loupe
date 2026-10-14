@@ -61,6 +61,40 @@ def as_port(text):
     return None
 
 
+class AddressTable:
+    """Networks -> names; get() gives the first network in the list that holds an address, like scanning the list,
+    with one dict lookup per prefix length and the answer remembered per address (reports ask for the same
+    servers over and over)."""
+
+    def __init__(self, nets):
+        self.by_len = {}                        # (version, prefix length) -> {network as int: (list position, name)}
+        for i, (net, s) in enumerate(nets):
+            self.by_len.setdefault((net.version, net.prefixlen), {}).setdefault(int(net.network_address), (i, s))
+        self._cache = {}
+
+    def __bool__(self):
+        return bool(self.by_len)
+
+    def get(self, addr):
+        try:
+            return self._cache[addr]
+        except KeyError:
+            pass
+        hit = None
+        try:
+            a = ipaddress.ip_address(addr)
+        except ValueError:
+            a = None
+        if a is not None:
+            n, bits = int(a), a.max_prefixlen
+            found = [t[(n >> (bits - plen)) << (bits - plen)] for (v, plen), t in self.by_len.items()
+                     if v == a.version and (n >> (bits - plen)) << (bits - plen) in t]
+            if found:
+                hit = min(found)[1]
+        self._cache[addr] = hit
+        return hit
+
+
 class ServiceMap:
     def __init__(self, extra=None):
         """`extra`: the user's entries, the same kinds as the shipped file - a list of {"kind": domain | address |
@@ -86,8 +120,8 @@ class ServiceMap:
                 mine.append((as_network(pattern), name))
             elif kind in ("domain", ""):
                 self.suffixes[pattern.lower().strip(".")] = name
-        self.mine = sorted(mine, key=lambda x: -x[0].prefixlen)       # most specific first
-        self.ranges = [(ipaddress.ip_network(n), s) for n, s in RANGES]
+        self.mine = AddressTable(sorted(mine, key=lambda x: -x[0].prefixlen))   # most specific first
+        self.ranges = AddressTable((ipaddress.ip_network(n), s) for n, s in RANGES)
         self.prefixed = {}                                            # suffix -> [(first-label prefix, service)]
         for pattern, s in self.suffixes.items():
             label, star, rest = pattern.partition("*.")
@@ -101,18 +135,7 @@ class ServiceMap:
         """The user's own name for this server address, if they gave one."""
         if not self.mine:
             return None
-        return self._in(addr, self.mine)
-
-    @staticmethod
-    def _in(addr, ranges):
-        try:
-            a = ipaddress.ip_address(addr)
-        except ValueError:
-            return None
-        for net, s in ranges:
-            if a.version == net.version and a in net:
-                return s
-        return None
+        return self.mine.get(addr)
 
     def by_name(self, name):
         if not name:
@@ -132,7 +155,7 @@ class ServiceMap:
         return hit or None
 
     def by_address(self, addr):
-        return self._in(addr, self.ranges)
+        return self.ranges.get(addr)
 
     def service(self, name, server, port, proto):
         s = self.by_my_address(server) or self.by_name(name)

@@ -29,6 +29,9 @@ import tempfile
 import time
 import unittest
 
+import ipaddress
+import random
+
 import helpers  # noqa: F401
 from lib import services, store
 
@@ -92,6 +95,30 @@ class TestServices(unittest.TestCase):
         self.assertEqual(services.ServiceMap().vpn_provider("nordvpn.com."), "NordVPN")
         self.assertEqual(services.ServiceMap().vpn_provider("notnordvpn.com"), None)
         self.assertEqual(services.ServiceMap().vpn_provider(""), None)
+
+
+class TestAddressTable(unittest.TestCase):
+    def test_same_as_scanning_the_list(self):
+        nets = [(ipaddress.ip_network(n), s) for n, s in [
+            ("198.51.100.0/24", "wide"), ("198.51.100.128/25", "narrow, listed later"), ("198.51.100.7/32", "one host"),
+            ("203.0.113.0/26", "a"), ("203.0.113.0/26", "same network again"), ("10.0.0.0/8", "big"),
+            ("2001:db8::/32", "v6"), ("2001:db8:1::/48", "v6 narrow"), ("0.0.0.0/0", "everything v4")]]
+
+        def scan(addr):
+            try:
+                a = ipaddress.ip_address(addr)
+            except ValueError:
+                return None
+            return next((s for net, s in nets if a.version == net.version and a in net), None)
+
+        table = services.AddressTable(nets)
+        rnd = random.Random(1)
+        addrs = ["198.51.100.7", "198.51.100.200", "203.0.113.5", "2001:db8:1::9", "2001:db9::1", "not an address", ""]
+        addrs += [str(ipaddress.IPv4Address(rnd.getrandbits(32))) for _ in range(2000)]
+        addrs += ["198.51.100.%d" % i for i in range(256)] + ["2001:db8:%x::1" % i for i in range(4)]
+        for a in addrs * 2:                     # twice: the second answer comes from the cache
+            self.assertEqual(table.get(a), scan(a), a)
+        self.assertFalse(services.AddressTable([]))
 
 
 class TestSharedServer(unittest.TestCase):
