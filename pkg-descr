@@ -28,6 +28,8 @@ Plugin Changelog
 * Hardened against malformed packets and database errors; device-supplied
   names escaped in the GUI
 * tools/install.sh and tools/uninstall.sh to install from the repository
+* Sub-Zero/Wolf/Cove appliances recognised (they show as Card Access or Azure
+  Sphere); fanSync fans named Fanimation, not their Wi-Fi module maker
 * identities query for other plugins: name, type and icon for a list of MAC
   addresses (configctl loupe query identities, /api/loupe/report/identities)
 
