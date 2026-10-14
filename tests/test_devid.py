@@ -102,6 +102,9 @@ class TestDevid(unittest.TestCase):
                 "mdns_names": ["0a1b2c3d4e5f6a7b", "lock plus", "70-35-60-63.1 den", "den"]}
         self.assertEqual(devid.mdns_name(info), "den")
         self.assertEqual(devid.mdns_name({"mdns_hosts": ["0a1b2c3d4e5f.local", "box.local"]}), "box")
+        hap = {"mdns_hosts": ["0a1b2c3d4e5f60718293a4b5c6d7e8f9-hap.local", "0a1b2c3d4e5f60718293a4b5c6d7e8f9.local", "desk.local"]}
+        self.assertEqual(devid.mdns_name(hap), "desk")                   # long IDs and HomeKit's -hap names too
+        self.assertEqual(devid.mdns_name({"mdns_hosts": ["front-yard.local"]}), "front-yard")   # a real name stays
 
 
     def test_placeholder_names(self):
@@ -228,6 +231,32 @@ class TestModelAndName(unittest.TestCase):
     def test_model(self):
         self.assertEqual(devid.model({"mdns_models": ["model=Mac15,13"]}), "MacBook Air 15″ (M3)")
         self.assertIsNone(devid.model({"mdns_models": ["model=Mac99,1"]}))
+
+    def test_current_announcements_outrank_old_ones(self):
+        day = 86400
+        info = {"mdns_models": ["model=AppleTV5,3", "model=Mac14,14"], "mdns_services": ["_googlecast._tcp", "_airplay._tcp"],
+                "seen": {"m|model=Mac14,14": 10 * day, "s|_airplay._tcp": 10 * day}}
+        cur = devid.current_mdns(info)
+        self.assertEqual(cur["mdns_models"], ["model=Mac14,14"])              # the unstamped old model drops out
+        self.assertEqual(cur["mdns_services"], ["_airplay._tcp"])
+        self.assertEqual(devid.classify("02:00:00:00:00:70", None, cur)[0], "Mac")
+        self.assertEqual(devid.classify("02:00:00:00:00:70", None, info)[0], "Apple TV")     # what it used to say
+        self.assertEqual(info["mdns_models"], ["model=AppleTV5,3", "model=Mac14,14"])        # input untouched
+
+    def test_recent_items_all_count_and_old_stamped_ones_drop(self):
+        day = 86400
+        info = {"mdns_hosts": ["a.local", "b.local", "c.local"],
+                "seen": {"h|a.local": 10 * day, "h|b.local": 10 * day - 3600, "h|c.local": 5 * day}}
+        self.assertEqual(devid.current_mdns(info)["mdns_hosts"], ["a.local", "b.local"])
+
+    def test_old_evidence_kept_until_something_newer(self):
+        info = {"mdns_models": ["model=AppleTV5,3"], "mdns_hosts": ["den.local"]}
+        self.assertEqual(devid.current_mdns(info), info)                      # nothing stamped: all counts
+        self.assertEqual(devid.current_mdns(None), {})
+
+    def test_display_name_skips_ids(self):
+        self.assertEqual(devid.display_name("0005CD000001", "receiver-den"), "receiver-den")
+        self.assertEqual(devid.display_name("0005CD000001"), "0005CD000001")      # nothing better
 
     def test_mdns_name(self):
         self.assertEqual(devid.mdns_name({"mdns_hosts": ["box.local"], "mdns_names": ["Other"]}), "box")

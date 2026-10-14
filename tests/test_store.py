@@ -184,6 +184,19 @@ class TestUnboundConf(unittest.TestCase):
             os.unlink(f.name)
 
 
+class TestSeenMerge(unittest.TestCase):
+    def test_latest_time_per_item_kept(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = store.Store(os.path.join(d, "loupe.db"))
+            mac = "02:00:00:00:00:71"
+            s.write({}, {}, {mac: {"ip": "10.9.1.71", "ts": 100, "info": {"mdns_models": ["model=Mac14,14"], "seen": {"m|model=Mac14,14": 100, "h|x.local": 100}}}})
+            s.write({}, {}, {mac: {"ip": "10.9.1.71", "ts": 50, "info": {"seen": {"m|model=Mac14,14": 50, "h|y.local": 60}}}})
+            info = {m: i for m, _ip, _hn, i, _n in s.devices_with_names(0)}[mac]
+            s.close()
+            self.assertEqual(info["seen"], {"m|model=Mac14,14": 100, "h|x.local": 100, "h|y.local": 60})
+            self.assertEqual(info["mdns_models"], ["model=Mac14,14"])
+
+
 if __name__ == "__main__":
     unittest.main()
 

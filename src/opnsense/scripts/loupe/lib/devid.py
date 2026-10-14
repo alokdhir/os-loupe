@@ -256,8 +256,33 @@ def model(info):
     return None
 
 
-# random identifiers some devices announce as host names (UUIDs, 12-16 hex digits)
-ID_NAME = re.compile(r"(?i)^([0-9a-f]{12,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
+# Bonjour evidence ages: per kind, only what was announced within RECENT of the newest item counts, so a
+# device's current announcements outrank stale ones (e.g. another device's model it once relayed)
+MDNS_KINDS = ("models", "names", "services", "hosts")
+RECENT = 86400
+
+
+def seen_key(kind, item):
+    return f"{kind[0]}|{item}"
+
+
+def current_mdns(info):
+    """A copy of `info` whose mdns_* lists hold only current items. Items recorded before timestamps
+    existed count only while the kind has no timestamped item at all."""
+    info = dict(info or {})
+    seen = info.get("seen") if isinstance(info.get("seen"), dict) else {}
+    for kind in MDNS_KINDS:
+        items = info.get(f"mdns_{kind}") or []
+        stamped = {i: seen[seen_key(kind, i)] for i in items if seen_key(kind, i) in seen}
+        if stamped:
+            newest = max(stamped.values())
+            info[f"mdns_{kind}"] = [i for i in items if stamped.get(i, -1) >= newest - RECENT]
+    return info
+
+
+# random identifiers some devices announce as host names: UUIDs and runs of 12 or more hex digits, with an
+# optional short suffix (HomeKit bridges announce "<32 hex digits>-hap")
+ID_NAME = re.compile(r"(?i)^([0-9a-f]{12,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(-[a-z]{1,8})?$")
 
 
 # names Apple devices send instead of their own when a private Wi-Fi address is on
@@ -266,9 +291,11 @@ PLACEHOLDERS = {"mac", "iphone", "ipad", "watch", "apple-watch", "ipod", "localh
 
 def display_name(*candidates):
     """The first real name: lease or static name, DHCP host name, Bonjour name. A generic
-    placeholder ("Mac", "iPhone") only if nothing better is known."""
+    placeholder ("Mac", "iPhone") or an ID (a receiver calling itself "0005CD000001") only if nothing
+    better is known."""
     names = [c for c in candidates if c]
-    return next((n for n in names if n.lower() not in PLACEHOLDERS), names[0] if names else None)
+    return next((n for n in names if n.lower() not in PLACEHOLDERS and not ID_NAME.match(n)),
+                names[0] if names else None)
 
 
 def mdns_name(info):

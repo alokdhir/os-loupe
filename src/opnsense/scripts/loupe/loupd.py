@@ -115,12 +115,14 @@ class Loupe:
             if ":" not in ev["client"]:
                 d["ip"] = ev["client"]    # mDNS often comes from the IPv6 link-local address
             info = d.setdefault("info", {})
-            for k in ("models", "names", "services"):
-                if ev.get(k):
-                    info[f"mdns_{k}"] = sorted(set(info.get(f"mdns_{k}", [])) | set(ev[k]))
+            seen = info.setdefault("seen", {})          # when each item was last announced (devid.current_mdns)
             hosts = [h for h in ev.get("hosts", {}) if h.endswith(".local")]
-            if hosts:
-                info["mdns_hosts"] = sorted(set(info.get("mdns_hosts", [])) | set(hosts))
+            for k, items in (("models", ev.get("models")), ("names", ev.get("names")),
+                             ("services", ev.get("services")), ("hosts", hosts)):
+                if items:
+                    info[f"mdns_{k}"] = sorted(set(info.get(f"mdns_{k}", [])) | set(items))
+                    for item in items:
+                        seen[devid.seen_key(k, item)] = int(ev["ts"])
 
     def lookup(self, ts, ip, name, source):
         k = (local_day(ts), ip, name, source)
@@ -176,6 +178,7 @@ class Loupe:
         leases, hosts = devid.leases(), devid.static_hosts()
         rows = []
         for mac, ip, hostname, info, seen in self.store.devices_with_names(now - 7 * 86400):
+            info = devid.current_mdns(info)     # what the device announces now outranks older announcements
             name = leases.get(mac) or hosts.get(ip)
             t, src, ven = devid.classify(mac, name or hostname, info, seen, self.oui)
             rows.append((devid.display_name(name, hostname, devid.mdns_name(info)), ven, t, src, devid.model(info), mac))

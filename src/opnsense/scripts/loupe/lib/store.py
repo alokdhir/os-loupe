@@ -199,6 +199,9 @@ class Store:
                 for k, v in (d.get("info") or {}).items():
                     if isinstance(v, list):
                         info[k] = sorted(set(info.get(k, [])) | set(v))
+                    elif isinstance(v, dict):           # {item: last seen}: keep the latest of each
+                        old = info.get(k) if isinstance(info.get(k), dict) else {}
+                        info[k] = {**old, **{i: max(t, old.get(i, 0)) for i, t in v.items()}}
                     else:
                         info[k] = v
                 db.execute(

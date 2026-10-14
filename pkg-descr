@@ -30,6 +30,9 @@ Plugin Changelog
 * tools/install.sh and tools/uninstall.sh to install from the repository
 * Sub-Zero/Wolf/Cove appliances recognised (they show as Card Access or Azure
   Sphere); fanSync fans named Fanimation, not their Wi-Fi module maker
+* Bonjour evidence keeps when it was last seen: what a device announces now
+  outranks older announcements (a stale relayed model no longer decides the
+  type); long hex IDs and "-hap" names are not used as device names
 * identities query for other plugins: name, type and icon for a list of MAC
   addresses (configctl loupe query identities, /api/loupe/report/identities)
 
