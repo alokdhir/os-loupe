@@ -19,7 +19,7 @@ flowchart TB
     subgraph daemon["loupd"]
         names["Names and device clues"]
         bytes["Byte changes per connection<br/>every 10 s"]
-        flush["Write every minute<br/>classify devices every 10 min<br/>prune hourly"]
+        flush["Write every minute<br/>classify devices every minute<br/>prune hourly"]
     end
     db[("SQLite<br/>/var/db/loupe")]
     data["Shipped rules (data/*.json)<br/>settings (loupe.json)"]
@@ -45,9 +45,9 @@ Everything Loupe knows comes from these. Required ones stop Loupe from working i
 | pf state table (pf's netlink interface) | bytes and packets per connection, both directions, before NAT | every 10 s | required |
 | Packet capture (BPF) on the selected interfaces | TLS SNI and QUIC names, DNS answers sent to devices, DHCP requests (host name, vendor class, parameter list), mDNS (host names, models, services) | continuously | required |
 | ARP and IPv6 neighbour tables (sysctl, as `arp -an` / `ndp -an` show them) | IP → MAC, to tie traffic to a device | every 60 s | required |
-| Interface addresses (`getifaddrs()`) | which networks are local | at start, every 10 min | required |
+| Interface addresses (`getifaddrs()`) | which networks are local | at start, every minute | required |
 | Unbound cache (`dump_cache` over Unbound's TLS control port) | names for connections opened before Loupe started | at start | optional (Unbound) |
-| DHCP leases and fixed entries: dnsmasq (`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`), Kea (`/var/db/kea/kea-leases4.csv`, reservations in `kea-dhcp4.conf`), ISC dhcpd (`dhcpd.leases`, `host` entries in `dhcpd.conf`) | device names | every 10 min | optional; a server's fixed entries are read only while it has a lease file (Kea is installed with a sample config) |
+| DHCP leases and fixed entries: dnsmasq (`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`), Kea (`/var/db/kea/kea-leases4.csv`, reservations in `kea-dhcp4.conf`), ISC dhcpd (`dhcpd.leases`, `host` entries in `dhcpd.conf`) | device names | every minute | optional; a server's fixed entries are read only while it has a lease file (Kea is installed with a sample config) |
 | IEEE vendor list (`/usr/local/opnsense/contrib/ieee/oui.csv`, shipped with OPNsense) | MAC maker | at start | optional |
 | Settings (`/usr/local/etc/loupe.json`, from the OPNsense config via a template) | interfaces, retention, your service and device names | daemon: at start (Apply restarts it); reports: every query | required |
 | Shipped rules (`data/devices.json`, `data/services.json`) | device types, icons, makers, Apple model names; service names, address ranges, ports, VPN providers | at start / every query | required |

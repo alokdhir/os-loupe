@@ -151,7 +151,9 @@ class Loupe:
             self.next_flush = mono + self.flush_every
             self.guarded("flush", self.flush, now)
         if mono >= self.next_classify:
-            self.next_classify = mono + 600
+            # right after the minute's write: new evidence (a fresh Bonjour model, a lease) counts within a
+            # minute. A pass over every device takes ~0.2 s.
+            self.next_classify = mono + self.flush_every
             self.guarded("networks", self.refresh_networks)
             self.guarded("classify", self.classify, now)
         if mono >= self.next_prune:
