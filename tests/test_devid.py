@@ -249,6 +249,19 @@ class TestModelAndName(unittest.TestCase):
                 "seen": {"h|a.local": 10 * day, "h|b.local": 10 * day - 3600, "h|c.local": 5 * day}}
         self.assertEqual(devid.current_mdns(info)["mdns_hosts"], ["a.local", "b.local"])
 
+    def test_fresh_ids_dont_make_a_real_name_old(self):
+        # a phone with a private address: placeholder DHCP name, a real host name from before timestamps, then only
+        # fresh UUID hosts and instance names that are never names
+        day = 86400
+        info = {"mdns_hosts": ["11111111-2222-4333-8444-555555555555.local", "kids-iphone.local"],
+                "mdns_names": ["66666666-7777-4888-9999-000000000000", "localnetworkprivacy", "Spotify Group Session [ab12c]"],
+                "seen": {"h|11111111-2222-4333-8444-555555555555.local": 10 * day}}
+        cur = devid.current_mdns(info)
+        self.assertEqual(cur["mdns_hosts"], info["mdns_hosts"])
+        self.assertEqual(devid.mdns_name(cur), "kids-iphone")
+        self.assertEqual(devid.display_name("iPhone", "iPhone", devid.mdns_name(cur)), "kids-iphone")
+        self.assertIsNone(devid.mdns_name({"mdns_names": ["localnetworkprivacy", "Spotify Group Session [ab12c]"]}))
+
     def test_old_evidence_kept_until_something_newer(self):
         info = {"mdns_models": ["model=AppleTV5,3"], "mdns_hosts": ["den.local"]}
         self.assertEqual(devid.current_mdns(info), info)                      # nothing stamped: all counts

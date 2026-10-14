@@ -268,12 +268,13 @@ def seen_key(kind, item):
 
 def current_mdns(info):
     """A copy of `info` whose mdns_* lists hold only current items. Items recorded before timestamps
-    existed count only while the kind has no timestamped item at all."""
+    existed count only while the kind has no timestamped item at all. Random IDs (an iPhone's UUID host
+    names) are never used as names, so they don't make a kind's other items look old."""
     info = dict(info or {})
     seen = info.get("seen") if isinstance(info.get("seen"), dict) else {}
     for kind in MDNS_KINDS:
         items = info.get(f"mdns_{kind}") or []
-        stamped = {i: seen[seen_key(kind, i)] for i in items if seen_key(kind, i) in seen}
+        stamped = {i: seen[seen_key(kind, i)] for i in items if seen_key(kind, i) in seen and not _id_item(kind, i)}
         if stamped:
             newest = max(stamped.values())
             info[f"mdns_{kind}"] = [i for i in items if stamped.get(i, -1) >= newest - RECENT]
@@ -287,6 +288,19 @@ ID_NAME = re.compile(r"(?i)^([0-9a-f]{12,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[
 
 # names Apple devices send instead of their own when a private Wi-Fi address is on
 PLACEHOLDERS = {"mac", "iphone", "ipad", "watch", "apple-watch", "ipod", "localhost"}
+
+# Bonjour instance names that are never a device's name: iOS announces "localnetworkprivacy" while it checks
+# Local Network access; Spotify's group sessions are named "Spotify Group Session [code]"
+NOT_NAMES = re.compile(r"(?i)^(localnetworkprivacy|spotify group session( \[[^]]*\])?)$")
+
+
+def _id_item(kind, item):
+    """An announced host or instance name that is only an ID or never a name."""
+    if kind == "hosts":
+        item = item[:-len(".local")] if item.endswith(".local") else item
+    elif kind != "names":
+        return False
+    return bool(ID_NAME.match(item) or NOT_NAMES.match(item))
 
 
 def display_name(*candidates):
@@ -305,8 +319,8 @@ def mdns_name(info):
     device's own name is preferred: the one that also appears as its AirPlay name ("70-35-60-63.1 kitchen").
     """
     hosts = [h[:-len(".local")] for h in (info or {}).get("mdns_hosts", [])
-             if h.endswith(".local") and not h.startswith("_") and not ID_NAME.match(h[:-len(".local")])]
-    names = [n for n in (info or {}).get("mdns_names", []) if not ID_NAME.match(n)]
+             if h.endswith(".local") and not h.startswith("_") and not _id_item("hosts", h)]
+    names = [n for n in (info or {}).get("mdns_names", []) if not _id_item("names", n)]
     airplay = {n.split(" ", 1)[1].replace(" ", "-").lower() for n in names if re.match(r"^[0-9-]+\.\d+ ", n)}
     own = [h for h in hosts if h.lower() in airplay]
     return (own or hosts or names or [None])[0]
