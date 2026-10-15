@@ -11,6 +11,24 @@ Reports live under Reporting, with a dashboard widget.
 Plugin Changelog
 ================
 
+1.0
+
+* Long periods in a fraction of a second: loupd keeps a daily summary per
+  device and service, so 7 days, 30 days and a year read days instead of
+  hours; lists up to 48 hours read stored hourly summaries
+* The same traffic gets the same service name in every period: rows are named
+  with the evidence of their own day
+* Device and service lists are kept for a minute while you sort, page and
+  search them
+* Devices are classified every minute, right after each write (was every 10
+  minutes)
+* Traffic is recorded per MAC as well as address, so a device that takes over
+  another's address gets its own rows; existing tables are converted once on
+  the first start after updating
+* Random IDs in Bonjour names (an iPhone's UUID host names) no longer push out
+  a real host name; "localnetworkprivacy" and Spotify group sessions are never
+  used as device names
+
 0.9
 
 * One page with Devices, Services and Settings tabs
