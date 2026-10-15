@@ -1,6 +1,6 @@
 <menu>
     <Reporting>
-        <Loupe VisibleName="Loupe" order="45" cssClass="fa fa-search fa-fw" url="/ui/loupe/">
+        <Loupe VisibleName="Loupe" cssClass="fa fa-search fa-fw" url="/ui/loupe/">
             <Pages url="/ui/loupe/index/*" visibility="hidden"/>
         </Loupe>
     </Reporting>
