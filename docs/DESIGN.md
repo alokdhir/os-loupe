@@ -132,7 +132,7 @@ The grids sort, page and search on the server, so each click and keystroke asks 
 
 ### Storage growth
 
-`flows_1h` grows ~13 MB a day with its indexes, ~4.6 GB at the default 365-day retention; `day_names` ~0.6 MB a day (~10,000 device/server pairs). The lists don't read `flows_1h` once the summaries are built, so a shorter retention mainly limits how far back the device page, searches and a rebuild can go.
+`flows_1h` grows ~14 MB a day with its indexes, ~5.3 GB at the default 365-day retention; `day_names` ~0.4 MB a day (~7,000 rows), the summaries less than that. The lists don't read `flows_1h` once the summaries are built, so a shorter retention mainly limits how far back the device page, searches and a rebuild can go.
 
 ## Alternatives considered
 
