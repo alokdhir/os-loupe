@@ -10,6 +10,7 @@
  ],
  "rules": [
   {"when": {"mac_prefix": "52:54:00"}, "type": "Virtual machine", "vendor": "QEMU/KVM", "example": {"mac": "52:54:00:00:00:01"}},
+  {"when": {"vendor": "Tesla"}, "tier": "mac_prefix", "type": "Tesla", "note": "Tesla's own MAC block, only on Tesla hardware; the car's DHCP client says MSFT 5.0", "example": {"vendor": "Tesla,Inc.", "info": {"dhcp_vendor_class": "MSFT 5.0"}}},
   {"when": {"mdns_model": "^AppleTV"}, "type": "Apple TV", "example": {"info": {"mdns_models": ["model=AppleTV14,1"]}}},
   {"when": {"mdns_model": "^AudioAccessory"}, "type": "HomePod", "example": {"info": {"mdns_models": ["model=AudioAccessory5,1"]}}},
   {"when": {"mdns_model": "^(MacBook|Macmini|MacPro|iMac|Mac\\d|MacStudio)"}, "type": "Mac", "example": {"info": {"mdns_models": ["model=Mac14,14"]}}},
