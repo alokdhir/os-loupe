@@ -213,7 +213,11 @@ def cmd_device(arg, hours):
         dev = info.get(val)
     else:
         dev = next((d for d in info.values() if d["ip"] == val), None)
-    services = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "names": collections.Counter()})
+    if dev and dev["mac"]:              # the name it sent in DHCP, when it has a domain (a work laptop's says whose)
+        row = db.execute("SELECT info FROM devices WHERE mac = ?", (dev["mac"],)).fetchone()
+        fqdn = (json.loads(row[0] or "{}").get("dhcp_fqdn") or "").rstrip(".") if row else ""
+        dev = {**dev, "fqdn": fqdn if "." in fqdn else ""}
+    services =collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "names": collections.Counter()})
     sites = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "last": 0, "service": "", "inferred": False,
                                              "servers": set()})
     ports = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0})

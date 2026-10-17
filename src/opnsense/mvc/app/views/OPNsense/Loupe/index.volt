@@ -188,8 +188,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 const d = data.device || {};
                 $('#loupe-detail-title').html((d.icon ? '<i class="' + esc(d.icon) + ' fa-fw text-muted"></i> ' : '')
                     + esc(d.name || d.ip || id) + editButton(d)
-                    + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.ip, d.mac].filter(Boolean).join(' · '))
-                    + (d.type_source ? ' (' + esc(d.type_source) + ')' : '') + '</small>');
+                    + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>');
                 const tl = data.timeline, step = data.step || 300;
                 const mbps = b => b * 8 / step / 1e6;          /* average rate over the bar */
                 if (chart) chart.destroy();
