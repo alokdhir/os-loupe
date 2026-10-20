@@ -122,12 +122,13 @@ def protocol_names(path="/etc/protocols"):
 
 
 def is_group(addr):
-    """Multicast/broadcast destinations (mDNS, SSDP, ...) are not internet traffic."""
+    """Multicast/broadcast destinations (mDNS, SSDP, ...), link-local peers (IPv6 neighbour discovery from fe80::
+    to the router) and :: (duplicate address detection for each new IPv6 address) are not internet traffic."""
     try:
         a = ipaddress.ip_address(addr.split("%")[0])
     except ValueError:
         return False
-    return a.is_multicast or a == ipaddress.IPv4Address("255.255.255.255")
+    return a.is_multicast or a.is_link_local or a.is_unspecified or a == ipaddress.IPv4Address("255.255.255.255")
 
 
 _client = None

@@ -37,7 +37,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "opnsense", "scripts", "loupe"))
 from lib import pfnl, pfstate  # noqa: E402
 
-PROTO = {"tcp": 6, "udp": 17}
+PROTO = {"tcp": 6, "udp": 17, "ipv6-icmp": 58}
 
 
 def message(sid, origif, inbound, left, right, proto="tcp", packets=(0, 0), bytes_=(0, 0), age=0):

@@ -47,6 +47,8 @@ def table(bytes1=(1000, 50000), bytes5=(400000, 3000)):
         M(4, "ix1", True, ("10.9.10.10", 22), ("203.0.113.99", 55555), "tcp", (30, 40), (3000, 400000), 600),
         M(5, "bridge0", False, ("203.0.113.99", 55555), ("10.9.10.10", 22), "tcp", (30, 40), bytes5[::-1], 600),
         M(6, "bridge0", True, ("10.9.0.1", 53), ("10.9.1.20", 5353), "udp", (1, 1), (60, 120), 1),          # LAN <-> router
+        M(7, "bridge0", True, ("2001:db8:1::1", 135), ("fe80::ac00:ff:fe00:1", 0), "ipv6-icmp", (1, 1), (72, 0), 1),  # NS
+        M(8, "bridge0", True, ("2001:db8:1::30", 135), ("::", 0), "ipv6-icmp", (0, 1), (0, 72), 1),               # DAD
     ]
 
 
@@ -63,7 +65,9 @@ class TestPfState(unittest.TestCase):
 
     def test_lan_side_only(self):
         keys = {int(k[0], 16) for k in self.parse()}
-        # NAT'd WAN state (2), WAN side of the port forward (4) and LAN<->router (6) are dropped
+        # NAT'd WAN state (2), WAN side of the port forward (4), LAN<->router (6) and neighbour discovery from a
+        # link-local address to the router's global one (7: only the router's end is in a local network) and
+        # duplicate address detection from :: (8: would make every new address a device) are dropped
         self.assertEqual(keys, {1, 3, 5})
 
     def test_outbound_directions(self):
@@ -93,7 +97,7 @@ class TestPfState(unittest.TestCase):
         self.assertNotIn(3, d)                               # unchanged
 
     def test_wan_twin_skipped_before_parsing(self):
-        self.assertEqual(len(pfnl.parse_states(table(), {"bridge0"})), 4)       # states 2 and 4 never decoded
+        self.assertEqual(len(pfnl.parse_states(table(), {"bridge0"})), 6)       # states 2 and 4 never decoded
 
 
 class TestTrackerUnseen(unittest.TestCase):
