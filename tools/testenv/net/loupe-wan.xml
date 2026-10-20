@@ -1,0 +1,11 @@
+<network>
+  <name>loupe-wan</name>
+  <forward mode='nat'/>
+  <bridge name='loupewan0' stp='off' delay='0'/>
+  <ip address='10.98.0.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='10.98.0.50' end='10.98.0.99'/>
+      <host mac='52:54:00:98:00:02' ip='10.98.0.2'/>
+    </dhcp>
+  </ip>
+</network>

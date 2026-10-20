@@ -1,0 +1,4 @@
+<network>
+  <name>loupe-trunk</name>
+  <bridge name='loupetrk0' stp='off' delay='0'/>
+</network>
