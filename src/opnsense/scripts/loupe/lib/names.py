@@ -75,6 +75,10 @@ class Names:
                 name = cname[name]
             self.dns_any.setdefault(addr, (name, now + DNS_MIN_TTL))
 
+    def has_hello(self, st):
+        """The TLS/QUIC hello of this connection has arrived."""
+        return (st.local, st.lport, st.remote, st.rport) in self.hellos
+
     def name_for(self, st, now=None):
         """Name for a pfstate.State; remembered per state for its lifetime."""
         got = self.conn.get(st.key)

@@ -84,6 +84,40 @@ class TestNames(unittest.TestCase):
         self.assertEqual(n.name_for(st, 105), ("b.example", "dns"))      # state gone -> fresh lookup
 
 
+class TestLateHello(unittest.TestCase):
+    """capture can hand over a connection's hello after pf shows its state: the first bytes wait for it"""
+
+    def setUp(self):
+        import loupd
+        self.lp = object.__new__(loupd.Loupe)
+        self.lp.names, self.lp.flows, self.lp.held, self.lp.ip_mac, self.lp.stopping = names.Names(), {}, [], {}, False
+        self.lp.names.dns_answer({"ts": 100, "client": "10.9.1.21", "name": "guess.example", "addrs": ["203.0.113.10"],
+                                  "ttl": 60})
+
+    def rows(self):
+        return {k[5]: v[3:5] for k, v in self.lp.flows.items()}
+
+    def test_late_hello(self):
+        st = state()
+        self.lp.count(110, [pfstate.Delta(st, 10, 20, 1, 1, True)])
+        self.assertEqual(self.lp.flows, {})                                 # held, not named "guess.example"
+        self.lp.names.tls({"ts": 109, "client": "10.9.1.20", "cport": 51000, "server": "203.0.113.10", "port": 443,
+                           "sni": "www.example"})
+        self.lp.count(120, [pfstate.Delta(st, 5, 5, 1, 1, False)])
+        self.assertEqual(self.rows(), {"www.example": [15, 25]})
+
+    def test_hello_already_in(self):
+        self.lp.names.tls({"ts": 109, "client": "10.9.1.20", "cport": 51000, "server": "203.0.113.10", "port": 443,
+                           "sni": "www.example"})
+        self.lp.count(110, [pfstate.Delta(state(), 10, 20, 1, 1, True)])
+        self.assertEqual(self.rows(), {"www.example": [10, 20]})
+
+    def test_no_hello(self):
+        self.lp.count(110, [pfstate.Delta(state(), 10, 20, 1, 1, True)])
+        self.lp.count(120, [])
+        self.assertEqual(self.rows(), {"guess.example": [10, 20]})        # plain connections: one poll later
+
+
 class TestStore(unittest.TestCase):
     def test_write_accumulates(self):
         with tempfile.TemporaryDirectory() as d:

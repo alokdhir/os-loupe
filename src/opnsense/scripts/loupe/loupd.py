@@ -64,6 +64,7 @@ class Loupe:
         self.oui = devid.load_oui()
         self.ip_mac = {}
         self.flows = {}
+        self.held = []
         self.lookups = {}
         self.devices = collections.defaultdict(dict)
         self.live = set()
@@ -216,8 +217,17 @@ class Loupe:
     def poll(self, now):
         states = pfstate.snapshot(self.is_local, self.ifaces)
         self.live = set(states)
+        self.count(now, self.tracker.update(states))
+
+    def count(self, now, deltas):
+        """Add byte deltas to this minute's rows. A new connection whose TLS/QUIC hello hasn't arrived yet waits one
+        poll: capture reads packets in batches, so the hello can come after pf shows the state, and the name a
+        connection gets first (otherwise a DNS guess, or none) is the one it keeps."""
         bucket = int(now // 60 * 60)          # minute; the store derives 5-minute and hourly rows
-        for d in self.tracker.update(states):
+        ready, self.held = self.held, []
+        for d in deltas:
+            (self.held if d.new and not self.names.has_hello(d.state) else ready).append(d)
+        for d in ready:
             st = d.state
             name, source = self.names.name_for(st, now)
             k = (bucket, st.local, st.remote, st.rport if st.outbound else st.lport, st.proto, name or "")
@@ -230,6 +240,8 @@ class Loupe:
             v[6] += d.new
 
     def flush(self, now):
+        if self.stopping:
+            self.count(now, [])                 # connections still waiting for a name
         self.guarded("neighbour table", self.refresh_macs)     # best effort: rows get their MAC next time
         for (_b, ip, *_rest), v in self.flows.items():
             if not v[0]:
