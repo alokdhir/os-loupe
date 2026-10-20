@@ -1,10 +1,13 @@
 #!/bin/bash
-# Made-up traffic, forever: small requests to real sites (v4), small and big
-# transfers to the .fake sites (v4/v6, HTTP/2 or HTTP/3), uploads, and pulls from
-# other clients across VLANs. One log line per transfer in /var/log/bakwas.log.
+# Made-up traffic, forever: small and big transfers to the .fake sites (v4/v6,
+# HTTP/2 or HTTP/3), uploads, pulls from other clients across VLANs and, with
+# INTERNET=1, small requests to real sites (v4). One log line per transfer in
+# /var/log/bakwas.log.
 # PEERS="name ..." in /etc/default/bakwas lists the other clients; ROLE=server only
 # does a media server's upkeep (update checks, metadata) every 20-30 minutes.
-PEERS= ROLE=
+# INTERNET=1 also visits real sites. Off by default: they leave through the host's
+# own network, where they show up as the host's traffic.
+PEERS= ROLE= INTERNET=
 [ -f /etc/default/bakwas ] && . /etc/default/bakwas
 LOG=/var/log/bakwas.log
 # REAL sites are visited often; RARE ones (device makers, distro mirrors) now and then, like a person would
@@ -34,7 +37,11 @@ xfer() {  # kind curl-args... ; logs what curl reports
 if [ "$ROLE" = server ]; then
 	while :; do
 		for _ in $(seq $((RANDOM % 3 + 2))); do
-			xfer real -4 --max-time 20 "https://$(pick plex.tv www.themoviedb.org image.tmdb.org api.github.com)/"
+			if [ -n "$INTERNET" ]; then
+				xfer real -4 --max-time 20 "https://$(pick plex.tv www.themoviedb.org image.tmdb.org api.github.com)/"
+			else
+				xfer small $(fam) $(proto) "https://$(pick video cdn.video photos).fake/"
+			fi
 		done
 		xfer small $(fam) $(proto) "https://updates.fake/"
 		[ $((RANDOM % 6)) = 0 ] && xfer big $(fam) $(proto) --limit-rate 20M \
@@ -45,7 +52,9 @@ fi
 
 while :; do
 	r=$((RANDOM % 100))
-	if [ $r -lt 45 ]; then
+	if [ $r -lt 45 ] && [ -z "$INTERNET" ]; then
+		xfer small $(fam) $(proto) "https://$(pick "${FAKE[@]}").fake/"
+	elif [ $r -lt 45 ]; then
 		[ $((RANDOM % 50)) = 0 ] && s=$(pick "${RARE[@]}") || s=$(pick "${REAL[@]}")
 		case "$H3" in *" $s "*) p=--http3 ;; *) p= ;; esac
 		xfer real -4 $p --max-time 20 "https://$s/"

@@ -19,12 +19,15 @@ new libvirt networks, one VM and five containers, all named `loupe-*`.
   its own v4 and v6 address, over HTTP, HTTPS/HTTP2 and HTTP/3. `fake-dl.py`
   streams random bytes (`/dl?bytes=500M`) and discards uploads (`/ul`). The test
   router's Unbound forwards `fake.` to it.
-- **Clients** (Debian containers) run `bakwas.sh`: small requests to real sites
-  (v4, some over HTTP/3), small and big transfers to `*.fake` (v4/v6, HTTP/2 or
-  HTTP/3), uploads, and pulls from each other across VLANs. Every transfer is
-  logged in `/var/log/bakwas.log` with curl's byte counts, to check Loupe against.
-  `loupe-c4` sits on VLAN 20 and 30 with one MAC. Each client has three global
-  v6 addresses per network (stable, privacy, DHCPv6).
+- **Clients** (Debian containers) run `bakwas.sh`: small and big transfers to
+  `*.fake` (v4/v6, HTTP/2 or HTTP/3), uploads, and pulls from each other across
+  VLANs. Every transfer is logged in `/var/log/bakwas.log` with curl's byte
+  counts, to check Loupe against. `INTERNET=1` in `/etc/default/bakwas` adds small
+  requests to real sites; off by default, since they leave through the host's
+  network and show up there as the host's traffic.
+  `loupe-c4` (plex-server) sits on VLAN 30 and 20 with one MAC, its default route
+  on VLAN 30; remote viewers on fakenet stream from it through WAN port 32400.
+  Each client has three global v6 addresses per network (stable, privacy, DHCPv6).
 
 ## Build (on the host, as root, from a copy of this directory)
 
