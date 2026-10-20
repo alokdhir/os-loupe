@@ -3,7 +3,8 @@
 
 check.py [SINCE]   SINCE: unix time (default: the interface baseline in ifbase.txt)
 
-Per client: bytes from its bakwas log (curl's counts: payload only, so Loupe should be a few % higher) next to
+Per client: bytes from its bakwas log (for the media server, also fakenet's viewer log, its streams being the
+server's upload) (curl's counts: payload only, so Loupe should be a few % higher) next to
 Loupe's per-minute rows for its MAC, the addresses Loupe saw for it and how its .fake names were learnt.
 Per interface: the router's byte counters since the baseline next to Loupe's total. The counters also hold
 traffic Loupe leaves out on purpose (the router's own DNS/DHCP/ND, traffic between clients).
@@ -15,7 +16,7 @@ import subprocess
 import sys
 
 D = os.path.dirname(os.path.abspath(__file__))
-CLIENTS = {"loupe-c1": "den-laptop", "loupe-c2": "kids-tablet", "loupe-c3": "office-pc", "loupe-c4": "media-box"}
+CLIENTS = {"loupe-c1": "den-laptop", "loupe-c2": "kids-tablet", "loupe-c3": "office-pc", "loupe-c4": "plex-server"}
 IFACES = ("vtnet0", "vlan0.20", "vlan0.30")
 
 ROUTER = r'''
@@ -55,16 +56,19 @@ def baseline():
     return since, base
 
 
-def client_log(ct, since):
-    """bytes by kind and family from the client's bakwas log, transfers that started at or after `since`"""
-    out = {}
-    for line in sh("incus", "exec", ct, "--", "cat", "/var/log/bakwas.log").splitlines():
+def client_log(ct, since, path="/var/log/bakwas.log", out=None, swap=False):
+    """bytes by kind and family from the client's bakwas log, transfers that started at or after `since`
+    (swap: a log written by the other end, its download being this client's upload)"""
+    out = {} if out is None else out
+    for line in sh("incus", "exec", ct, "--", "cat", path).splitlines():
         f = line.split()
         if len(f) < 6 or not f[2].startswith("rc="):
             continue
         if datetime.datetime.fromisoformat(f[0]).replace(tzinfo=datetime.timezone.utc).timestamp() < since:
             continue
         kv = dict(x.split("=", 1) for x in f if "=" in x and x.split("=", 1)[0] in ("down", "up"))
+        if swap:
+            kv = {"down": kv.get("up", 0), "up": kv.get("down", 0)}
         fam = "v6" if ":" in f[4] else "v4"
         k = out.setdefault(f[1], {"v4": [0, 0, 0], "v6": [0, 0, 0]})[fam]
         k[0] += int(kv.get("down", 0))
@@ -90,6 +94,8 @@ def main():
     print(f"{'device':<12} {'mac':<18} {'log down':>9} {'log up':>9} {'loupe dn':>9} {'loupe up':>9}  dn %  addresses")
     for mac, ct in macs.items():
         log = client_log(ct, since)
+        if CLIENTS[ct] == "plex-server":
+            client_log("loupe-fakenet", since, "/var/log/viewers.log", log, swap=True)
         down = sum(v[f][0] for k, v in log.items() if k != "peer" for f in v)
         up = sum(v[f][1] for k, v in log.items() if k != "peer" for f in v)
         lo = r["macs"].get(mac, {"up": 0, "down": 0, "ips": []})

@@ -36,7 +36,7 @@ networkctl reload; networkctl reconfigure eth0; sleep 3
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get -qq update
-apt-get -qq install -y nginx dnsmasq-base openssl python3 >/dev/null
+apt-get -qq install -y nginx dnsmasq-base openssl python3 curl >/dev/null
 
 cat > /etc/systemd/system/fake-dns.service <<EON
 [Unit]
@@ -107,9 +107,21 @@ server {
 	}
 }
 EON
+install -m 755 /root/viewers.sh /usr/local/bin/viewers.sh
+cat > /etc/systemd/system/viewers.service <<EON
+[Unit]
+Description=Remote viewers streaming from the bench's media server
+After=network-online.target
+[Service]
+ExecStart=/usr/local/bin/viewers.sh
+Restart=always
+RestartSec=60
+[Install]
+WantedBy=multi-user.target
+EON
 systemctl daemon-reload
-systemctl enable -q fake-dns fake-dl
-systemctl restart fake-dns fake-dl
+systemctl enable -q fake-dns fake-dl viewers
+systemctl restart fake-dns fake-dl viewers
 nginx -t 2>&1 | tail -1
 systemctl restart nginx
 echo "fakenet ready: $SITES"

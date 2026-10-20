@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Endless-bytes download server: behind nginx on fakenet (127.0.0.1:8080), or
-on a client for traffic between VLANs (fake-dl.py 0.0.0.0).
+on a client for traffic between VLANs (fake-dl.py 0.0.0.0 [PORT]).
 
 GET /dl?bytes=500M   streams that many random bytes (K/M/G suffixes), then closes.
 PUT/POST /ul         reads the body, throws it away and answers with its size.
@@ -67,4 +67,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    ThreadingHTTPServer((sys.argv[1] if len(sys.argv) > 1 else '127.0.0.1', 8080), Handler).serve_forever()
+    ThreadingHTTPServer((sys.argv[1] if len(sys.argv) > 1 else '127.0.0.1',
+                         int(sys.argv[2]) if len(sys.argv) > 2 else 8080), Handler).serve_forever()

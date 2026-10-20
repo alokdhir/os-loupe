@@ -10,7 +10,8 @@ reboot to the caller. Idempotent: running it again rewrites the same settings.
   WAN    vtnet1           DHCP (v4)      2001:db8:98::2/64, gw 2001:db8:98::100
 DHCPv4 + SLAAC on all three, allow-all out, root ssh by key (keys from
 /root/.ssh/authorized_keys), ssh/https from the host (10.98.0.1) on WAN, and
-Unbound forwarding the made-up "fake." TLD to fakenet (10.98.0.100).
+Unbound forwarding the made-up "fake." TLD to fakenet (10.98.0.100). The media
+server (MEDIA) gets a fixed VLAN 30 address and WAN port 32400 forwarded to it.
 """
 import base64
 import shutil
@@ -26,6 +27,7 @@ NETS = [  # (name, device, descr, v4 net, v6 prefix)
     ('opt1', 'vlan0.20', 'VLAN20', '10.99.20', '2001:db8:1:20:'),
     ('opt2', 'vlan0.30', 'VLAN30', '10.99.30', '2001:db8:1:30:'),
 ]
+MEDIA = ('plex-server', '52:54:00:00:00:c4', '10.99.30.50')
 MARK = 'loupe-testenv'  # description on everything we add, so reruns replace it
 
 
@@ -116,6 +118,18 @@ def main():
              domain_type='range', nosync=0, description=MARK)
         item(dm, 'dhcp_ranges', interface=name, start_addr='::1000', end_addr='::2000', constructor=name,
              domain_type='range', nosync=0, ra_mode='slaac', description=MARK)
+
+    drop_marked(dm, 'hosts', 'descr')
+    item(dm, 'hosts', host=MEDIA[0], ip=MEDIA[2], hwaddr=MEDIA[1], descr=MARK)
+
+    nat = child(root, 'nat')
+    drop_marked(nat, 'rule', 'descr')
+    fwd = item(nat, 'rule', interface='wan', ipprotocol='inet', protocol='tcp', target=MEDIA[2],
+               descr=MARK, **{'local-port': 32400, 'pass': 'pass'})
+    sub(sub(fwd, 'source'), 'network', 'any')
+    dst = sub(fwd, 'destination')
+    sub(dst, 'network', 'wanip')
+    sub(dst, 'port', 32400)
 
     rules = root.find('OPNsense/Firewall/Filter/rules')
     drop_marked(rules, 'rule', 'description')

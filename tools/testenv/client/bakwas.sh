@@ -2,8 +2,9 @@
 # Made-up traffic, forever: small requests to real sites (v4), small and big
 # transfers to the .fake sites (v4/v6, HTTP/2 or HTTP/3), uploads, and pulls from
 # other clients across VLANs. One log line per transfer in /var/log/bakwas.log.
-# PEERS="name ..." in /etc/default/bakwas lists the other clients.
-PEERS=
+# PEERS="name ..." in /etc/default/bakwas lists the other clients; ROLE=server only
+# does a media server's upkeep (update checks, metadata) every 20-30 minutes.
+PEERS= ROLE=
 [ -f /etc/default/bakwas ] && . /etc/default/bakwas
 LOG=/var/log/bakwas.log
 # REAL sites are visited often; RARE ones (device makers, distro mirrors) now and then, like a person would
@@ -29,6 +30,18 @@ xfer() {  # kind curl-args... ; logs what curl reports
 	out=$(curl -sk -o /dev/null --max-time 900 -w '%{http_version} %{remote_ip} down=%{size_download} up=%{size_upload}' "$@" 2>/dev/null)
 	log "$kind rc=$? $out ${*: -1}"
 }
+
+if [ "$ROLE" = server ]; then
+	while :; do
+		for _ in $(seq $((RANDOM % 3 + 2))); do
+			xfer real -4 --max-time 20 "https://$(pick plex.tv www.themoviedb.org image.tmdb.org api.github.com)/"
+		done
+		xfer small $(fam) $(proto) "https://updates.fake/"
+		[ $((RANDOM % 6)) = 0 ] && xfer big $(fam) $(proto) --limit-rate 20M \
+			"https://updates.fake/dl?bytes=$((RANDOM % 150 + 50))M"
+		sleep $((RANDOM % 600 + 1200))
+	done
+fi
 
 while :; do
 	r=$((RANDOM % 100))

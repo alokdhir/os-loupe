@@ -3,6 +3,8 @@
 # Puts eth0 (or VLAN sub-interfaces of it) on DHCPv4 + SLAAC with privacy
 # addresses, installs curl/dig/python3 and starts the traffic loop.
 # TEMP_LFT=SECONDS rotates the privacy addresses that often (Linux: a day).
+# Only the first VLAN takes a default route; the others reach their own network.
+# ROLE=server also serves streams on port 32400 (the router forwards WAN 32400).
 set -eu
 name=$1; shift
 echo "$name" > /etc/hostname; hostname "$name"
@@ -15,7 +17,8 @@ fi
 for l in $(ip -o link | awk -F'[ :@]+' '$2 ~ /^eth0\./ {print $2}'); do ip link del "$l"; done   # recreated below
 
 rm -f /etc/systemd/network/*.network /etc/systemd/network/*.netdev
-up() {  # networkd [Network] for an interface that takes addresses
+up() {  # networkd [Network] for an interface that takes addresses; up nogw: no default route from it
+	gw=yes; [ "${1:-}" = nogw ] && gw=no
 	cat <<EON
 DHCP=ipv4
 IPv6AcceptRA=yes
@@ -23,6 +26,9 @@ IPv6PrivacyExtensions=yes
 [DHCPv4]
 SendHostname=yes
 Hostname=$name
+UseGateway=$gw
+[IPv6AcceptRA]
+UseGateway=$gw
 EON
 }
 if [ "$*" = 0 ]; then
@@ -30,9 +36,11 @@ if [ "$*" = 0 ]; then
 else
 	{ printf '[Match]\nName=eth0\n[Network]\nLinkLocalAddressing=no\nIPv6AcceptRA=no\n'
 	  for v in "$@"; do echo "VLAN=eth0.$v"; done; } > /etc/systemd/network/eth0.network
+	gw=
 	for v in "$@"; do
 		printf '[NetDev]\nName=eth0.%s\nKind=vlan\n[VLAN]\nId=%s\n' "$v" "$v" > /etc/systemd/network/eth0.$v.netdev
-		{ printf '[Match]\nName=eth0.%s\n[Network]\n' "$v"; up; } > /etc/systemd/network/eth0.$v.network
+		{ printf '[Match]\nName=eth0.%s\n[Network]\n' "$v"; up $gw; } > /etc/systemd/network/eth0.$v.network
+		gw=nogw
 	done
 fi
 systemctl restart systemd-networkd
@@ -65,7 +73,10 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EON
+sed 's/0.0.0.0$/0.0.0.0 32400/; s/between VLANs/remote viewers/' /etc/systemd/system/fake-dl.service \
+	> /etc/systemd/system/fake-dl-viewers.service
 systemctl daemon-reload
 systemctl enable -q fake-dl bakwas
 systemctl restart fake-dl
+if [ "${ROLE:-}" = server ]; then systemctl enable -q --now fake-dl-viewers; else systemctl disable -q --now fake-dl-viewers; fi
 echo "$name ready (bakwas enabled, not started)"
