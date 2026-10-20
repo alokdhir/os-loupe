@@ -39,4 +39,4 @@ case "$ROUTER" in root@*) SUDO= ;; *) SUDO=sudo ;; esac
 DIR=$($SSH "$ROUTER" mktemp -d /tmp/loupe.XXXXXX)
 COPYFILE_DISABLE=1 tar --exclude .DS_Store --exclude __pycache__ -cf - src tools/install.sh tools/uninstall.sh | $SSH "$ROUTER" tar -C "$DIR" -xf -
 [ "$1" = uninstall ] && SCRIPT=uninstall.sh || SCRIPT=install.sh
-$SSH $TTY "$ROUTER" "$SUDO sh $DIR/tools/$SCRIPT; rc=\$?; rm -rf $DIR; exit \$rc"
+$SSH $TTY "$ROUTER" "sh -c '$SUDO sh $DIR/tools/$SCRIPT; rc=\$?; rm -rf $DIR; exit \$rc'"  # root's shell is csh
