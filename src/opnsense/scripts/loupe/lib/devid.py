@@ -87,6 +87,7 @@ class Rules:
     def __init__(self, data, user=()):
         self.types = data.get("types", {})
         self.apple_models = data.get("apple_models", {})
+        self.computer_vendors = data.get("computer_vendors", [])
         self.user_icons = {r["type"]: r["icon"] for r in user if r.get("icon") and r.get("type")}
         self.loose_icons = {loose(t): v["icon"] for t, v in self.types.items() if v.get("icon")}
         self.user = _tiers(user)
@@ -172,6 +173,8 @@ def _check(field, want, ev):
         p = ev["params"]
         return "dhcp fingerprint" if p == want or p.startswith(want + ",") else None
     if field == "talks_to":
+        if ev["computer"]:
+            return None
         hit = any(n == want or n.endswith("." + want) for n in ev["names"])
         return f"talks to {want}" if hit else None
     if field == "vendor":
@@ -208,7 +211,9 @@ def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
           "vc": info.get("dhcp_vendor_class") or "", "params": _params(info),
           "hosts": [hostname or "", info.get("dhcp_hostname") or ""] + list(info.get("mdns_hosts", []))}
     t = table or rules()
+    computer = private or any(re.search(r"(?i)\b" + re.escape(v) + r"\b", ven or "") for v in t.computer_vendors)
     for mine, tiers in ((True, t.user), (False, t.tiers)):
+        ev["computer"] = computer and not mine      # the user's own talks_to rules apply to any device
         for tier in tiers.values():
             for conds, r in tier:
                 src = _match(conds, ev)

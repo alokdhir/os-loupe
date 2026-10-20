@@ -6,7 +6,9 @@
   "dhcp_params (prefix of the request list), talks_to (domain suffix), vendor (whole word), private_mac (bool).",
   "Tiers run in a fixed order (strongest evidence first, see TIERS in lib/devid.py); a rule's tier defaults to its first field.",
   "'example' is synthetic evidence that must classify as this rule's type (checked by the tests).",
-  "Distro rules (Ubuntu, Debian...) match the update servers a machine checks; containers can blur them."
+  "Distro rules (Ubuntu, Debian...) match the update servers a machine checks; containers can blur them.",
+  "Shipped talks_to rules skip private MACs and computer_vendors: a phone or laptop opening a vendor's website is not",
+  "that vendor's device (devices themselves don't randomize their MAC and aren't built on these makers' network chips)."
  ],
  "rules": [
   {"when": {"mac_prefix": "52:54:00"}, "type": "Virtual machine", "vendor": "QEMU/KVM", "example": {"mac": "52:54:00:00:00:01"}},
@@ -146,6 +148,7 @@
   {"when": {"vendor": "Ring"}, "type": "Ring device", "example": {"vendor": "Ring Corp."}},
   {"when": {"private_mac": true}, "type": "Phone/tablet/laptop", "example": {"mac": "02:00:00:00:00:02"}}
  ],
+ "computer_vendors": ["Apple", "Intel", "Samsung Electronics", "Google", "Dell", "Lenovo", "LCFC", "Hewlett Packard", "HP Inc", "ASUSTek", "Micro-Star", "GIGA-BYTE", "Liteon", "Motorola Mobility", "OnePlus"],
  "types": {
   "iPhone": {"icon": "fa-brands fa-apple", "vendor": "Apple"},
   "iPad": {"icon": "fa-brands fa-apple", "vendor": "Apple"},

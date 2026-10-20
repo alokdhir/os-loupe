@@ -48,8 +48,18 @@ class TestDevid(unittest.TestCase):
         self.assertEqual(devid.classify("dd:ee:ff:00:00:02", "Sams-iPhone", {}, (), OUI)[0], "iPhone")
 
     def test_traffic_hint(self):
-        t = devid.classify("aa:bb:cc:00:00:01", None, {}, ["auth.np.ac.playstation.net"], OUI)
+        t = devid.classify("ac:00:00:00:00:01", None, {}, ["auth.np.ac.playstation.net"], OUI)
         self.assertEqual(t[:2], ("PlayStation", "talks to playstation.net"))
+
+    def test_traffic_hint_not_for_computers(self):
+        # a laptop or phone that opened a vendor's website is not that vendor's device
+        laptop = devid.classify("02:00:00:00:00:01", None, {}, ["www.roku.com", "www.ring.com"], OUI)
+        self.assertEqual(laptop[:2], ("Phone/tablet/laptop", "private MAC"))
+        self.assertNotEqual(devid.classify("dd:ee:ff:00:00:01", None, {}, ["www.ring.com"], OUI)[0], "Ring device")
+        # the user's own talks_to rules still apply to any device
+        mine = devid.Rules({"rules": [], "computer_vendors": ["Apple"]},
+                           [{"when": {"talks_to": "vpn.example.com"}, "type": "Work laptop"}])
+        self.assertEqual(devid.classify("02:00:00:00:00:01", None, {}, ["vpn.example.com"], OUI, mine)[0], "Work laptop")
 
     def test_dhcp(self):
         self.assertEqual(devid.classify("00:00:00:00:00:01", None, {"dhcp_vendor_class": "MSFT 5.0"}, (), OUI)[0],
@@ -86,7 +96,7 @@ class TestDevid(unittest.TestCase):
 
     def test_generic_fingerprint_is_last_resort(self):
         info = {"dhcp_vendor_class": "udhcp 1.31.1", "dhcp_params": "1,3,6,12,15,28,42"}
-        self.assertEqual(devid.classify("02:00:00:00:00:21", info=info, names=["p2p.reolink.com"])[:2],
+        self.assertEqual(devid.classify("ac:00:00:00:00:21", info=info, names=["p2p.reolink.com"])[:2],
                          ("Camera", "talks to reolink.com"))
         self.assertEqual(devid.classify("02:00:00:00:00:22", info=info)[0], "Embedded Linux device")
         self.assertEqual(devid.classify("02:00:00:00:00:23", hostname="NVR", info=info, names=["p2p.reolink.com"])[0], "NVR")
