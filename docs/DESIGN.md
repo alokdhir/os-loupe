@@ -157,6 +157,7 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **Private MACs** can rotate, which splits a device's history until the user names it or turns the private address off for the network.
 - **Multicast and broadcast** traffic is not counted.
 - **Traffic that never crosses the router** (device to device on the LAN) is invisible by design.
+- **Traffic between local networks** (VLAN to VLAN) crosses the router but isn't counted: Loupe tracks devices' internet traffic, and same-network traffic can't be seen anyway, so a partial local view would mislead. Firewall logs and NetFlow cover it.
 
 ## Untested / open risks
 
