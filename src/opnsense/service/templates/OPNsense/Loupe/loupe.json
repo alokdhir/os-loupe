@@ -1,6 +1,10 @@
 {
     "interfaces": [{% if not helpers.empty('OPNsense.Loupe.general.interfaces') %}{%
         for intf in OPNsense.Loupe.general.interfaces.split(',') %}{{ helpers.physical_interface(intf) | tojson }}{{ "," if not loop.last }}{% endfor %}{% endif %}],
+    "networks": [{% if not helpers.empty('OPNsense.Loupe.general.interfaces') %}{%
+        for intf in OPNsense.Loupe.general.interfaces.split(',') %}
+        {"id": {{ intf | tojson }}, "device": {{ helpers.physical_interface(intf) | tojson }}, "name": {{ (helpers.getNodeByTag('interfaces.'+intf+'.descr') or intf | upper) | tojson }}}{{ "," if not loop.last }}{% endfor %}{% endif %}
+    ],
     "retention": {
         "days_5m": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_5m') or '30' }},
         "days_1h": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_1h') or '365' }},

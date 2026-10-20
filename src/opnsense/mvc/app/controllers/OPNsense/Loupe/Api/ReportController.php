@@ -69,6 +69,22 @@ class ReportController extends ApiControllerBase
         return $this->query(['lookup', $text, $this->hours($hours)]);
     }
 
+    /**
+     * The networks to filter by (none when Loupe watches just one), each with its place in Reporting -> Traffic's
+     * interface list: the GUI colours it from that place, so a network has the same colour on both pages.
+     */
+    public function networksAction()
+    {
+        $data = $this->query(['networks']);
+        $traffic = json_decode((new Backend())->configdRun('interface show traffic') ?? '', true);
+        $order = array_keys($traffic['interfaces'] ?? []);
+        foreach ($data['networks'] ?? [] as $i => $net) {
+            $pos = array_search($net['id'], $order, true);
+            $data['networks'][$i]['color'] = $pos === false ? count($order) + $i : $pos;
+        }
+        return $data;
+    }
+
     public function widgetAction()
     {
         return $this->query(['widget']);
@@ -94,13 +110,22 @@ class ReportController extends ApiControllerBase
         return $this->hours($this->request->getPost('hours', null, 24));
     }
 
+    /* the network filter: interface ids (lan,opt1), empty for all */
+    private function postNetworks()
+    {
+        $nets = (string)$this->request->getPost('networks', null, '');
+        return preg_match('/^[a-zA-Z0-9_,]{0,500}$/', $nets) ? $nets : '';
+    }
+
     /* a whole-house list (devices, services): configd keeps it for a minute, so sorting, paging and searching the
        grid don't run the report again; the page asks for a fresh one when it loads or the period changes ("!" makes
        configd run it again) */
     private function cachedList($report)
     {
         $fresh = $this->request->getPost('fresh', null, '') === '1';
-        return $this->query([$report, $this->postHours()], ($fresh ? '!' : '') . 'loupe list');
+        $args = $report === 'sites' ? ['sites', $this->postHours(), '', $this->postNetworks()]
+            : [$report, $this->postHours(), $this->postNetworks()];
+        return $this->query($args, ($fresh ? '!' : '') . 'loupe list');
     }
 
     private function postDevice()
@@ -182,7 +207,7 @@ class ReportController extends ApiControllerBase
         if ($text === '') {
             $data = $this->cachedList('sites');
         } elseif (preg_match(self::TEXT, $text)) {
-            $data = $this->query(['sites', $this->postHours(), $text]);
+            $data = $this->query(['sites', $this->postHours(), $text, $this->postNetworks()]);
         } else {
             return $this->searchRecordsetBase([]);
         }
@@ -195,7 +220,7 @@ class ReportController extends ApiControllerBase
         if (!preg_match(self::TEXT, $text)) {
             return $this->searchRecordsetBase([]);
         }
-        $data = $this->query(['lookup', $text, $this->postHours(), 'exact']);
+        $data = $this->query(['lookup', $text, $this->postHours(), 'exact', $this->postNetworks()]);
         return $this->grid($data[$section] ?? [], $sort, null, self::SEARCH[$section]);
     }
 

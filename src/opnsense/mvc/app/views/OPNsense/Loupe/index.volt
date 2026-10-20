@@ -27,6 +27,7 @@ POSSIBILITY OF SUCH DAMAGE.
 <script src="{{ cache_safe('/ui/js/chart.umd.min.js') }}"></script>
 <script src="{{ cache_safe('/ui/js/moment-with-locales.min.js') }}"></script>
 <script src="{{ cache_safe('/ui/js/chartjs-adapter-moment.min.js') }}"></script>
+<script src="{{ cache_safe('/ui/js/chartjs-plugin-colorschemes.min.js') }}"></script>
 <style>
     .loupe-edit { color: #999; cursor: pointer; visibility: hidden; padding-left: 8px; }
     .tabulator-row:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
@@ -37,10 +38,18 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-bar { padding: 10px 15px; }
+    .loupe-netpick { display: inline-block; margin-left: 10px; vertical-align: middle; }
+    .loupe-net + .loupe-net { margin-left: 3px; }
 </style>
 <script>
     $(document).ready(function () {
         let hours = parseFloat(localStorage.getItem('loupe.hours') || '24');
+        /* networks (several interfaces): a filter and a pill per network, coloured as Reporting -> Traffic does
+           (its colour scheme, by the network's place in Traffic's interface list) */
+        let networks = {}, picked = [], syncing = false;
+        const allPicked = () => picked.length === Object.keys(networks).length;
+        /* the filter sent: '' for all networks (one added later is included too), 'none' for none */
+        const netFilter = () => allPicked() ? '' : (picked.join(',') || 'none');
         let chart = null, current = null, q = '';
         const grids = {};
         const fresh = new Set();      /* lists to fetch anew (not configd's cached copy) on their next request */
@@ -78,8 +87,15 @@ POSSIBILITY OF SUCH DAMAGE.
             }
         });
 
+        const COLORS = Chart.colorschemes.tableau.Classic10;
+        const pill = id => networks[id] ? '<span class="badge loupe-net" style="background:' + COLORS[networks[id].color % COLORS.length]
+            + '">' + esc(networks[id].name) + '</span>' : '';
+
         /* formatters for the report grids (device list, device detail, lookup) */
         const formatters = {
+            networks: function (column, row) {
+                return (row.networks || []).map(pill).join('');
+            },
             device: function (column, row) {
                 return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>'
                     + editButton(row);
@@ -163,6 +179,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     multiSelect: false,
                     requestHandler: function (request) {
                         request.hours = hours;
+                        request.networks = netFilter();
                         if (fresh.delete(id)) request.fresh = '1';
                         return Object.assign(request, extra ? extra() : {});
                     },
@@ -176,19 +193,36 @@ POSSIBILITY OF SUCH DAMAGE.
         function showDevices() {
             $('#loupe-detail').hide();
             $('#loupe-list').show();
+            $('#tab_devices .loupe-netpick').toggle(Object.keys(networks).length > 1);
             grid('grid-devices', '/api/loupe/report/search_devices');
         }
 
+        /* a device page's Network columns: only for a device that was on several networks in the period */
+        let deviceNetworks = 0;
+        const DEVICE_GRIDS = '#grid-services, #grid-sites, #grid-devnames';
+        function deviceColumns($grids) {
+            $grids.each(function () {
+                try {
+                    $(this).bootgrid(deviceNetworks > 1 ? 'setColumns' : 'unsetColumns', ['networks']);
+                } catch (e) { /* not built yet: its loaded event does it */ }
+            });
+        }
+        $(document).on('loaded.rs.jquery.bootgrid', DEVICE_GRIDS, function () { deviceColumns($(this)); });
+
         function showDevice(id) {
             current = id;
+            $('#tab_devices .loupe-netpick').hide();       /* a device's page shows all its traffic: no filter */
             $('#loupe-list').hide();
             $('#loupe-detail').show();
             ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
                 if (data.error) { $('#loupe-detail-title').text(data.error); return; }
                 const d = data.device || {};
+                deviceNetworks = (data.networks || []).length;
+                deviceColumns($(DEVICE_GRIDS));
                 $('#loupe-detail-title').html((d.icon ? '<i class="' + esc(d.icon) + ' fa-fw text-muted"></i> ' : '')
                     + esc(d.name || d.ip || id) + editButton(d)
-                    + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · ')) + '</small>');
+                    + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
+                    + ' ' + (data.networks || []).map(n => pill(n.id)).join('') + '</small>');
                 const tl = data.timeline, step = data.step || 300;
                 const mbps = b => b * 8 / step / 1e6;          /* average rate over the bar */
                 if (chart) chart.destroy();
@@ -369,6 +403,42 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $('.loupe-period .btn').filter('[data-hours="' + hours + '"]').addClass('active');
 
+        /* the network picker (on Devices and Services, kept in step): shown when Loupe watches several networks */
+        function loadNetworks() {
+            return ajaxGet('/api/loupe/report/networks', {}, function (data) {
+                const list = data.networks || [];
+                networks = {};
+                list.forEach(n => { networks[n.id] = n; });
+                const saved = localStorage.getItem('loupe.networks');
+                picked = !saved || saved === 'all' ? list.map(n => n.id)
+                    : saved === 'none' ? [] : saved.split(',').filter(id => networks[id]);
+                $('.loupe-netpick').toggle(list.length > 1);    /* first: a hidden picker measures its width as 0 */
+                $('select.loupe-networks').each(function () {
+                    const $s = $(this).empty();
+                    list.forEach(n => $s.append($('<option/>').val(n.id).attr('data-content', pill(n.id))
+                        .prop('selected', picked.includes(n.id))));
+                    $s.selectpicker('refresh');
+                    $s.data('selectpicker').options.countSelectedText = (n, total) => n === total
+                        ? '{{ lang._("All networks") }}' : '{{ lang._("%s networks") }}'.replace('%s', n);
+                    $s.selectpicker('render');
+                });
+            });
+        }
+        /* the Network column: shown whenever there are several networks, hidden for one. Set after every load (not
+           saved as the user's choice): the grid restores a layout it remembers, which may be from before this column */
+        $(document).on('loaded.rs.jquery.bootgrid', '#grid-devices', function () {
+            $(this).bootgrid(Object.keys(networks).length > 1 ? 'setColumns' : 'unsetColumns', ['networks']);
+        });
+        $('select.loupe-networks').on('changed.bs.select', function () {
+            if (syncing) return;            /* the other picker being kept in step (that fires this event too) */
+            picked = $(this).val() || [];
+            localStorage.setItem('loupe.networks', allPicked() ? 'all' : (picked.join(',') || 'none'));
+            syncing = true;
+            $('select.loupe-networks').not(this).selectpicker('val', picked);
+            syncing = false;
+            route();
+        });
+
         /* the pencil opens the same standard dialog as the Overrides grid, saved per MAC */
         $(document).on('click', '.loupe-edit', function (e) {
             e.preventDefault();
@@ -433,10 +503,11 @@ POSSIBILITY OF SUCH DAMAGE.
             },
             onAction: function () {
                 updateServiceControlUI('loupe');
+                loadNetworks();         /* the interfaces may have changed */
             }
         });
         updateServiceControlUI('loupe');
-        route();
+        loadNetworks().always(route);     /* the grids need to know whether to show the Network column */
     });
 </script>
 
@@ -458,6 +529,12 @@ POSSIBILITY OF SUCH DAMAGE.
             <div class="btn-group loupe-period">
                 {% for p in periods %}<button type="button" class="btn btn-default btn-sm" data-hours="{{ p[0] }}">{{ p[1] }}</button>{% endfor %}
             </div>
+            <div class="loupe-netpick" style="display: none">
+                <select class="selectpicker loupe-networks" multiple="multiple" data-style="btn-default btn-sm"
+                        data-actions-box="true" data-select-all-text="{{ lang._('All networks') }}"
+                        data-deselect-all-text="{{ lang._('None') }}" data-selected-text-format="count > 1"
+                        title="{{ lang._('No networks') }}"></select>
+            </div>
         </div>
         <div id="loupe-list">
             <table id="grid-devices" class="table table-condensed table-hover table-striped table-responsive">
@@ -467,6 +544,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <th data-column-id="name" data-formatter="device">{{ lang._('Device') }}</th>
                     <th data-column-id="shown_type" data-formatter="devtype">{{ lang._('Type') }}</th>
                     <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
+                    <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
                     <th data-column-id="vendor" data-formatter="vendor">{{ lang._('Vendor') }}</th>
                     <th data-column-id="mac" data-visible="false" data-formatter="copy">{{ lang._('MAC address') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
@@ -496,6 +574,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <table id="grid-services" class="table table-condensed table-hover table-striped table-responsive">
                         <thead><tr>
                             <th data-column-id="service" data-identifier="true" data-formatter="service">{{ lang._('Service') }}</th>
+                            <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
                             <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                             <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
                             <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
@@ -508,6 +587,7 @@ POSSIBILITY OF SUCH DAMAGE.
                         <thead><tr>
                             <th data-column-id="name" data-identifier="true" data-formatter="site">{{ lang._('Site') }}</th>
                             <th data-column-id="service" data-formatter="sitesvc">{{ lang._('Service') }}</th>
+                            <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
                             <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                             <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
                             <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
@@ -532,6 +612,7 @@ POSSIBILITY OF SUCH DAMAGE.
                         <thead><tr>
                             <th data-column-id="name" data-identifier="true" data-formatter="site">{{ lang._('Name') }}</th>
                             <th data-column-id="service" data-formatter="sitesvc">{{ lang._('Service') }}</th>
+                            <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
                             <th data-column-id="sources" data-width="9em">{{ lang._('Seen in') }}</th>
                             <th data-column-id="count" data-width="7em">{{ lang._('Times') }}</th>
                             <th data-column-id="first" data-formatter="datetime">{{ lang._('First') }}</th>
@@ -548,6 +629,12 @@ POSSIBILITY OF SUCH DAMAGE.
         <div class="loupe-bar">
             <div class="btn-group loupe-period">
                 {% for p in periods %}<button type="button" class="btn btn-default btn-sm" data-hours="{{ p[0] }}">{{ p[1] }}</button>{% endfor %}
+            </div>
+            <div class="loupe-netpick" style="display: none">
+                <select class="selectpicker loupe-networks" multiple="multiple" data-style="btn-default btn-sm"
+                        data-actions-box="true" data-select-all-text="{{ lang._('All networks') }}"
+                        data-deselect-all-text="{{ lang._('None') }}" data-selected-text-format="count > 1"
+                        title="{{ lang._('No networks') }}"></select>
             </div>
         </div>
         <div id="loupe-overview" style="display: none">

@@ -347,6 +347,30 @@ class TestDailySummary(unittest.TestCase):
         self.assertEqual(devices["02:00:00:00:00:61"]["down"], 3 * (1000 + 1001 + 1002) + 9 * 70)
         self.assertEqual(devices["02:00:00:00:00:61"]["top"][0], "Netflix")
 
+    def test_network_filter(self):
+        """Traffic is filed under the network its address is in; a filter keeps those networks' traffic only."""
+        orig = self.query.Networks.__init__
+
+        def init(n, conf):
+            orig(n, {"networks": [{"id": "lan", "name": "LAN"}, {"id": "opt1", "name": "IoT"}]})
+            n.subnets = [(ipaddress.ip_network("10.9.2.60/31"), "lan"), (ipaddress.ip_network("10.9.2.62/31"), "opt1")]
+        self.query.Networks.__init__ = init
+        a, b = "02:00:00:00:00:61", "02:00:00:00:00:62"
+        try:
+            listed = self.query.cmd_devices(72)
+            self.assertEqual(listed["networks"], [{"id": "lan", "name": "LAN"}, {"id": "opt1", "name": "IoT"}])
+            self.assertEqual({r["mac"]: r["networks"] for r in listed["rows"]}, {a: ["lan"], b: ["opt1"]})
+            self.assertEqual([r["mac"] for r in self.query.cmd_devices(72, {"lan"})["rows"]], [a])
+            self.assertEqual([r["mac"] for r in self.query.cmd_devices(72, {"opt1"})["rows"]], [b])
+            self.assertEqual(len(self.query.cmd_devices(72, {"lan", "opt1"})["rows"]), 2)
+            self.assertIn("Netflix", {r["service"] for r in self.query.cmd_sites(72, "", {"lan"})["rows"]})
+            self.assertNotIn("Netflix", {r["service"] for r in self.query.cmd_sites(72, "", {"opt1"})["rows"]})
+            page = self.query.cmd_device(a, 72)
+            self.assertEqual(page["networks"], [{"id": "lan", "name": "LAN"}])
+            self.assertEqual({tuple(r["networks"]) for r in page["services"] + page["sites"]}, {("lan",)})
+        finally:
+            self.query.Networks.__init__ = orig
+
     def test_newest_first_and_rebuilt_when_the_map_changes(self):
         self.summarize(budget=0)                # one day a call
         self.assertEqual(list(self.store.summary_state(0)), [self.today])
