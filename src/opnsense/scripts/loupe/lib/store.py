@@ -92,8 +92,9 @@ CREATE TABLE IF NOT EXISTS devices (
     last_seen INTEGER NOT NULL
 );
 
--- traffic per device and service per hour (recent days) and per local day, named with the day's evidence, and that
--- evidence: loupd builds them from flows_1h (lib/report.py), and builds a day again when the service map changes
+-- traffic per device and service per hour (recent days) and per local day, and per device, site and service per
+-- day, named with the day's evidence, and that evidence: loupd builds them from flows_1h (lib/report.py), and builds
+-- a day again when the service map changes
 CREATE TABLE IF NOT EXISTS services_1h (
     hour INTEGER NOT NULL,
     ip TEXT NOT NULL,
@@ -124,6 +125,26 @@ CREATE TABLE IF NOT EXISTS services_1d (
     last INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (day, ip, mac, service)
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS sites_1d (
+    day INTEGER NOT NULL,
+    ip TEXT NOT NULL,
+    mac TEXT NOT NULL DEFAULT '',
+    site TEXT NOT NULL,             -- server name, or the address for traffic without one
+    named INTEGER NOT NULL,         -- 1: site is a name
+    service TEXT NOT NULL,          -- '' = none
+    inferred INTEGER NOT NULL DEFAULT 0,    -- 1: all of it named from other traffic on the same servers
+    up INTEGER NOT NULL DEFAULT 0,
+    down INTEGER NOT NULL DEFAULT 0,
+    conns INTEGER NOT NULL DEFAULT 0,
+    first INTEGER NOT NULL DEFAULT 0,
+    last INTEGER NOT NULL DEFAULT 0,
+    servers TEXT NOT NULL DEFAULT ''        -- a named site's addresses, space-separated
+);
+-- one row per day, device, site and service (loupd writes a day at a time). A rowid table: its indexes hold the
+-- rowid, not the whole key. By day (a day replaced, the search), and by the services list row (its service, or
+-- for traffic without one its site) a click on that row shows
+CREATE INDEX IF NOT EXISTS sites_1d_day ON sites_1d (day);
+CREATE INDEX IF NOT EXISTS sites_1d_listed ON sites_1d (lower(CASE WHEN service != '' THEN service ELSE site END), day);
 CREATE TABLE IF NOT EXISTS summary_days (
     day INTEGER PRIMARY KEY,
     map TEXT NOT NULL,              -- fingerprint of the service map it was built with
@@ -281,15 +302,21 @@ class Store:
         """{day: (service map fingerprint, built at)} for the summarized days from `since`."""
         return {d: (m, b) for d, m, b in self.db.execute("SELECT day, map, built FROM summary_days WHERE day >= ?", (since,))}
 
-    def replace_day(self, day, end, daily, hourly, evidence, fingerprint, now):
+    def replace_day(self, day, end, daily, hourly, evidence, fingerprint, now, sites=None):
         """A whole day [day, end): daily {(ip, mac, service): [up, down, conns, last]}, hourly {(hour, ip, mac,
-        service): [...]} (None: not kept for this day), evidence [(kind, ip, server, value)]."""
+        service): [...]} (None: not kept for this day), evidence [(kind, ip, server, value)], sites as
+        report.add_site() gives them."""
         db = self.db
         db.execute("BEGIN")
         try:
             db.execute("DELETE FROM services_1d WHERE day = ?", (day,))
             db.executemany("INSERT INTO services_1d (day, ip, mac, service, up, down, conns, last) VALUES (?,?,?,?,?,?,?,?)",
                            [(day, *k, *v) for k, v in daily.items()])
+            db.execute("DELETE FROM sites_1d WHERE day = ?", (day,))
+            db.executemany("INSERT INTO sites_1d (day, ip, mac, site, named, service, inferred, up, down, conns, first, last, "
+                           "servers) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                           [(day, *k, int(v[0]), *v[1:6], " ".join(sorted(v[6])) if k[3] else "")
+                            for k, v in (sites or {}).items()])
             db.execute("DELETE FROM services_1h WHERE hour >= ? AND hour < ?", (day, end))
             if hourly is not None:
                 db.executemany("INSERT INTO services_1h (hour, ip, mac, service, up, down, conns, last) "
@@ -309,6 +336,7 @@ class Store:
         db.execute("DELETE FROM flows_5m WHERE bucket < ?", (now - days_5m * 86400,))
         db.execute("DELETE FROM flows_1h WHERE bucket < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM services_1d WHERE day < ?", (now - days_1h * 86400,))
+        db.execute("DELETE FROM sites_1d WHERE day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM summary_days WHERE day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM day_names WHERE day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM services_1h WHERE hour < ?", (now - KEEP_1H_SUMMARY,))

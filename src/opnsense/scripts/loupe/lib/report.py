@@ -23,7 +23,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 """Traffic named by service, with the evidence of its local day: shared by the reports (query.py) and loupd's
-summaries (per hour for recent days, per day for all of them).
+summaries (per hour for recent days, per day for all of them, and per day by site).
 
 A row's service can depend on other traffic: nameless traffic takes the service of named traffic to the same server,
 and a VPN tunnel is told apart by the provider's domain the device looked up. That evidence is gathered per local
@@ -38,7 +38,7 @@ import time
 
 from .services import DATA_JSON, HOSTING
 
-SUMMARY_VERSION = 2     # raise when the naming changes, so loupd builds the summaries again
+SUMMARY_VERSION = 3     # raise when the naming changes, so loupd builds the summaries again
 HOURLY_DAYS = 3         # days kept in the hourly summary (report periods up to 48 hours)
 SETTLE = 120            # seconds until loupd has written a minute's traffic (it writes once a minute)
 
@@ -217,6 +217,12 @@ class Namer:
                 self._built = {}
         return self._built.get(day, 0)
 
+    def sites_until(self, day):
+        """Where loupd's site summary of `day` ends (its hourly rows before this): `day` when it has none built with
+        this service map."""
+        built = self.built(day)
+        return max(day, sites_until(next_day(day), built)) if built else day
+
     def day(self, day, keys=None):
         """The day's evidence; `keys` (a tuple of addresses and MACs) limits it to those devices."""
         k = (day, keys)
@@ -260,19 +266,52 @@ def add(out, key, up, down, conns, last):
         r[3] = max(r[3], last)
 
 
-def build_day(db, svc, day, end=None):
-    """One local day from the hourly rows, named with that day's evidence:
-    ({(ip, mac, service): [up, down, conns, last]}, {(hour, ip, mac, service): [...]}, Labels)."""
+def add_site(out, ip, mac, name, server, service, inferred, up, down, conns, first, last):
+    """Traffic per device, site and service: the site is the server's name, or its address when it has none.
+    {(ip, mac, site, named, service): [inferred, up, down, conns, first, last, {servers}]}; inferred while all of
+    it was named from other traffic on the same server."""
+    k = (ip, mac, name or server, 1 if name else 0, service)
+    r = out.get(k)
+    if r is None:
+        out[k] = [inferred, up, down, conns, first, last, {server}]
+    else:
+        r[0] = r[0] and inferred
+        r[1] += up
+        r[2] += down
+        r[3] += conns
+        r[4] = min(r[4], first)
+        r[5] = max(r[5], last)
+        r[6].add(server)
+
+
+def site_rows(sites):
+    """add_site()'s totals as rows: (ip, mac, site, named, service, inferred, up, down, conns, first, last, servers)."""
+    return [(*k, *v) for k, v in sites.items()]
+
+
+def sites_until(end, built):
+    """The site summary of a day ending at `end`, built at `built`, holds its hourly rows before this: the whole
+    day once it had ended, else the hours that had ended (and been written)."""
+    return end if built - SETTLE >= end else (built - SETTLE) // 3600 * 3600
+
+
+def build_day(db, svc, day, end=None, until=None):
+    """One local day from the hourly rows, named with that day's evidence: ({(ip, mac, service): [up, down, conns,
+    last]}, {(hour, ip, mac, service): [...]}, Labels, add_site()'s totals of the hours before `until`)."""
     end = end or next_day(day)
+    until = end if until is None else until
     rows = db.execute("SELECT bucket, ip, mac, name, server, port, proto, up, down, conns, max(bucket, last) FROM flows_1h "
                       "WHERE bucket >= ? AND bucket < ?", (day, end)).fetchall()
     lab = Labels(db, svc, "flows_1h", day, [r[1:7] for r in rows], end)
-    daily, hourly = {}, {}
+    daily, hourly, sites = {}, {}, {}
     for bucket, ip, mac, name, server, port, proto, up, down, conns, last in rows:
-        s = lab.service(ip, name, server, port, proto, mac) or ""
+        s, inferred = lab.named(ip, name, server, port, proto, mac)
+        s = s or ""
         add(daily, (ip, mac, s), up, down, conns, last)
         add(hourly, (bucket, ip, mac, s), up, down, conns, last)
-    return daily, hourly, lab
+        if bucket < until:
+            add_site(sites, ip, mac, name, server, s, bool(s) and inferred, up, down, conns, bucket, last)
+    return daily, hourly, lab, sites
 
 
 def recent_rows(namer, table, start, end):

@@ -51,7 +51,7 @@ Each connection gets the name from its own handshake first, then from the DNS an
 
 Site lookups are kept per device per day, with a count and the first and last time seen. Retention for all but the minute rows is set under *Settings → General*: **Keep 5-minute detail**, **Keep hourly totals** and **Keep site lookups** (in days). Past 2 days, reports read hourly rows even where 5-minute rows still exist: a week or a month by the hour is plenty, and far fewer rows to read.
 
-**Names.** Device names, types and service names are applied when a report is built, not stored with the traffic, so renaming a device or a service changes its whole history.
+**Names.** Renaming a device or a service changes its whole history. Device names, types and icons are applied when a report is built. Service names are kept in daily summaries, which Loupe builds again, newest day first, after you change the service names or update Loupe; until it has finished, periods of 7 days and longer load slower, and the Devices and Services tabs show how many days are left.
 
 The design, the alternatives considered and the known limits are in [docs/DESIGN.md](docs/DESIGN.md).
 

@@ -206,8 +206,9 @@ class Loupe:
         recent = local_day(now - report.HOURLY_DAYS * 86400)
         for d in due:
             end = report.next_day(d)
-            daily, hourly, lab = report.build_day(self.store.db, self.svc, d, end)
-            self.store.replace_day(d, end, daily, hourly if d >= recent else None, lab.evidence(), self.map_fingerprint, now)
+            daily, hourly, lab, sites = report.build_day(self.store.db, self.svc, d, end, report.sites_until(end, int(now)))
+            self.store.replace_day(d, end, daily, hourly if d >= recent else None, lab.evidence(), self.map_fingerprint, now,
+                                   sites)
             if time.monotonic() - t0 >= budget:
                 break
 

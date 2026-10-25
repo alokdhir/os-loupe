@@ -347,6 +347,25 @@ class TestDailySummary(unittest.TestCase):
         self.assertEqual(devices["02:00:00:00:00:61"]["down"], 3 * (1000 + 1001 + 1002) + 9 * 70)
         self.assertEqual(devices["02:00:00:00:00:61"]["top"][0], "Netflix")
 
+    def drilldowns(self):
+        """A service's traffic (a services list row clicked) and the services search, over periods read by day."""
+        q = self.query
+        return [(q.cmd_lookup(row, h, True)["traffic"], q.cmd_sites(h, text)["rows"])
+                for h in (72, 168) for row, text in (("netflix", "netflix"), ("192.0.2.20", "192.0.2.20"),
+                                                     ("vpn (wireguard)", "198.51.100.7"))]
+
+    def test_same_drilldowns_from_the_site_summary(self):
+        live = self.drilldowns()
+        self.assertTrue(all(traffic and found for traffic, found in live))
+        self.summarize()
+        self.assertTrue(self.store.db.execute("SELECT count(*) FROM sites_1d").fetchone()[0])
+        self.assertEqual(self.drilldowns(), live)
+        # the days before today come from the summary alone; today's hours since loupd built it are named here
+        self.store.db.execute("DELETE FROM flows_1h WHERE bucket < ?", (self.today,))
+        self.assertEqual(self.drilldowns(), live)
+        netflix = {(r["mac"], r["name"]): r for r in live[0][0]}
+        self.assertEqual(netflix[("02:00:00:00:00:61", "www.netflix.com")]["servers"], ["192.0.2.10"])
+
     def test_network_filter(self):
         """Traffic is filed under the network its address is in; a filter keeps those networks' traffic only."""
         orig = self.query.Networks.__init__

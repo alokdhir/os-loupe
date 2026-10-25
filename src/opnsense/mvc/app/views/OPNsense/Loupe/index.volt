@@ -40,6 +40,7 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-bar { padding: 10px 15px; }
     .loupe-netpick { display: inline-block; margin-left: 10px; vertical-align: middle; }
     .loupe-net + .loupe-net { margin-left: 3px; }
+    .loupe-rebuild { margin-top: 6px; }
 </style>
 <script>
     $(document).ready(function () {
@@ -272,8 +273,11 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-results').show();
             $('#loupe-service-title').text(q);
             const query = () => ({q: q});
+            /* both grids show the same report: the second asks once the first has it, and gets configd's copy */
+            $('#grid-traffic').off('loaded.loupenames').one('loaded.rs.jquery.bootgrid.loupenames', function () {
+                grid('grid-names', '/api/loupe/report/search_lookup_names', query);
+            });
             grid('grid-traffic', '/api/loupe/report/search_lookup_traffic', query);
-            grid('grid-names', '/api/loupe/report/search_lookup_names', query);
         }
 
         /* Settings tabs */
@@ -365,9 +369,20 @@ POSSIBILITY OF SUCH DAMAGE.
             return PAGES.indexOf(t) >= 0 ? 'settings' : (TABS[t] ? t : 'devices');
         }
 
+        /* after an update or a service names change loupd builds each day's summary again, newest first: until a
+           day is built, periods reaching it are read the slow way */
+        function rebuildNote() {
+            ajaxGet('/api/loupe/report/summary', {}, function (data) {
+                const left = data.waiting || 0;
+                $('.loupe-rebuild').toggle(left > 0).text('{{ lang._("Rebuilding summaries: %s of %s days left (%s and older). Periods that include those days load slower until then.") }}'
+                    .replace('%s', left).replace('%s', data.days).replace('%s', data.newest_waiting));
+            });
+        }
+
         function route() {
             const hash = window.location.hash;
-            fresh.add('grid-devices').add('grid-house');    /* opened, period changed or saved: not the cached list */
+            fresh.add('grid-devices').add('grid-house').add('grid-traffic');    /* opened, period changed or saved: not the cached copy */
+            rebuildNote();
             const tab = tabOf(hash);
             $('#maintabs a[href="' + TABS[tab] + '"]').tab('show');
             $('.loupe-apply').toggle(tab === 'settings');
@@ -535,6 +550,7 @@ POSSIBILITY OF SUCH DAMAGE.
                         data-deselect-all-text="{{ lang._('None') }}" data-selected-text-format="count > 1"
                         title="{{ lang._('No networks') }}"></select>
             </div>
+            <div class="loupe-rebuild text-muted" style="display: none"></div>
         </div>
         <div id="loupe-list">
             <table id="grid-devices" class="table table-condensed table-hover table-striped table-responsive">
@@ -636,6 +652,7 @@ POSSIBILITY OF SUCH DAMAGE.
                         data-deselect-all-text="{{ lang._('None') }}" data-selected-text-format="count > 1"
                         title="{{ lang._('No networks') }}"></select>
             </div>
+            <div class="loupe-rebuild text-muted" style="display: none"></div>
         </div>
         <div id="loupe-overview" style="display: none">
             <table id="grid-house" class="table table-condensed table-hover table-striped table-responsive">

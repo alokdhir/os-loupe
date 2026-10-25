@@ -31,6 +31,7 @@ usage:
   query.py sites HOURS [TEXT]
   query.py lookup TEXT HOURS [exact]
   query.py widget
+  query.py summary
 """
 import collections
 import ipaddress
@@ -44,7 +45,8 @@ sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from lib import netif  # noqa: E402
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
-from lib.report import Namer, add, build_day, days, local_day, pieces, recent_rows  # noqa: E402
+from lib.report import (Namer, add, add_site, build_day, days, local_day, next_day, pieces, recent_rows,  # noqa: E402
+                        site_rows)
 from lib.services import ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
@@ -118,6 +120,15 @@ def window(hours):
     return table, start - start % bucket, step      # whole buckets: the first one isn't cut short
 
 
+def period(hours):
+    """(table, start) of a whole-house report: up to two days the last `hours`; longer periods are whole local days
+    (today and the days before it), as loupd's daily summary has them."""
+    table, start, _ = window(hours)
+    if table == "flows_1h":
+        start = local_day(time.time() - (max(1, round(hours / 24)) - 1) * 86400)
+    return table, start
+
+
 def vendor_of(mac, vendor, dtype):
     """(vendor, note). The MAC prefix names the maker unless the MAC is private (randomized) or newer than
     OPNsense's copy of the IEEE list; then a type that only one maker makes (iPhone, PlayStation) still tells us."""
@@ -173,11 +184,10 @@ def service_rows(db, svc, hours):
     """The period's traffic per device and service: [(ip, mac, service, up, down, conns, last)]. Up to two days:
     the last `hours`, from loupd's hourly summary and the detail tables; longer periods are whole days (today and
     the days before it) from loupd's daily summary."""
-    table, start, _ = window(hours)
+    table, first = period(hours)
     now = time.time()
     if table != "flows_1h":
-        return recent_rows(Namer(db, svc), table, start, int(now) + 1)
-    first = local_day(now - (max(1, round(hours / 24)) - 1) * 86400)
+        return recent_rows(Namer(db, svc), table, first, int(now) + 1)
     oldest = db.execute("SELECT min(bucket) FROM flows_1h").fetchone()[0]
     try:
         rows = db.execute("SELECT ip, mac, service, sum(up), sum(down), sum(conns), max(last) FROM services_1d "
@@ -233,19 +243,99 @@ def cmd_devices(hours, want=None):
     return {"hours": hours, "networks": nets.shown(), "rows": sorted(rows.values(), key=lambda r: -(r["down"] + r["up"]))}
 
 
-def named_flows(db, svc, hours, first=False):
-    """The period's traffic per device, server, port and name, a day at a time: (Labels for that day, row) with
-    rows as flow_totals() gives them (plus the first bucket before `last` when `first`)."""
-    table, start, _ = window(hours)
+SITE_COLS = "ip, mac, site, named, service, inferred, up, down, conns, first, last, servers"
+
+
+def live_sites(db, namer, table, day, a, b):
+    """The traffic in [a, b) of `day` per device, site and service, named here: site rows as report.site_rows()."""
+    flows = db.execute(f"SELECT ip, mac, name, server, port, proto, sum(up), sum(down), sum(conns), min(bucket), "
+                       f"max(max(bucket), max(last)) FROM {table} WHERE bucket >= ? AND bucket < ? "
+                       f"GROUP BY ip, mac, name, server, port, proto", (a, b)).fetchall()
+    if not flows:
+        return []
+    lab = namer.labels(day, table, a, b, flows)
+    sites = {}
+    for ip, mac, name, server, port, proto, up, down, conns, first, last in flows:
+        s, inferred = lab.named(ip, name, server, port, proto, mac)
+        s = s or ""
+        add_site(sites, ip, mac, name, server, s, bool(s) and inferred, up, down, conns, first, last)
+    return site_rows(sites)
+
+
+LISTED = "lower(CASE WHEN service != '' THEN service ELSE site END)"     # as the sites_1d_listed index has it
+DAYS_IN = "day IN (SELECT value FROM json_each(?))"
+
+
+def split_period(namer, table, start, end):
+    """[start, end) as ([days with a site summary], [(day, a, b)]: the traffic to name here, on days without one
+    and on today since its summary). Up to two days, all of it is named here (the 5-minute and 1-minute detail)."""
+    stored, live = [], []
+    for day, a, b in pieces(start, end):
+        cut = min(b, namer.sites_until(day)) if table == "flows_1h" and a == day else a
+        if cut > a:
+            stored.append(day)
+        if cut < b:
+            live.append((day, cut, b))
+    return stored, live
+
+
+def stored_sites(db, days, text, exact):
+    """loupd's site rows on `days` that can match `text` (site_matches() tells), as report.site_rows()."""
+    if not days:
+        return []
+    if exact:
+        cond, args = f"{LISTED} = ?", (text,)
+    else:
+        cond, args = "(instr(lower(site), ?) > 0 OR instr(lower(service), ?) > 0 OR instr(servers, ?) > 0)", (text,) * 3
+    return [(*r[:11], r[11].split() if r[3] else (r[2],))
+            for r in db.execute(f"SELECT {SITE_COLS} FROM sites_1d WHERE {cond} AND {DAYS_IN}", (*args, json.dumps(days)))]
+
+
+def site_matches(text, exact, site, named, s, servers):
+    """exact: the service is `text`, or for traffic without one its site name or address. Else `text` is in the
+    service or site name, or is one of the site's addresses."""
+    if exact:
+        return (s or site).lower() == text
+    return (named and text in site.lower()) or text in s.lower() or text in servers
+
+
+def matching_sites(db, svc, hours, text, exact):
+    """The period's traffic per device, site and service that matches `text` (site_matches()): from loupd's site
+    summary where it has it, the rest named here a day at a time."""
+    table, start = period(hours)
     namer = Namer(db, svc)
-    cols = "sum(up), sum(down), sum(conns), " + ("min(bucket), " if first else "") + "max(max(bucket), max(last))"
-    for day, a, b in pieces(start, int(time.time()) + 1):
-        flows = db.execute(f"SELECT ip, mac, name, server, port, proto, {cols} FROM {table} WHERE bucket >= ? AND bucket < ? "
-                           f"GROUP BY ip, mac, name, server, port, proto", (a, b)).fetchall()
-        if flows:
-            lab = namer.labels(day, table, a, b, flows)
-            for f in flows:
-                yield lab, f
+    stored, live = split_period(namer, table, start, int(time.time()) + 1)
+    rows = stored_sites(db, stored, text, exact)
+    for day, a, b in live:
+        rows += live_sites(db, namer, table, day, a, b)
+    return [r for r in rows if site_matches(text, exact, r[2], r[3], r[4], r[11])]
+
+
+def search_rows(db, svc, hours, text):
+    """The services search's traffic: (ip, mac, listed as, up, down, conns, last, matched). Traffic with a service is
+    listed as the service, and all of it counts; traffic without one only when its site matches, listed as the site.
+    Where loupd's summaries have it: the services from the daily summary (from the site summary for today's
+    summarized hours), matching sites from the site summary."""
+    table, start = period(hours)
+    namer = Namer(db, svc)
+    stored, live = split_period(namer, table, start, int(time.time()) + 1)
+    whole = [d for d in stored if namer.sites_until(d) == next_day(d)]
+    part = [d for d in stored if d not in whole]
+    for sql, days in (("SELECT ip, mac, service, up, down, conns, last FROM services_1d WHERE service != '' AND " + DAYS_IN,
+                       whole),
+                      ("SELECT ip, mac, service, sum(up), sum(down), sum(conns), max(last) FROM sites_1d "
+                       f"WHERE service != '' AND {DAYS_IN} GROUP BY ip, mac, service", part)):
+        if days:
+            for ip, mac, s, up, down, conns, last in db.execute(sql, (json.dumps(days),)):
+                yield ip, mac, s, up, down, conns, last, text in s.lower()
+    for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in stored_sites(db, stored, text, False):
+        if site_matches(text, False, site, named, s, servers):
+            yield (ip, mac, s, 0, 0, 0, 0, True) if s else (ip, mac, site, up, down, conns, last, True)
+    for day, a, b in live:
+        for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in live_sites(db, namer, table, day, a, b):
+            hit = site_matches(text, False, site, named, s, servers)
+            if s or hit:
+                yield ip, mac, s or site, up, down, conns, last, hit
 
 
 def device_filter(arg):
@@ -356,19 +446,12 @@ def cmd_sites(hours, text="", want=None):
     info = devices_info(db, ov)
     rows = {}
     if text:
-        flows = ((ip, mac, name, server, lab.service(ip, name, server, port, proto, mac), up, down, conns, last)
-                 for lab, (ip, mac, name, server, port, proto, up, down, conns, last) in named_flows(db, svc, hours))
+        flows = search_rows(db, svc, hours, text)
     else:       # the whole list: per service is enough
-        flows = ((ip, mac, "", "", s, up, down, conns, last) for ip, mac, s, up, down, conns, last in service_rows(db, svc, hours))
-    for ip, mac, name, server, s, up, down, conns, last in flows:
-        if want and nets.of(ip) not in want:
+        flows = ((ip, mac, s, up, down, conns, last, False) for ip, mac, s, up, down, conns, last in service_rows(db, svc, hours))
+    for ip, mac, s, up, down, conns, last, hit in flows:
+        if not s or (want and nets.of(ip) not in want):
             continue
-        s = s or None
-        hit = bool(text) and (matches(text, name, s) or server == text)
-        if not s:
-            if not hit:
-                continue
-            s = name or server
         r = rows.setdefault(s, {"service": s, "down": 0, "up": 0, "conns": 0, "last": 0, "by": collections.Counter(),
                                 "hit": False})
         r["hit"] = r["hit"] or hit
@@ -391,28 +474,24 @@ def cmd_lookup(text, hours, exact=False, want=None):
 
     exact: one row of the services list - its service, or for nameless traffic its site name or address."""
     db, svc, ov = load()
-    _table, start, _ = window(hours)
+    _table, start = period(hours)
     info = devices_info(db, ov)
     text = text.strip().lower()
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
-    for lab, (ip, mac, name, server, port, proto, up, down, conns, first, last) in named_flows(db, svc, hours, first=True):
+    for ip, mac, site, named, s, inferred, up, down, conns, first, last, servers in matching_sites(db, svc, hours, text, exact):
         if want and nets.of(ip) not in want:
             continue
-        s, inferred = lab.named(ip, name, server, port, proto, mac)
-        s = s or ""
-        if exact:
-            if (s or name or server).lower() != text:
-                continue
-        elif not (matches(text, name, s) or server == text):
-            continue
-        r = rows[(mac or ip, name or (s and "\0" + s) or server)]     # nameless traffic: one row per service
-        r.update(ip=ip, mac=mac, name=name, service=s, inferred=bool(s) and inferred)
+        name = site if named else ""
+        r = rows[(mac or ip, name or (s and "\0" + s) or site)]     # nameless traffic: one row per service
+        if r["first"] is None or last >= r["last"]:     # the address, and service, it had most recently
+            r.update(ip=ip, mac=mac, name=name, service=s)
+        r["inferred"] = r.get("inferred", True) and bool(inferred)
         r["down"] += down
         r["up"] += up
         r["conns"] += conns
         r["first"] = first if r["first"] is None else min(r["first"], first)
         r["last"] = max(r["last"], last)
-        r["servers"].add(server)
+        r["servers"].update(servers)
     looked = []
     day0 = start - 86400
     for ip, mac, name, source, count, first, last in db.execute(
@@ -467,6 +546,25 @@ def cmd_widget():
     return {"hours": hours, "down": sum(h[1] for h in hours), "up": sum(h[2] for h in hours), "top": top}
 
 
+def cmd_summary():
+    """How far loupd's summaries are: the days of traffic, how many are built with the current service map (the
+    rest are rebuilt newest first, and read the slow way until then), and the database file's size."""
+    db, svc, _ov = load()
+    try:
+        namer = Namer(db, svc)
+        oldest = db.execute("SELECT min(bucket) FROM flows_1h").fetchone()[0]
+        all_days = list(days(local_day(oldest), local_day(time.time()))) if oldest else []
+        built = [d for d in all_days if namer.built(d)]
+        waiting = [d for d in all_days if not namer.built(d)]
+        pages, size = (db.execute(f"PRAGMA {p}").fetchone()[0] for p in ("page_count", "page_size"))
+        out = {"days": len(all_days), "built": len(built), "waiting": len(waiting),
+               "newest_waiting": time.strftime("%Y-%m-%d", time.localtime(waiting[-1])) if waiting else "",
+               "mb": round(pages * size / 1e6, 1)}
+        return out
+    finally:
+        db.close()
+
+
 IDENTITY_FIELDS = ("name", "type", "icon", "vendor", "model")
 MAX_MACS = 1024
 MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
@@ -514,6 +612,8 @@ def main(argv):
             out = cmd_identities(argv[2] if len(argv) > 2 else "")
         elif cmd == "widget":
             out = cmd_widget()
+        elif cmd == "summary":
+            out = cmd_summary()
         else:
             out = {"error": "unknown command"}
     except (IndexError, ValueError) as e:

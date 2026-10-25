@@ -90,6 +90,12 @@ class ReportController extends ApiControllerBase
         return $this->query(['widget']);
     }
 
+    /* how far loupd's summaries are (after an update or a service names change it builds every day again) */
+    public function summaryAction()
+    {
+        return $this->query(['summary']);
+    }
+
     /**
      * For other plugins: Loupe's name, type and icon for each of the given devices (POST macs: a comma-separated
      * MAC list, at most 1024). {"version": 1, "devices": {mac: {name, type, icon, vendor, model}}}.
@@ -117,14 +123,19 @@ class ReportController extends ApiControllerBase
         return preg_match('/^[a-zA-Z0-9_,]{0,500}$/', $nets) ? $nets : '';
     }
 
-    /* a whole-house list (devices, services): configd keeps it for a minute, so sorting, paging and searching the
-       grid don't run the report again; the page asks for a fresh one when it loads or the period changes ("!" makes
-       configd run it again) */
+    /* a whole-house report (devices, services, a service's traffic): configd keeps it for a minute, so sorting, paging
+       and searching the grid, or a second grid showing the same report, don't run it again; the page asks for a fresh
+       one when it loads or the period changes ("!" makes configd run it again) */
     private function cachedList($report)
     {
-        $fresh = $this->request->getPost('fresh', null, '') === '1';
         $args = $report === 'sites' ? ['sites', $this->postHours(), '', $this->postNetworks()]
             : [$report, $this->postHours(), $this->postNetworks()];
+        return $this->cached($args);
+    }
+
+    private function cached(array $args)
+    {
+        $fresh = $this->request->getPost('fresh', null, '') === '1';
         return $this->query($args, ($fresh ? '!' : '') . 'loupe list');
     }
 
@@ -207,7 +218,7 @@ class ReportController extends ApiControllerBase
         if ($text === '') {
             $data = $this->cachedList('sites');
         } elseif (preg_match(self::TEXT, $text)) {
-            $data = $this->query(['sites', $this->postHours(), $text, $this->postNetworks()]);
+            $data = $this->cached(['sites', $this->postHours(), $text, $this->postNetworks()]);
         } else {
             return $this->searchRecordsetBase([]);
         }
@@ -220,7 +231,7 @@ class ReportController extends ApiControllerBase
         if (!preg_match(self::TEXT, $text)) {
             return $this->searchRecordsetBase([]);
         }
-        $data = $this->query(['lookup', $text, $this->postHours(), 'exact', $this->postNetworks()]);
+        $data = $this->cached(['lookup', $text, $this->postHours(), 'exact', $this->postNetworks()]);
         return $this->grid($data[$section] ?? [], $sort, null, self::SEARCH[$section]);
     }
 
