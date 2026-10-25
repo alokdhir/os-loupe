@@ -279,16 +279,42 @@ def split_period(namer, table, start, end):
     return stored, live
 
 
-def stored_sites(db, days, text, exact):
-    """loupd's site rows on `days` that can match `text` (site_matches() tells), as report.site_rows()."""
+def site_candidates(db, first, text):
+    """What the names table holds since day `first` that can match `text`: (named sites whose name contains it,
+    sites that were on the address `text`, services whose name contains it)."""
+    by_name, by_address, services = set(), set(), set()
+    for site, named, s, server in db.execute(
+            "SELECT site, named, service, server FROM site_names WHERE last_day >= ? AND "
+            "(instr(lower(site), ?) > 0 OR instr(lower(service), ?) > 0 OR server = ?)", (first, text, text, text)):
+        if named and text in site.lower():
+            by_name.add(site)
+        if server == text:
+            by_address.add(site)
+        if text in s.lower():
+            services.add(s)
+    return by_name, by_address, services
+
+
+def stored_sites(db, days, text, exact, by_service=True):
+    """loupd's site rows on `days` that can match `text` (site_matches() tells), as report.site_rows(), in the
+    order loupd wrote them. Not exact: the rows of the sites the names table matches, and with `by_service` the
+    rows of the services it matches."""
     if not days:
         return []
     if exact:
         cond, args = f"{LISTED} = ?", (text,)
     else:
-        cond, args = "(instr(lower(site), ?) > 0 OR instr(lower(service), ?) > 0 OR instr(servers, ?) > 0)", (text,) * 3
+        by_name, by_address, services = site_candidates(db, min(days), text)
+        sites = by_name | by_address
+        cond, args = "site IN (SELECT value FROM json_each(?))", (json.dumps(sorted(sites)),)
+        if by_service and services:
+            cond = f"({cond} OR {LISTED} IN (SELECT value FROM json_each(?)))"
+            args += (json.dumps(sorted(s.lower() for s in services)),)
+        elif not sites:
+            return []
     return [(*r[:11], r[11].split() if r[3] else (r[2],))
-            for r in db.execute(f"SELECT {SITE_COLS} FROM sites_1d WHERE {cond} AND {DAYS_IN}", (*args, json.dumps(days)))]
+            for r in db.execute(f"SELECT {SITE_COLS} FROM sites_1d WHERE {cond} AND {DAYS_IN} ORDER BY day, rowid",
+                                (*args, json.dumps(days)))]
 
 
 def site_matches(text, exact, site, named, s, servers):
@@ -312,25 +338,51 @@ def matching_sites(db, svc, hours, text, exact):
 
 
 def search_rows(db, svc, hours, text):
-    """The services search's traffic: (ip, mac, listed as, up, down, conns, last, matched). Traffic with a service is
-    listed as the service, and all of it counts; traffic without one only when its site matches, listed as the site.
-    Where loupd's summaries have it: the services from the daily summary (from the site summary for today's
-    summarized hours), matching sites from the site summary."""
+    """The services search's traffic: (ip, mac, listed as, up, down, conns, last, matched). A service is listed with
+    all its traffic when its name or one of its sites matches; traffic without a service only when its site matches,
+    listed as the site. Where loupd's summaries have it: the services' traffic from the daily summary (from the site
+    summary for today's summarized hours), the matching sites from the site summary, added up there."""
     table, start = period(hours)
     namer = Namer(db, svc)
     stored, live = split_period(namer, table, start, int(time.time()) + 1)
     whole = [d for d in stored if namer.sites_until(d) == next_day(d)]
     part = [d for d in stored if d not in whole]
-    for sql, days in (("SELECT ip, mac, service, up, down, conns, last FROM services_1d WHERE service != '' AND " + DAYS_IN,
-                       whole),
-                      ("SELECT ip, mac, service, sum(up), sum(down), sum(conns), max(last) FROM sites_1d "
-                       f"WHERE service != '' AND {DAYS_IN} GROUP BY ip, mac, service", part)):
-        if days:
-            for ip, mac, s, up, down, conns, last in db.execute(sql, (json.dumps(days),)):
+    matched, services = [], set()
+    if stored:
+        by_name, by_address, services = site_candidates(db, min(stored), text)
+        in_days, names = json.dumps(stored), json.dumps(sorted(by_name))
+        # a site whose name matches: all its traffic. With a service, it only marks the service as matched (its
+        # traffic is the service's rows below); without one, it is listed as the site.
+        for ip, mac, s in db.execute("SELECT DISTINCT ip, mac, service FROM sites_1d WHERE named = 1 AND service != '' "
+                                     f"AND site IN (SELECT value FROM json_each(?)) AND {DAYS_IN}", (names, in_days)):
+            matched.append((ip, mac, s, 0, 0, 0, 0, True))
+            services.add(s)
+        matched += [(*r, True) for r in db.execute(
+            "SELECT ip, mac, site, sum(up), sum(down), sum(conns), max(last) FROM sites_1d WHERE named = 1 AND service = '' "
+            f"AND site IN (SELECT value FROM json_each(?)) AND {DAYS_IN} GROUP BY ip, mac, site "
+            "ORDER BY min(day), ip, mac, site", (names, in_days))]
+        # a site on the address: the days it was there
+        for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in db.execute(
+                f"SELECT {SITE_COLS} FROM sites_1d WHERE site IN (SELECT value FROM json_each(?)) AND {DAYS_IN} "
+                "ORDER BY day, rowid", (json.dumps(sorted(by_address)), in_days)):
+            if named and site in by_name:
+                continue
+            if site_matches(text, False, site, named, s, servers.split() if named else (site,)):
+                matched.append((ip, mac, s, 0, 0, 0, 0, True) if s else (ip, mac, site, up, down, conns, last, True))
+                if s:
+                    services.add(s)
+    wanted_services = json.dumps(sorted(services))
+    # per device and service, each first seen where the day-by-day rows would have it (the devices listed with a
+    # service are the biggest, in that order when they tie)
+    for sql, days in (("SELECT ip, mac, service, sum(up), sum(down), sum(conns), max(last) FROM services_1d WHERE service IN "
+                       f"(SELECT value FROM json_each(?)) AND {DAYS_IN} GROUP BY ip, mac, service "
+                       "ORDER BY min(day), ip, mac, service", whole),
+                      ("SELECT ip, mac, service, sum(up), sum(down), sum(conns), max(last) FROM sites_1d WHERE service IN "
+                       f"(SELECT value FROM json_each(?)) AND {DAYS_IN} GROUP BY ip, mac, service", part)):
+        if days and services:
+            for ip, mac, s, up, down, conns, last in db.execute(sql, (wanted_services, json.dumps(days))):
                 yield ip, mac, s, up, down, conns, last, text in s.lower()
-    for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in stored_sites(db, stored, text, False):
-        if site_matches(text, False, site, named, s, servers):
-            yield (ip, mac, s, 0, 0, 0, 0, True) if s else (ip, mac, site, up, down, conns, last, True)
+    yield from matched
     for day, a, b in live:
         for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in live_sites(db, namer, table, day, a, b):
             hit = site_matches(text, False, site, named, s, servers)

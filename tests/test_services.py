@@ -366,6 +366,21 @@ class TestDailySummary(unittest.TestCase):
         netflix = {(r["mac"], r["name"]): r for r in live[0][0]}
         self.assertEqual(netflix[("02:00:00:00:00:61", "www.netflix.com")]["servers"], ["192.0.2.10"])
 
+    def test_site_names(self):
+        """Each site, service and address the summaries hold, with the last day: what the search looks up first.
+        A row left by a renamed service only makes the search look further; it never shows."""
+        self.summarize()
+        db = self.store.db
+        names = {r[:4]: r[4] for r in db.execute("SELECT site, named, service, server, last_day FROM site_names")}
+        self.assertEqual(names[("www.netflix.com", 1, "Netflix", "192.0.2.10")], self.today)
+        self.assertEqual(names[("192.0.2.20", 0, "", "192.0.2.20")], self.today)
+        before = self.drilldowns()
+        db.execute("INSERT INTO site_names VALUES ('www.netflix.com', 1, 'Old name', '192.0.2.10', ?)", (self.today,))
+        self.assertEqual(self.drilldowns(), before)
+        self.assertEqual(self.query.cmd_sites(168, "old name")["rows"], [])
+        self.store.prune(self.today + 2 * 86400, days_1h=1)
+        self.assertEqual(db.execute("SELECT count(*) FROM site_names").fetchone(), (0,))
+
     def test_network_filter(self):
         """Traffic is filed under the network its address is in; a filter keeps those networks' traffic only."""
         orig = self.query.Networks.__init__

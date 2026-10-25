@@ -38,7 +38,7 @@ import time
 
 from .services import DATA_JSON, HOSTING
 
-SUMMARY_VERSION = 3     # raise when the naming changes, so loupd builds the summaries again
+SUMMARY_VERSION = 4     # raise when the naming or what the summaries hold changes, so loupd builds them again
 HOURLY_DAYS = 3         # days kept in the hourly summary (report periods up to 48 hours)
 SETTLE = 120            # seconds until loupd has written a minute's traffic (it writes once a minute)
 

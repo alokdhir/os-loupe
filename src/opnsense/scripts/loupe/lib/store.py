@@ -145,6 +145,19 @@ CREATE TABLE IF NOT EXISTS sites_1d (
 -- for traffic without one its site) a click on that row shows
 CREATE INDEX IF NOT EXISTS sites_1d_day ON sites_1d (day);
 CREATE INDEX IF NOT EXISTS sites_1d_listed ON sites_1d (lower(CASE WHEN service != '' THEN service ELSE site END), day);
+CREATE INDEX IF NOT EXISTS sites_1d_site ON sites_1d (site, day);
+CREATE INDEX IF NOT EXISTS services_1d_service ON services_1d (service, day);
+-- each site, service and address in sites_1d, and the last day it was there: the services search finds what matches
+-- its text here (thousands of rows a year, not millions), then reads only those sites' and services' rows. Rows
+-- are only added or moved later (a service renamed leaves its old row until pruned), so it can only find too much.
+CREATE TABLE IF NOT EXISTS site_names (
+    site TEXT NOT NULL,
+    named INTEGER NOT NULL,
+    service TEXT NOT NULL,
+    server TEXT NOT NULL,           -- an address the site was on (traffic without a name: the site itself)
+    last_day INTEGER NOT NULL,
+    PRIMARY KEY (site, named, service, server)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS summary_days (
     day INTEGER PRIMARY KEY,
     map TEXT NOT NULL,              -- fingerprint of the service map it was built with
@@ -317,6 +330,10 @@ class Store:
                            "servers) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                            [(day, *k, int(v[0]), *v[1:6], " ".join(sorted(v[6])) if k[3] else "")
                             for k, v in (sites or {}).items()])
+            names = {(k[2], k[3], k[4], server) for k, v in (sites or {}).items() for server in (v[6] if k[3] else (k[2],))}
+            db.executemany("INSERT INTO site_names (site, named, service, server, last_day) VALUES (?,?,?,?,?) "
+                           "ON CONFLICT (site, named, service, server) DO UPDATE SET last_day = max(last_day, excluded.last_day)",
+                           [(*n, day) for n in sorted(names)])
             db.execute("DELETE FROM services_1h WHERE hour >= ? AND hour < ?", (day, end))
             if hourly is not None:
                 db.executemany("INSERT INTO services_1h (hour, ip, mac, service, up, down, conns, last) "
@@ -337,6 +354,7 @@ class Store:
         db.execute("DELETE FROM flows_1h WHERE bucket < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM services_1d WHERE day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM sites_1d WHERE day < ?", (now - days_1h * 86400,))
+        db.execute("DELETE FROM site_names WHERE last_day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM summary_days WHERE day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM day_names WHERE day < ?", (now - days_1h * 86400,))
         db.execute("DELETE FROM services_1h WHERE hour < ?", (now - KEEP_1H_SUMMARY,))

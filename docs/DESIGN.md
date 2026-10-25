@@ -85,7 +85,7 @@ SQLite at `/var/db/loupe/loupe.db`, WAL mode: `loupd` is the only writer; `query
 - `flows_1m` / `flows_5m` / `flows_1h`: per bucket, device (address and MAC), server, port, protocol and name — bytes up/down, packets, connections, and when loupd last added to the row. All three are written in the same transaction each minute (no separate roll-up). Kept 4 hours / 30 days / 365 days (the last two are settings).
 - `lookups`: names each device looked up or connected to, per day and device (address and MAC), including ones that moved no data. 30 days by default.
 - `devices`: detected facts only.
-- `services_1h` / `services_1d`: per hour (the last 3 days) and per local day, device and service — bytes, connections, last seen. `sites_1d`: per local day, device, site (server name, or address) and service — bytes, connections, first and last seen, the site's addresses, and whether its service was inferred. `day_names`: the evidence each day's traffic was named with. `summary_days`: when each day was built, and with which service map. loupd builds them from `flows_1h` (see Performance); the daily rows and evidence are pruned with `flows_1h`.
+- `services_1h` / `services_1d`: per hour (the last 3 days) and per local day, device and service — bytes, connections, last seen. `sites_1d`: per local day, device, site (server name, or address) and service — bytes, connections, first and last seen, the site's addresses, and whether its service was inferred. `site_names`: each site, service and address in `sites_1d`, and the last day it was there. `day_names`: the evidence each day's traffic was named with. `summary_days`: when each day was built, and with which service map. loupd builds them from `flows_1h` (see Performance); the daily rows and evidence are pruned with `flows_1h`.
 
 Device names, types and icons are applied **when a report is built**, so editing or resetting a device shows everywhere immediately. Service names are stored in the summaries; when the service map changes (your entries, or the shipped file in an update) loupd builds the days again, newest first, and the reports name traffic directly until a day is rebuilt — see Performance.
 
@@ -106,6 +106,7 @@ loupd builds each day from `flows_1h` with the reports' naming code (`build_day`
 - `services_1h`: per hour, device and service (the last 3 days, for periods up to 48 hours);
 - `services_1d`: per day, device and service;
 - `sites_1d`: per day, device, site and service: what a services list row shows when clicked, and what the services search matches. Today's holds the hours that had ended when loupd built it;
+- `site_names`: each site, service and address `sites_1d` holds, with the last day it was there (thousands of rows a year): the services search finds what matches its text here, then reads only those sites' and services' rows by index. Rows are only added or moved later, so a renamed service leaves a row that makes a search look further but never shows;
 - `day_names`: the day's evidence — which services were named on each device/server pair, which pairs carry VPN tunnels, which VPN apps each device used.
 
 Today is built every 10 minutes (~0.6 s), each day once more after it ends, and every day again when the service map changes: each day records a fingerprint of the map it was built with (`summary_days`), and days with another fingerprint are built again, newest first, with at most ~1 s of work a minute. Until a day is rebuilt the short periods, the device page and the services drill-down and search gather that day's evidence themselves (slower, same names), and the long-period lists show the day as it was built. While days wait, the Devices and Services tabs say so under the period buttons (`query.py summary`: days built and waiting), so the slower periods don't look like a fault.
@@ -115,13 +116,30 @@ Today is built every 10 minutes (~0.6 s), each day once more after it ends, and 
 | Report | Made from | Time (Intel N150, ~100 devices) |
 |---|---|---|
 | Lists, up to 2 days (1 h, 3 h, 24 h, 48 h) | stored hours, plus the minutes since loupd's last build named with the stored evidence | ~0.12–0.17 s |
-| Lists, longer (7 days, 30 days, a year) | stored days | ~0.01 s, whatever the period |
+| Lists, longer (7 days, 30 days, a year) | stored days | ~0.01 s with a few weeks of history; it grows with the days in the period (a synthetic year, ~100 devices: ~1.5 s on a desktop) |
 | Sorting, paging, searching a list | configd's cached copy | ~0.04 s |
 | Device page | that device's traffic rows, named with its stored evidence, each device/server/port/name once | ~0.05 s (1 h), ~0.5 s (7 days) |
 | A service's traffic, services search: up to 2 days | all traffic rows in the period, a day at a time | ~0.8 s (24 h) |
-| A service's traffic, services search: longer | stored sites (a click: by the row's index; a search: every site in the period), plus today's traffic since loupd's last build, named here | 7 days: ~0.5 s a click, ~0.2 s a search (was ~2.8 s and ~0.9 s) |
+| A service's traffic, services search: longer | stored sites (a click: by the row's index; a search: the sites and services `site_names` matches, by index), plus today's traffic since loupd's last build, named here | 7 days: ~0.5 s a click, ~0.2 s a search (was ~2.8 s and ~0.9 s). A synthetic year on a desktop: ~0.1–0.4 s a click or search, ~1.5 s for a search matching sites every device used every day, ~7 s for one matching a third of all traffic (it reads most of it) |
 
 The short lists are a rolling window, current to the minute. The long ones are whole local days: "7 days" is today and the six days before it, and today is up to 10 minutes behind. A service's traffic and the services search cover the same days as the list, and are current to the minute: today's hours since loupd's last build are named when asked for.
+
+### Summary indexes
+
+| Index | Serves |
+|---|---|
+| `services_1d` primary key (day, ip, mac, service) | the long lists (a range of days) |
+| `services_1d_service` (service, day) | the services search: the traffic of the services it matched |
+| `sites_1d_day` (day) | loupd replacing a day |
+| `sites_1d_listed` (lower(service, or site when it has none), day) | a click on a services list row |
+| `sites_1d_site` (site, day) | the services search: the sites it matched |
+| `site_names` primary key (site, named, service, server) | loupd adding a day's names; the search reads the whole table (thousands of rows) |
+
+`sites_1d` is a rowid table, unlike the others: each of its three indexes would otherwise carry the whole six-column key, nearly doubling its size.
+
+### Rebuilding the summaries
+
+The summaries hold names and what the reports read, so they're built again whenever either changes: `SUMMARY_VERSION` in `lib/report.py` is part of each day's fingerprint. Raise it when the naming code changes or a summary table gains something loupd must fill in for past days (a new table or column); loupd then builds every day again, newest first. New indexes don't need it (SQLite builds them when loupd opens the database). A rebuild goes about one day of history a minute (as seen on an N150), so ~17 minutes for 17 days and ~6 hours for a full year; the Devices and Services tabs show the days left. On a desktop, the site summary made naming a day ~35% slower (0.17 → 0.23 s) and the names table made building and writing it ~15% slower (0.39 → 0.45 s); not measured on an N150.
 
 ### Cached lists
 
@@ -134,7 +152,7 @@ The grids sort, page and search on the server, so each click and keystroke asks 
 
 ### Storage growth
 
-`flows_1h` grows ~14 MB a day with its indexes, ~5.3 GB at the default 365-day retention; `day_names` ~0.4 MB a day (~7,000 rows), `services_1d` less than that. `sites_1d` ~1.4 MB a day with its indexes (measured over 4 days on a home network of about a hundred devices; ~5.8 MB on synthetic traffic where every device uses every site). The lists, a service's traffic and the services search don't read `flows_1h` once the summaries are built, so a shorter retention mainly limits how far back the device page and a rebuild can go.
+`flows_1h` grows ~14 MB a day with its indexes, ~5.3 GB at the default 365-day retention; `day_names` ~0.4 MB a day (~7,000 rows), `services_1d` less than that. `sites_1d` ~1.4 MB a day with its indexes (measured over 4 days on a home network of about a hundred devices; ~5.8 MB on synthetic traffic where every device uses every site), plus ~25% for the indexes the search uses (by site in `sites_1d`, by service in `services_1d`); `site_names` well under 1 MB a year. The lists, a service's traffic and the services search don't read `flows_1h` once the summaries are built, so a shorter retention mainly limits how far back the device page and a rebuild can go.
 
 ## Alternatives considered
 
@@ -160,6 +178,7 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **Multicast and broadcast** traffic is not counted.
 - **Traffic that never crosses the router** (device to device on the LAN) is invisible by design.
 - **Traffic between local networks** (VLAN to VLAN) crosses the router but isn't counted: Loupe tracks devices' internet traffic, and same-network traffic can't be seen anyway, so a partial local view would mislead. Firewall logs and NetFlow cover it.
+- **Slow reports over long periods:** a services search that matches a large share of all traffic (a fragment like `.com`) reads most of the period's site rows: ~7 s for a synthetic year on a desktop. The 1-year device and service lists grow with the days kept (~1.5 s for a synthetic year on a desktop). The device page reads that device's raw traffic rows and isn't cached. After an update or a service names change, periods that reach days not rebuilt yet are read the slow way until loupd catches up.
 
 ## Untested / open risks
 
