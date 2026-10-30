@@ -92,16 +92,25 @@ class Labels:
     Built from a window's traffic (the constructor), or from a day's stored evidence (`from_evidence`).
     """
 
-    def __init__(self, db, svc, table, start, flows=None, end=None, lookups_from=None):
+    def __init__(self, db, svc, table, start, flows=None, end=None, lookups_from=None, keys=None):
         """The evidence in [start, end) of `table`. `flows`: that window's rows from flow_totals() (or any rows
         starting ip, mac, name, server, port, proto), when the caller has them (saves two scans of the table).
-        VPN providers come from lookups since a day before the window, or since `lookups_from`."""
+        VPN providers come from lookups since a day before the window, or since `lookups_from`. `keys` (addresses
+        and MACs): only those devices' evidence - all of it is per device, so it's the same for them."""
         self.svc = svc
         counts = collections.defaultdict(collections.Counter)      # by MAC; lookups without one by address
         end = end or 1 << 62
         since = start - 86400 if lookups_from is None else lookups_from
-        for mac, ip, name, n in db.execute("SELECT mac, ip, name, sum(count) FROM lookups WHERE day >= ? AND last_seen >= ? "
-                                           "AND first_seen < ? GROUP BY mac, ip, name", (since - 86400, since, end)):
+        mine, look, args = "", "", ()
+        if keys is not None:
+            args = (json.dumps(sorted(keys)),)
+            mine = " AND ip IN (SELECT value FROM json_each(?))"
+            # providers are kept by MAC (by address for lookups without one): written so both use the MAC index
+            look = " AND (mac IN (SELECT value FROM json_each(?)) OR (mac = '' AND ip IN (SELECT value FROM json_each(?))))"
+        # day < end: implied by first_seen < end, and without it SQLite skip-scans the MAC index (10x slower)
+        for mac, ip, name, n in db.execute(f"SELECT mac, ip, name, sum(count) FROM lookups WHERE day >= ? AND day < ? "
+                                           f"AND last_seen >= ? AND first_seen < ?{look} GROUP BY mac, ip, name",
+                                           (since - 86400, end, since, end, *args * 2)):
             p = svc.vpn_provider(name)
             if p:
                 counts[mac or ip][p] += n
@@ -112,9 +121,9 @@ class Labels:
         if flows is None:
             cond = " OR ".join("(proto = ? AND port = ?)" for _ in vpn_ports) or "0"
             tunnels = db.execute(f"SELECT DISTINCT ip, server, proto, port FROM {table} WHERE bucket >= ? AND name = '' "
-                                 f"AND bucket < ? AND ({cond})", (start, end, *[x for pp in vpn_ports for x in pp]))
-            named = db.execute(f"SELECT DISTINCT ip, server, name FROM {table} WHERE bucket >= ? AND bucket < ? AND name != ''",
-                               (start, end))
+                                 f"AND bucket < ?{mine} AND ({cond})", (start, end, *args, *[x for pp in vpn_ports for x in pp]))
+            named = db.execute(f"SELECT DISTINCT ip, server, name FROM {table} WHERE bucket >= ? AND bucket < ?{mine} "
+                               f"AND name != ''", (start, end, *args))
         else:
             vpn_ports = set(vpn_ports)
             tunnels = {(f[0], f[3], f[5], f[4]) for f in flows if not f[2] and (f[5], f[4]) in vpn_ports}
@@ -234,7 +243,7 @@ class Namer:
                     args += keys
                 self._days[k] = Labels.from_evidence(self.svc, self.db.execute(sql, args))
             else:
-                self._days[k] = Labels(self.db, self.svc, "flows_1h", day, None, next_day(day))
+                self._days[k] = Labels(self.db, self.svc, "flows_1h", day, None, next_day(day), keys=keys)
         return self._days[k]
 
     def labels(self, day, table, start, end, flows, keys=None):
@@ -244,7 +253,7 @@ class Namer:
         stored = self.day(day, keys)
         if built and end <= built - SETTLE:
             return stored
-        return stored.merged(Labels(self.db, self.svc, table, start, flows, end, built - SETTLE if built else None))
+        return stored.merged(Labels(self.db, self.svc, table, start, flows, end, built - SETTLE if built else None, keys))
 
 
 def flow_totals(db, table, start, end=None, where="", args=()):

@@ -271,6 +271,11 @@ class TestVpnLabels(unittest.TestCase):
                 # looked up from its IPv6 address, tunnel over IPv4: the same device by MAC
                 self.assertEqual(lab.service("10.9.1.32", "", "203.0.113.80", 51820, "udp", "02:00:00:00:00:32"),
                                  "VPN (Mullvad)")
+                # one device's evidence (its page, on a day loupd hasn't summarized) is the house's for that device
+                for keys in (("10.9.1.30",), ("10.9.1.31", "02:00:00:00:00:31"), ("10.9.1.32", "02:00:00:00:00:32")):
+                    own = report.Labels(db, services.ServiceMap(), "flows_5m", b, keys=keys)
+                    self.assertEqual(sorted(own.evidence()), sorted(e for e in lab.evidence() if e[1] in keys))
+                    self.assertTrue(own.evidence())
             finally:
                 db.close()
 
