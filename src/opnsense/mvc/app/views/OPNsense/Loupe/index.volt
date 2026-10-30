@@ -215,8 +215,17 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#tab_devices .loupe-netpick').hide();       /* a device's page shows all its traffic: no filter */
             $('#loupe-list').hide();
             $('#loupe-detail').show();
+            /* the header runs the report and configd keeps it: the grids ask once it has, and get that copy */
+            const dev = () => ({device: current});
+            const loadGrids = function () {
+                grid('grid-services', '/api/loupe/report/search_services', dev);
+                grid('grid-sites', '/api/loupe/report/search_sites', dev);
+                grid('grid-ports', '/api/loupe/report/search_ports', dev);
+                grid('grid-devnames', '/api/loupe/report/search_names', dev);
+            };
             ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
-                if (data.error) { $('#loupe-detail-title').text(data.error); return; }
+                loadGrids();
+                if (!data || data.error) { $('#loupe-detail-title').text((data || {}).error || ''); return; }
                 const d = data.device || {};
                 deviceNetworks = (data.networks || []).length;
                 deviceColumns($(DEVICE_GRIDS));
@@ -254,11 +263,6 @@ POSSIBILITY OF SUCH DAMAGE.
                     }
                 });
             });
-            const dev = () => ({device: current});
-            grid('grid-services', '/api/loupe/report/search_services', dev);
-            grid('grid-sites', '/api/loupe/report/search_sites', dev);
-            grid('grid-ports', '/api/loupe/report/search_ports', dev);
-            grid('grid-devnames', '/api/loupe/report/search_names', dev);
         }
 
         /* Services tab: every service the house used, or what matches the search */

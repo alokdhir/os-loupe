@@ -143,7 +143,7 @@ The summaries hold names and what the reports read, so they're built again whene
 
 ### Cached lists
 
-The grids sort, page and search on the server, so each click and keystroke asks for the report again. The device and service lists, a service's traffic and the services search go through a configd action with a 60-second cache (`loupe list`), which configd keys by its arguments (report, period, text, networks). The page asks for a fresh copy (configd's `!` prefix) when it opens, when the period changes and after a save; the requests in between get the cached one. A service's two grids (traffic, lookups) show the same report: the second asks once the first has loaded, and gets the cached copy.
+The grids sort, page and search on the server, so each click and keystroke asks for the report again. The device and service lists, a service's traffic and the services search go through a configd action with a 60-second cache (`loupe list`), which configd keys by its arguments (report, period, text, networks). The page asks for a fresh copy (configd's `!` prefix) when it opens, when the period changes and after a save; the requests in between get the cached one. A service's two grids (traffic, lookups) show the same report: the second asks once the first has loaded, and gets the cached copy. A device's page works the same way: its header and chart ask for a fresh copy of the device report, and its four grids ask once that has loaded, so opening a device runs the report once rather than five times.
 
 ### Naming traffic
 
@@ -178,7 +178,7 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **Multicast and broadcast** traffic is not counted.
 - **Traffic that never crosses the router** (device to device on the LAN) is invisible by design.
 - **Traffic between local networks** (VLAN to VLAN) crosses the router but isn't counted: Loupe tracks devices' internet traffic, and same-network traffic can't be seen anyway, so a partial local view would mislead. Firewall logs and NetFlow cover it.
-- **Slow reports over long periods:** a services search that matches a large share of all traffic (a fragment like `.com`) reads most of the period's site rows: ~7 s for a synthetic year on a desktop. The 1-year device and service lists grow with the days kept (~1.5 s for a synthetic year on a desktop). The device page reads that device's raw traffic rows and isn't cached. After an update or a service names change, periods that reach days not rebuilt yet are read the slow way until loupd catches up.
+- **Slow reports over long periods:** a services search that matches a large share of all traffic (a fragment like `.com`) reads most of the period's site rows: ~7 s for a synthetic year on a desktop. The 1-year device and service lists grow with the days kept (~1.5 s for a synthetic year on a desktop). The device page reads that device's raw traffic rows (~0.5 s at 7 days on an N150), once per open. After an update or a service names change, periods that reach days not rebuilt yet are read the slow way until loupd catches up.
 
 ## Untested / open risks
 

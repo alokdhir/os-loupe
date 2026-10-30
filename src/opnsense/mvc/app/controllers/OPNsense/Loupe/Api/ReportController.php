@@ -57,7 +57,8 @@ class ReportController extends ApiControllerBase
         if (!preg_match('/^[0-9a-fA-F:.]{2,45}$/', $id)) {
             return ['error' => 'invalid device'];
         }
-        return $this->query(['device', $id, $this->hours($hours)]);
+        /* the page's header and chart: always run, and kept for the page's grids, which ask after it */
+        return $this->query(['device', $id, $this->hours($hours)], '!loupe list');
     }
 
     public function lookupAction($text = '', $hours = 24)
@@ -183,7 +184,7 @@ class ReportController extends ApiControllerBase
         if ($id === null) {
             return $this->searchRecordsetBase([]);
         }
-        $data = $this->query(['device', $id, $this->postHours()]);
+        $data = $this->cached(['device', $id, $this->postHours()]);
         return $this->grid($data[$section] ?? [], $sort, null, self::SEARCH[$section]);
     }
 
