@@ -106,17 +106,28 @@ class SettingsController extends ApiMutableModelControllerBase
         return $this->delBase('services.service', $uuid);
     }
 
+    /* a rule's clues, strongest first (the order loupd tries them in, lib/devid.py TIERS) */
     private const RULE_FIELDS = [
-        'vendor' => 'MAC vendor', 'hostname' => 'Host name', 'mdns_model' => 'Bonjour model',
-        'mdns_service' => 'Bonjour service', 'dhcp_vendor' => 'DHCP vendor class', 'talks_to' => 'Talks to',
-        'mac_prefix' => 'MAC prefix',
+        'mac_prefix' => 'MAC prefix', 'mdns_model' => 'Bonjour model', 'hostname' => 'Host name',
+        'dhcp_vendor' => 'DHCP vendor class', 'talks_to' => 'Talks to', 'mdns_service' => 'Bonjour service',
+        'vendor' => 'MAC vendor', 'private_mac' => 'Private MAC',
     ];
 
     public function searchRuleAction()
     {
-        $result = $this->searchBase('rules.rule', ['field', 'pattern', 'type', 'description'], 'type');
+        $fields = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description']);
+        $result = $this->searchBase('rules.rule', $fields, 'type');
         foreach ($result['rows'] as &$row) {
-            $row['field'] = gettext(self::RULE_FIELDS[$row['field']] ?? $row['field']);
+            $parts = [];
+            foreach (self::RULE_FIELDS as $field => $label) {
+                $want = (string)($row[$field] ?? '');
+                if ($field === 'private_mac' && $want !== '') {
+                    $parts[] = $want === '1' ? gettext($label) : sprintf(gettext('not %s'), gettext($label));
+                } elseif ($want !== '') {
+                    $parts[] = gettext($label) . ' ' . $want;
+                }
+            }
+            $row['match'] = implode(' ' . gettext('and') . ' ', $parts);
         }
         return $result;
     }
@@ -127,32 +138,35 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /**
-     * Host name, Bonjour model and DHCP vendor patterns are regular expressions: refuse ones that don't
-     * compile here, where the dialog can show it, instead of loupd skipping them later.
+     * A rule needs at least one clue. Host name, Bonjour model and DHCP vendor patterns are regular expressions:
+     * refuse ones that don't compile here, where the dialog can show it, instead of loupd skipping them later.
      */
     private function checkRule()
     {
         $rule = $this->request->getPost('rule');
-        $field = is_array($rule) ? ($rule['field'] ?? '') : '';
-        $pattern = is_array($rule) ? (string)($rule['pattern'] ?? '') : '';
-        if ($field === 'mac_prefix' && $pattern !== '') {
-            foreach (explode(',', $pattern) as $prefix) {
-                if (!preg_match('/^[0-9a-f]{2}([:.-]?[0-9a-f]{2}){0,5}$/i', trim($prefix))) {
-                    return $this->ruleError(gettext('Enter MAC prefixes like 52:54:00, separated by commas.'));
-                }
+        $rule = is_array($rule) ? $rule : [];
+        $clue = fn($field) => trim((string)($rule[$field] ?? ''));
+        if (count(array_filter(array_keys(self::RULE_FIELDS), fn($f) => $clue($f) !== '')) === 0) {
+            return $this->ruleError('rule.vendor', gettext('Fill in at least one clue.'));
+        }
+        foreach ($clue('mac_prefix') === '' ? [] : explode(',', $clue('mac_prefix')) as $prefix) {
+            if (!preg_match('/^[0-9a-f]{2}([:.-]?[0-9a-f]{2}){0,5}$/i', trim($prefix))) {
+                $message = gettext('Enter MAC prefixes like 52:54:00, separated by commas.');
+                return $this->ruleError('rule.mac_prefix', $message);
             }
         }
-        if (in_array($field, ['hostname', 'mdns_model', 'dhcp_vendor']) && $pattern !== '') {
-            if (@preg_match('/' . str_replace('/', '\\/', $pattern) . '/u', '') === false) {
-                return $this->ruleError(gettext('This is not a valid regular expression.'));
+        foreach (['hostname', 'mdns_model', 'dhcp_vendor'] as $field) {
+            $pattern = $clue($field);
+            if ($pattern !== '' && @preg_match('/' . str_replace('/', '\\/', $pattern) . '/u', '') === false) {
+                return $this->ruleError("rule.{$field}", gettext('This is not a valid regular expression.'));
             }
         }
         return null;
     }
 
-    private function ruleError(string $message)
+    private function ruleError(string $field, string $message)
     {
-        return ['result' => 'failed', 'validations' => ['rule.pattern' => $message]];
+        return ['result' => 'failed', 'validations' => [$field => $message]];
     }
 
     public function addRuleAction()

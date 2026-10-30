@@ -44,7 +44,13 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->view->formGridServices = $this->getFormGrid('dialogService', 'gridServiceNames');
         $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'gridOverrides');
         $this->view->formDialogRule = $this->getForm('dialogRule');
-        $this->view->formGridRules = $this->getFormGrid('dialogRule', 'gridRules');
+        // a rule's clues are hidden columns; one column says what it matches (built by search_rule)
+        $grid = $this->getFormGrid('dialogRule', 'gridRules');
+        array_splice($grid['fields'], 1, 0, [[
+            'column-id' => 'match', 'label' => gettext('Matches'), 'visible' => 'true', 'sortable' => 'false',
+            'identifier' => 'false', 'type' => 'string',
+        ]]);
+        $this->view->formGridRules = $grid;
         $this->view->pick('OPNsense/Loupe/index');
     }
 

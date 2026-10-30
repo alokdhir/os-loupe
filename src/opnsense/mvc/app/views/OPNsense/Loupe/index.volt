@@ -489,6 +489,48 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $('#' + dialog).on('shown.bs.modal', function () { $('#device\\.name').focus().select(); })
             .on('hidden.bs.modal', function () { $('#device\\.mac').prop('readonly', false); });
+        /* a rule shows only the clues it uses; "Match on" adds one, the × beside a clue removes it */
+        const CLUES = ['vendor', 'hostname', 'mdns_model', 'mdns_service', 'dhcp_vendor', 'talks_to', 'mac_prefix',
+            'private_mac'];
+        const $ruleDlg = $('#{{ formGridRules['edit_dialog_id'] }}');
+        const clueRow = (c) => $ruleDlg.find('#row_rule\\.' + c);
+        const used = (c) => clueRow(c).css('display') !== 'none';      /* also while the dialog itself is hidden */
+        const $addClue = $('<tr id="row_rule_addclue"><td><div class="control-label">'
+            + '<i class="fa fa-info-circle fa-fw text-muted"></i> <b></b></div></td><td>'
+            + '<select class="selectpicker" data-width="100%" title="{{ lang._('Choose a clue') }}"></select></td><td></td></tr>');
+        clueRow(CLUES[CLUES.length - 1]).after($addClue);
+        $addClue.find('select').selectpicker();
+        CLUES.forEach(function (c) {
+            clueRow(c).find('.control-label').append(' <a href="#" class="loupe-clue-remove" title="{{ lang._('Remove this clue') }}">'
+                + '<i class="fa fa-times fa-fw text-muted"></i></a>');
+        });
+        function showClues() {
+            const unused = CLUES.filter((c) => !used(c));
+            const $s = $addClue.find('select').empty();
+            unused.forEach((c) => $s.append($('<option>').val(c).text(clueRow(c).find('.control-label b').text())));
+            $addClue.toggle(unused.length > 0)
+                .find('b').text(unused.length === CLUES.length ? '{{ lang._('Match on') }}' : '{{ lang._('And also') }}');
+            $s.selectpicker('refresh');
+        }
+        $ruleDlg.on('opnsense_bootgrid_mapped', function () {
+            CLUES.forEach((c) => clueRow(c).toggle($('#rule\\.' + c).val() !== ''));
+            showClues();
+        });
+        $addClue.find('select').on('changed.bs.select', function () {
+            const c = $(this).val();
+            if (!c) return;
+            clueRow(c).show().find('input').focus();
+            if (c === 'private_mac') $('#rule\\.private_mac').selectpicker('val', '1');     /* "Either" is no clue */
+            showClues();
+        });
+        $ruleDlg.on('click', '.loupe-clue-remove', function (e) {
+            e.preventDefault();
+            const $row = $(this).closest('tr');
+            $row.find('input').val('');
+            $row.find('select').selectpicker('val', '');
+            $row.hide();
+            showClues();
+        });
         /* icon choices show the icon itself: added here from each option's value, since API output is
            HTML-escaped and the form code decodes option labels but not their data attributes */
         $(document).on('refreshed.bs.select', '#device\\.icon, #rule\\.icon', function () {
@@ -756,7 +798,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <button type="button" class="btn btn-default active" data-source="mine">{{ lang._('Custom') }}</button>
                     <button type="button" class="btn btn-default" data-source="builtin">{{ lang._('Built-in') }}</button>
                 </div>
-                <p class="loupe-source-help" data-for="mine" style="margin: 8px 0 0">{{ lang._('Set the type of every device that matches, e.g. all devices whose MAC vendor is Tuya are Window shades. Your rules are checked before the built-in ones; an override for one device still wins. Apply to use them: devices are reclassified within a minute.') }}</p>
+                <p class="loupe-source-help" data-for="mine" style="margin: 8px 0 0">{{ lang._('Set the type of every device that matches, e.g. all devices whose MAC vendor is Tuya are Window shades. Your rules are checked before the built-in ones; an override for one device still wins. Your rules are tried by their strongest clue (MAC prefix, Bonjour model, host name, DHCP vendor class, domain, Bonjour service, MAC vendor), then in the order you added them; the first that matches decides. Apply to use them: devices are reclassified within a minute.') }}</p>
                 <p class="loupe-source-help" data-for="builtin" style="margin: 8px 0 0; display: none">{{ lang._('The rules Loupe ships with, in the order they are tried within each kind of evidence (Bonjour model, host name, DHCP, domains it talks to, MAC vendor). The first one that matches decides the type.') }}</p>
             </div>
             <div data-source-pane="mine">

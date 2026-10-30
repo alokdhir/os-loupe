@@ -1,15 +1,67 @@
 <form>
     <field>
-        <id>rule.field</id>
-        <label>Match</label>
-        <type>dropdown</type>
-        <help>Which clue about a device to test. Host names, Bonjour models and DHCP vendor classes are regular expressions; a MAC vendor matches a whole word of the maker's name (e.g. Tuya); a domain also matches its subdomains.</help>
+        <type>header</type>
+        <label>Clues: a device must match all of them</label>
     </field>
     <field>
-        <id>rule.pattern</id>
-        <label>Pattern</label>
+        <id>rule.vendor</id>
+        <label>MAC vendor</label>
         <type>text</type>
-        <help>For example Tuya, ^kvm-[0-9a-f]{4}$, _hap._tcp, nordvpn.com or 52:54:00. For a MAC prefix, MAC vendor, Bonjour service or domain, separate several with commas: any of them matches.</help>
+        <help>A whole word of the maker's name, e.g. Tuya. Separate several with commas: any of them matches.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <id>rule.hostname</id>
+        <label>Host name</label>
+        <type>text</type>
+        <help>Its DHCP or Bonjour host name, a regular expression, e.g. ^kvm-[0-9a-f]{4}$</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <id>rule.mdns_model</id>
+        <label>Bonjour model</label>
+        <type>text</type>
+        <help>A model it announces over Bonjour, a regular expression, e.g. ^AppleTV</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <id>rule.mdns_service</id>
+        <label>Bonjour service</label>
+        <type>text</type>
+        <help>A service it announces, exactly, e.g. _hap._tcp. Separate several with commas: any of them matches.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <id>rule.dhcp_vendor</id>
+        <label>DHCP vendor class</label>
+        <type>text</type>
+        <help>The vendor class in its DHCP request, a regular expression, e.g. ^udhcp</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <id>rule.talks_to</id>
+        <label>Talks to</label>
+        <type>text</type>
+        <help>A domain it uses, including its subdomains, e.g. nordvpn.com. Separate several with commas: any of them matches.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <id>rule.mac_prefix</id>
+        <label>MAC prefix</label>
+        <type>text</type>
+        <help>The start of its MAC address, e.g. 52:54:00. Separate several with commas: any of them matches.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <id>rule.private_mac</id>
+        <label>MAC address</label>
+        <type>dropdown</type>
+        <help>Phones, tablets and laptops usually use a private (randomized) address on each network.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Device</label>
     </field>
     <field>
         <id>rule.type</id>

@@ -84,6 +84,7 @@ rm -f "$NEW"
 find $PREFIX/opnsense/scripts/loupe -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 
 refresh_gui
+$PREFIX/opnsense/mvc/script/run_migrations.php OPNsense/Loupe >/dev/null    # settings from an older version
 for i in 1 2 3 4 5 6 7 8 9 10; do        # configd takes a moment to come back
     configctl template reload OPNsense/Loupe >/dev/null 2>&1 && break
     sleep 1

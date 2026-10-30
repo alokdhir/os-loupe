@@ -63,6 +63,8 @@ def check_rule(r):
         conds = r["all"] if "all" in r else [r["when"]]
         if not r.get("type"):
             return "no type"
+        if not all(conds):
+            return "no clues"
         for cond in conds:
             for field, want in cond.items():
                 if field not in TIERS or field in ("role", "strong_service", "fallback"):
@@ -119,7 +121,8 @@ LISTABLE = ("mac_prefix", "vendor", "mdns_service", "talks_to")     # a comma ca
 
 
 def _split_lists(r):
-    """GUI rules hold one pattern; for fields where a comma can't occur, "a, b" means a or b."""
+    """GUI rules hold one pattern per clue; for fields where a comma can't occur, "a, b" means a or b.
+    A compound rule (several clues) is tried with the rules of its strongest clue."""
     if "when" not in r:
         return r
     when = {f: ([x.strip() for x in w.split(",") if x.strip()] if f in LISTABLE and isinstance(w, str) and "," in w else w)
@@ -127,6 +130,8 @@ def _split_lists(r):
     if "mac_prefix" in when:
         prefixes = when["mac_prefix"] if isinstance(when["mac_prefix"], list) else [when["mac_prefix"]]
         when["mac_prefix"] = [mac_prefix(p) for p in prefixes]
+    if when and "tier" not in r and all(f in TIERS for f in when):
+        r = {**r, "tier": min(when, key=TIERS.index)}
     return {**r, "when": when}
 
 

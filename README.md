@@ -6,7 +6,7 @@ Loupe answers questions like *"what was the PlayStation doing at 2 a.m.?"*, *"wh
 
 Loupe is about each device's traffic to and from the internet. Traffic between your own devices isn't counted: on the same network it never reaches the router, and between networks (VLANs) Loupe leaves it out (firewall logs and Insight cover it).
 
-Devices are identified automatically, not left as IP addresses. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and picks the most trustworthy clue, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 135 rules covering 71 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
+Devices are identified automatically, not left as IP addresses. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and goes with the strongest evidence, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 135 rules covering 71 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
 
 ## Features
 
@@ -20,7 +20,7 @@ Devices are identified automatically, not left as IP addresses. A layered, evide
 - **Services**: every service the house used in the period, with the devices that used it. Search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`) to see which devices used it, how much, and when, including names that were only looked up in DNS.
 - **Networks (VLANs)**: when Loupe watches more than one network, the device and service lists show each device's network and can be filtered to one or more. A device on several networks shows them all, and its page shows which network each service and site was used from. Network colours match *Reporting → Traffic*.
 - **Sensible service names**: traffic named only for its CDN (Fastly, Akamai, CloudFront…), or with no name at all, takes the service the same device was using on the same server, marked *(same server)*. Streaming services that share another company's servers are told apart (Hulu on Disney's servers).
-- **Your own names, types and icons**: rename a device, correct its type or pick its icon from any report page. Overrides follow the device by MAC address, and an icon picked for one device applies to every device of that type. Rules type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*.
+- **Your own names, types and icons**: rename a device, correct its type or pick its icon from any report page. Overrides follow the device by MAC address, and an icon picked for one device applies to every device of that type. Rules type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*; a compound rule combines clues (MAC vendor Espressif *and* a host name starting `shelly`).
 - **Your own service names**: add domains (including patterns like `cdn-*.example.com`), addresses, ports or VPN app domains. *Settings → Service names / Device rules → Built-in* shows what Loupe ships with.
 - **Dashboard widget**: the last 24 hours at a glance, with totals, an hourly chart and the top devices.
 
@@ -88,7 +88,7 @@ How Loupe recognises devices is data, not code: [`data/devices.json`](src/opnsen
 {"when": {"hostname": "(?i)^kvm-[0-9a-f]{4}$"}, "type": "NanoKVM", "example": {"hostname": "kvm-0a1b"}}
 ```
 
-A rule matches when all of its conditions do (`when`, or several in `all`); a list value means *any of*. Fields:
+A rule matches when all of its conditions do (`when`, or several in `all`) — a *compound* rule; a list value means *any of*. Fields:
 
 | Field | Matches |
 |---|---|
@@ -104,7 +104,7 @@ A rule matches when all of its conditions do (`when`, or several in `all`); a li
 
 Evidence is trusted in a fixed order — Bonjour model, host name, hosting role, strong Bonjour services, DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching rule wins (file order within a tier). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
 
-**For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones), and *Settings → Service names* takes your own names.
+**For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones; fill in one clue or several for a compound rule; your rules are tried by their strongest clue, then in the order you added them, and the first that matches decides), and *Settings → Service names* takes your own names.
 
 **Adding a rule to the shipped file:** add it with an `example` — made-up evidence that should come out as your type (no real MACs or names) — then run the tests. They fail if the example lands on another type, or if your rule takes over another rule's example. `tools/fmtjson.py` keeps the files one entry per line.
 

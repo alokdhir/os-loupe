@@ -142,12 +142,35 @@ class TestUserRules(unittest.TestCase):
         self.assertNotEqual(devid.classify("ac:00:00:03:00:09")[0], "Window shade")
         self.assertEqual(devid.classify("ac:00:00:04:00:09", hostname="a,b")[0], "Comma host")
 
+    def test_compound_rule(self):
+        oui = {"AC0000": "Espressif Inc."}
+        devid.set_user_rules([{"when": {"vendor": "Espressif", "hostname": "^shelly"}, "type": "Smart relay"}])
+        t, src, _ = devid.classify("ac:00:00:00:00:03", hostname="shelly-1", oui=oui)
+        self.assertEqual((t, src), ("Smart relay", "custom rule: vendor Espressif Inc. + hostname shelly-1"))
+        self.assertNotEqual(devid.classify("ac:00:00:00:00:03", hostname="plug-1", oui=oui)[0], "Smart relay")
+        self.assertNotEqual(devid.classify("ac:00:00:00:00:03", hostname="shelly-1")[0], "Smart relay")
+
+    def test_compound_rule_tried_with_its_strongest_clue(self):
+        # the vendor+hostname rule is a host name rule, so it beats a plain vendor rule listed first
+        oui = {"AC0000": "Espressif Inc."}
+        devid.set_user_rules([{"when": {"vendor": "Espressif"}, "type": "Espressif gadget"},
+                              {"when": {"vendor": "Espressif", "hostname": "^shelly"}, "type": "Smart relay"}])
+        self.assertEqual(devid.classify("ac:00:00:00:00:03", hostname="shelly-1", oui=oui)[0], "Smart relay")
+        self.assertEqual(devid.classify("ac:00:00:00:00:03", hostname="esp-1", oui=oui)[0], "Espressif gadget")
+
+    def test_private_mac_clue(self):
+        devid.set_user_rules([{"when": {"hostname": "^tab-", "private_mac": True}, "type": "Tablet"}])
+        self.assertEqual(devid.classify("02:00:00:00:00:04", hostname="tab-1")[0], "Tablet")
+        self.assertNotEqual(devid.classify("ac:00:00:00:00:04", hostname="tab-1")[0], "Tablet")
+
     def test_bad_rules_skipped(self):
         bad = devid.set_user_rules([{"when": {"hostname": "(unclosed"}, "type": "X"},
                                     {"when": {"nonsense": "x"}, "type": "Y"},
                                     {"when": {"hostname": "^ok-"}, "type": ""},
+                                    {"when": {}, "type": "Empty"},
                                     {"when": {"hostname": "^ok-"}, "type": "Good"}])
-        self.assertEqual([p.split(":")[0] for _, p in bad], ["bad regular expression", "unknown field nonsense", "no type"])
+        self.assertEqual([p.split(":")[0] for _, p in bad], ["bad regular expression", "unknown field nonsense", "no type",
+                                                          "no clues"])
         self.assertEqual(devid.classify("ac:00:00:00:00:02", hostname="ok-1")[0], "Good")
 
 
