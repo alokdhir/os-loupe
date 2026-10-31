@@ -395,6 +395,8 @@ POSSIBILITY OF SUCH DAMAGE.
             });
         }
 
+        /* the address is anyone's typing: a stray % must not stop the page */
+        const decode = s => { try { return decodeURIComponent(s); } catch (e) { return ''; } };
         function route() {
             const hash = window.location.hash;
             fresh.add('grid-devices').add('grid-house').add('grid-traffic');    /* opened, period changed or saved: not the cached copy */
@@ -404,10 +406,10 @@ POSSIBILITY OF SUCH DAMAGE.
             $('.loupe-apply').toggle(tab === 'settings');
             if (tab === 'devices') {
                 const m = hash.match(/device=([^&]+)/);
-                if (m) { showDevice(decodeURIComponent(m[1])); } else { showDevices(); }
+                if (m) { showDevice(decode(m[1])); } else { showDevices(); }
             } else if (tab === 'services') {
                 const m = hash.match(/q=([^&]+)/);
-                q = m ? decodeURIComponent(m[1]) : '';
+                q = m ? decode(m[1]) : '';
                 showServices();
             } else {
                 const page = (hash.replace(/^#/, '') || '{{ activetab }}').replace(/^devicenames$/, 'overrides');
