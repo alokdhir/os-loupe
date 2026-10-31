@@ -269,7 +269,13 @@ class SettingsController extends ApiMutableModelControllerBase
             $result = $this->validateAndSave($node, 'device');
         }
         if (($result['result'] ?? '') === 'saved') {
-            (new Backend())->configdRun('template reload OPNsense/Loupe');
+            /* as Apply: loupe.json carries every saved setting, so loupd reads it again too; otherwise the reports
+               would use settings saved but not applied (a new service name) that loupd doesn't */
+            $backend = new Backend();
+            $backend->configdRun('template reload OPNsense/Loupe');
+            if ((string)$this->getModel()->general->enabled === '1') {
+                $backend->configdRun('loupe restart');
+            }
         }
         return $result;
     }

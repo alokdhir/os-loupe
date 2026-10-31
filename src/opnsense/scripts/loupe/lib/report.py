@@ -312,6 +312,10 @@ def build_day(db, svc, day, end=None, until=None):
     rows = db.execute("SELECT bucket, ip, mac, name, server, port, proto, up, down, conns, max(bucket, last) FROM flows_1h "
                       "WHERE bucket >= ? AND bucket < ?", (day, end)).fetchall()
     lab = Labels(db, svc, "flows_1h", day, [r[1:7] for r in rows], end)
+    # VPN providers the day was named with before: its lookups are kept for fewer days than its traffic, so a
+    # rebuild of an older day (a service names change) would otherwise call NordVPN plain WireGuard
+    for key, provider in db.execute("SELECT ip, value FROM day_names WHERE day = ? AND kind = 'provider'", (day,)):
+        lab.provider.setdefault(key, provider)
     daily, hourly, sites = {}, {}, {}
     for bucket, ip, mac, name, server, port, proto, up, down, conns, last in rows:
         s, inferred = lab.named(ip, name, server, port, proto, mac)

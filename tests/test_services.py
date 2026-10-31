@@ -239,6 +239,26 @@ class TestIcons(unittest.TestCase):
 
 
 class TestVpnLabels(unittest.TestCase):
+    def test_rebuild_keeps_the_provider(self):
+        """A day rebuilt after its lookups were pruned keeps the VPN provider it was named with (day_names)."""
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            day = report.local_day(int(time.time()) - 40 * 86400)
+            b = day + 3600
+            mac = "02:00:00:00:00:33"
+            s.write({(b, "10.9.1.33", "203.0.113.90", 51820, "udp", ""): [mac, "", 0, 10, 100, 3, 1]}, {}, {})
+            s.close()
+            db = sqlite3.connect(path)
+            try:
+                svc = services.ServiceMap()
+                self.assertEqual({k[2] for k in report.build_day(db, svc, day)[0]}, {"VPN (WireGuard)"})   # no lookups
+                db.execute("INSERT INTO day_names (day, kind, ip, server, value) VALUES (?, 'provider', ?, '', 'NordVPN')",
+                           (day, mac))
+                self.assertEqual({k[2] for k in report.build_day(db, svc, day)[0]}, {"VPN (NordVPN)"})
+            finally:
+                db.close()
+
     def test_provider_and_fallback(self):
         import query
         with tempfile.TemporaryDirectory() as d:
@@ -389,6 +409,17 @@ class TestDailySummary(unittest.TestCase):
         self.assertEqual(self.query.cmd_sites(168, "old name")["rows"], [])
         self.store.prune(self.today + 2 * 86400, days_1h=1)
         self.assertEqual(db.execute("SELECT count(*) FROM site_names").fetchone(), (0,))
+
+    def test_prune_keeps_whole_days(self):
+        """A retention cut in the middle of a day keeps that day whole, its hourly rows and its summary, so loupd
+        doesn't build it again after every prune."""
+        self.summarize()
+        db = self.store.db
+        hours = db.execute("SELECT count(*) FROM flows_1h WHERE bucket >= ?", (self.today,)).fetchone()
+        self.store.prune(self.today + 86400 + 3 * 3600, days_1h=1)       # the cut: 03:00 today
+        self.assertEqual(db.execute("SELECT count(*) FROM flows_1h WHERE bucket >= ?", (self.today,)).fetchone(), hours)
+        self.assertIn(self.today, [d for d, in db.execute("SELECT day FROM summary_days")])
+        self.assertEqual(db.execute("SELECT count(*) FROM flows_1h WHERE bucket < ?", (self.today,)).fetchone(), (0,))
 
     def test_network_filter(self):
         """Traffic is filed under the network its address is in; a filter keeps those networks' traffic only."""

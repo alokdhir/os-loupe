@@ -267,7 +267,17 @@ def live_sites(db, namer, table, day, a, b):
     return site_rows(sites)
 
 
+MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 LISTED = "lower(CASE WHEN service != '' THEN service ELSE site END)"     # as the sites_1d_listed index has it
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
+
+def fold(s):
+    """Lower case as SQLite's lower() does it (ASCII letters only), so text matched in SQL and here agrees: a
+    service named "ÉLYSÉE" is "Élysée" in both."""
+    return (s or "").translate(_ASCII_LOWER)
+
+
 DAYS_IN = "day IN (SELECT value FROM json_each(?))"
 
 
@@ -291,11 +301,11 @@ def site_candidates(db, first, text):
     for site, named, s, server in db.execute(
             "SELECT site, named, service, server FROM site_names WHERE last_day >= ? AND "
             "(instr(lower(site), ?) > 0 OR instr(lower(service), ?) > 0 OR server = ?)", (first, text, text, text)):
-        if named and text in site.lower():
+        if named and text in fold(site):
             by_name.add(site)
         if server == text:
             by_address.add(site)
-        if text in s.lower():
+        if text in fold(s):
             services.add(s)
     return by_name, by_address, services
 
@@ -306,15 +316,15 @@ def stored_sites(db, days, text, exact, by_service=True):
     rows of the services it matches."""
     if not days:
         return []
-    if exact:
-        cond, args = f"{LISTED} = ?", (text,)
+    if exact:      # the service (or a nameless row's site), or a named site: a device page links its sites here
+        cond, args = f"({LISTED} = ? OR (site = ? AND named = 1))", (text, text)
     else:
         by_name, by_address, services = site_candidates(db, min(days), text)
         sites = by_name | by_address
         cond, args = "site IN (SELECT value FROM json_each(?))", (json.dumps(sorted(sites)),)
         if by_service and services:
             cond = f"({cond} OR {LISTED} IN (SELECT value FROM json_each(?)))"
-            args += (json.dumps(sorted(s.lower() for s in services)),)
+            args += (json.dumps(sorted(fold(s) for s in services)),)
         elif not sites:
             return []
     return [(*r[:11], r[11].split() if r[3] else (r[2],))
@@ -323,11 +333,11 @@ def stored_sites(db, days, text, exact, by_service=True):
 
 
 def site_matches(text, exact, site, named, s, servers):
-    """exact: the service is `text`, or for traffic without one its site name or address. Else `text` is in the
-    service or site name, or is one of the site's addresses."""
+    """exact: the service is `text`, or for traffic without one its site name or address, or it is the site's
+    name. Else `text` is in the service or site name, or is one of the site's addresses."""
     if exact:
-        return (s or site).lower() == text
-    return (named and text in site.lower()) or text in s.lower() or text in servers
+        return fold(s or site) == text or (bool(named) and fold(site) == text)
+    return (named and text in fold(site)) or text in fold(s) or text in servers
 
 
 def matching_sites(db, svc, hours, text, exact):
@@ -386,7 +396,7 @@ def search_rows(db, svc, hours, text):
                        f"(SELECT value FROM json_each(?)) AND {DAYS_IN} GROUP BY ip, mac, service", part)):
         if days and services:
             for ip, mac, s, up, down, conns, last in db.execute(sql, (wanted_services, json.dumps(days))):
-                yield ip, mac, s, up, down, conns, last, text in s.lower()
+                yield ip, mac, s, up, down, conns, last, text in fold(s)
     yield from matched
     for day, a, b in live:
         for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in live_sites(db, namer, table, day, a, b):
@@ -396,8 +406,9 @@ def search_rows(db, svc, hours, text):
 
 
 def device_filter(arg):
-    """A device is chosen by MAC (stable) or IP."""
-    return ("mac", arg.lower()) if arg.count(":") == 5 and len(arg) == 17 else ("ip", str(ipaddress.ip_address(arg)))
+    """A device is chosen by MAC (stable) or IP. A MAC by its shape: an IPv6 address can have 5 colons and 17
+    characters too (fd00::12:2:3:4567)."""
+    return ("mac", arg.lower()) if MAC.match(arg.lower()) else ("ip", str(ipaddress.ip_address(arg)))
 
 
 WEB_PORTS = {"tcp/443", "udp/443", "tcp/80"}
@@ -431,6 +442,8 @@ def cmd_device(arg, hours):
     db, svc, ov = load()
     col, val = device_filter(arg)
     table, start, step = window(hours)
+    start = period(hours)[1]        # past 2 days whole local days, as the list row the page was opened from
+    slot = local_day if step >= 86400 else (lambda b: b - b % step)     # a year's chart: local days, as the lists
     info = devices_info(db, ov)
     namer = Namer(db, svc)
     dev = None
@@ -476,17 +489,17 @@ def cmd_device(arg, hours):
             site["servers"].add(server)
             site["on"].add(net)
             site["ports"][f"{proto}/{port}" + (" in" if inbound else "")] += up + down
-            tl = timeline[bucket - bucket % step]
+            tl = timeline[slot(bucket)]
             tl[0] += down
             tl[1] += up
     now = int(time.time())
-    first = start - start % step
+    slots = list(days(start, local_day(now))) if step >= 86400 else range(start - start % step, now + 1, step)
     return {
         "hours": hours, "device": dev or {"ip": val if col == "ip" else "", "mac": val if col == "mac" else ""},
         "networks": [n for n in nets.shown() if n["id"] in on],
         "traffic": traffic_tree(services, sites),
         "step": step,
-        "timeline": [[b, *timeline.get(b, [0, 0])] for b in range(first, now + 1, step)],
+        "timeline": [[b, *timeline.get(b, [0, 0])] for b in slots],
     }
 
 
@@ -566,7 +579,7 @@ def cmd_lookup(text, hours, exact=False, want=None, chart=False):
     db, svc, ov = load()
     table, start = period(hours)
     info = {} if chart else devices_info(db, ov)
-    text = text.strip().lower()
+    text = fold(text.strip())
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
     spans = {}      # the chart's traffic: (ip, site name or "", server or None) -> ([times], service)
     daily = collections.defaultdict(lambda: [0, 0])
@@ -635,10 +648,10 @@ def cmd_widget():
     db, _svc, _ov = load()
     now = int(time.time())
     spark = collections.defaultdict(lambda: [0, 0])
+    first = (now - 86400) // 3600 * 3600        # whole hours: the first one is in the chart, so in the sums too
     for bucket, up, down in db.execute(
-            "SELECT bucket, sum(up), sum(down) FROM flows_1h WHERE bucket >= ? GROUP BY bucket", (now - 86400,)):
+            "SELECT bucket, sum(up), sum(down) FROM flows_1h WHERE bucket >= ? GROUP BY bucket", (first,)):
         spark[bucket] = [down, up]
-    first = (now - 86400) // 3600 * 3600
     hours = [[b, *spark.get(b, [0, 0])] for b in range(first, now + 1, 3600)]
     top = cmd_devices(24)["rows"][:8]
     return {"hours": hours, "down": sum(h[1] for h in hours), "up": sum(h[2] for h in hours), "top": top}
@@ -665,7 +678,6 @@ def cmd_summary():
 
 IDENTITY_FIELDS = ("name", "type", "icon", "vendor", "model")
 MAX_MACS = 1024
-MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 
 
 def cmd_identities(arg):
@@ -699,7 +711,7 @@ def main(argv):
         elif cmd == "device":
             out = cmd_device(argv[2], hours_arg(argv[3]))
         elif cmd == "sites":
-            out = cmd_sites(hours_arg(argv[2]), arg(3).strip().lower(), wanted(arg(4)))
+            out = cmd_sites(hours_arg(argv[2]), fold(arg(3).strip()), wanted(arg(4)))
         elif cmd == "lookup":
             out = cmd_lookup(argv[2], hours_arg(argv[3]), arg(4) == "exact", wanted(arg(5)))
         elif cmd == "servicechart":     # one row of the services list, charted

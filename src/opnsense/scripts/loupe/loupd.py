@@ -93,7 +93,7 @@ class Loupe:
             if not self.is_local(ev["client"]) or self.is_local(ev["server"]):
                 return  # LAN<->LAN TLS (AirPlay, lockdownd, ...) carries no site
             self.names.tls(ev, "sni" if kind == "tls" else "quic")
-            self.ip_mac.setdefault(ev["client"], ev["mac"])
+            self.ip_mac[ev["client"]] = ev["mac"]       # the frame's own source: who has the address now
             if ev.get("sni"):
                 self.lookup(ev["ts"], ev["client"], ev["sni"], kind if kind == "quic" else "sni")
         elif kind == "dns":
@@ -213,7 +213,9 @@ class Loupe:
                 break
 
     def refresh_macs(self):
-        self.ip_mac.update(neighbours.table())
+        """The kernel's neighbour tables as they are now (not added to: rotating IPv6 privacy addresses would grow
+        it for good, and an address handed to another device would keep the old MAC)."""
+        self.ip_mac = neighbours.table()
 
     def poll(self, now):
         states = pfstate.snapshot(self.is_local, self.ifaces)
@@ -245,8 +247,7 @@ class Loupe:
             self.count(now, [])                 # connections still waiting for a name
         self.guarded("neighbour table", self.refresh_macs)     # best effort: rows get their MAC next time
         for (_b, ip, *_rest), v in self.flows.items():
-            if not v[0]:
-                v[0] = self.ip_mac.get(ip, "")
+            v[0] = self.ip_mac.get(ip) or v[0]      # who has the address now, if the tables know (else as counted)
             if v[0]:
                 d = self.devices[v[0]]
                 if ":" not in ip:

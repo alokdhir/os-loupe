@@ -351,12 +351,16 @@ class Store:
         db = self.db
         db.execute("DELETE FROM flows_1m WHERE bucket < ?", (now - KEEP_1M,))
         db.execute("DELETE FROM flows_5m WHERE bucket < ?", (now - days_5m * 86400,))
-        db.execute("DELETE FROM flows_1h WHERE bucket < ?", (now - days_1h * 86400,))
-        db.execute("DELETE FROM services_1d WHERE day < ?", (now - days_1h * 86400,))
-        db.execute("DELETE FROM sites_1d WHERE day < ?", (now - days_1h * 86400,))
-        db.execute("DELETE FROM site_names WHERE last_day < ?", (now - days_1h * 86400,))
-        db.execute("DELETE FROM summary_days WHERE day < ?", (now - days_1h * 86400,))
-        db.execute("DELETE FROM day_names WHERE day < ?", (now - days_1h * 86400,))
+        # the hourly rows and the day summaries built from them go by whole local days: cut mid-day, the oldest
+        # day would lose its summary but keep some hours, and loupd would build it again every hour
+        t = time.localtime(now - days_1h * 86400)
+        oldest = int(time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+        db.execute("DELETE FROM flows_1h WHERE bucket < ?", (oldest,))
+        db.execute("DELETE FROM services_1d WHERE day < ?", (oldest,))
+        db.execute("DELETE FROM sites_1d WHERE day < ?", (oldest,))
+        db.execute("DELETE FROM site_names WHERE last_day < ?", (oldest,))
+        db.execute("DELETE FROM summary_days WHERE day < ?", (oldest,))
+        db.execute("DELETE FROM day_names WHERE day < ?", (oldest,))
         db.execute("DELETE FROM services_1h WHERE hour < ?", (now - KEEP_1H_SUMMARY,))
         db.execute("DELETE FROM lookups WHERE day < ?", (now - days_lookups * 86400,))
         db.execute("PRAGMA optimize")

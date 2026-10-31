@@ -72,9 +72,10 @@ export default class Loupe extends BaseWidget {
     }
 
     static esc(s) {
-        // also used inside attributes, so quotes are escaped too
-        return (s == null ? '' : String(s)).replace(/[&<>"']/g,
-            c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
+        // the API's answer reaches the browser already HTML-escaped by core (&amp;): decode once, then escape,
+        // quotes too (also used inside attributes)
+        const plain = s == null ? '' : String(s).includes('&') ? $('<textarea/>').html(String(s)).text() : String(s);
+        return plain.replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
     }
 
     // one entry: name (and a grey second line) on the left, a value on the right; long text gets "..."

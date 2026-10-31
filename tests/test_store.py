@@ -112,6 +112,16 @@ class TestLateHello(unittest.TestCase):
         self.lp.count(110, [pfstate.Delta(state(), 10, 20, 1, 1, True)])
         self.assertEqual(self.rows(), {"www.example": [10, 20]})
 
+    def test_neighbours_replace_the_address_map(self):
+        """Each refresh is the kernel's tables as they are: a rotated IPv6 address goes, and an address another
+        device took is that device's."""
+        import loupd
+        from unittest import mock
+        self.lp.ip_mac = {"10.9.1.20": "02:00:00:00:00:01", "2001:db8::99": "02:00:00:00:00:01"}
+        with mock.patch.object(loupd.neighbours, "table", return_value={"10.9.1.20": "02:00:00:00:00:02"}):
+            self.lp.refresh_macs()
+        self.assertEqual(self.lp.ip_mac, {"10.9.1.20": "02:00:00:00:00:02"})
+
     def test_no_hello(self):
         self.lp.count(110, [pfstate.Delta(state(), 10, 20, 1, 1, True)])
         self.lp.count(120, [])
