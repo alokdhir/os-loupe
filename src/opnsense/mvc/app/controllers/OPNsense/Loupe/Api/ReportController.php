@@ -150,7 +150,7 @@ class ReportController extends ApiControllerBase
     private const SEARCH = [
         'devices' => ['name', 'shown_type', 'ip', 'vendor'],
         'device' => ['label', 'search'],                // a service, or any of its sites
-        'traffic' => ['device', 'ip', 'name', 'service', 'servers'],
+        'traffic' => ['device', 'ip', 'name', 'servers'],
     ];
 
     private function grid(array $rows, string $defaultSort = 'down', $searchClauses = null, $fields = null)

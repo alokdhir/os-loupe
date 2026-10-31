@@ -137,16 +137,13 @@ POSSIBILITY OF SUCH DAMAGE.
                     + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '');
             },
             lookupsite: function (column, row) {
-                return copyable(row.name || (row.servers || []).join(', '));
+                return copyable(row.name || (row.servers || []).join(', ')) + inferred(row);
             },
             copy: function (column, row) {
                 return copyable(row[column.id]);
             },
             ruletype: function (column, row) {
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '') + esc(row.type);
-            },
-            lookupservice: function (column, row) {
-                return row.service ? esc(row.service) + inferred(row) : dash;
             },
             housesvc: function (column, row) {
                 return '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>';
@@ -688,13 +685,12 @@ POSSIBILITY OF SUCH DAMAGE.
                     <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
                     <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
                     <th data-column-id="name" data-formatter="lookupsite">{{ lang._('Site') }}</th>
-                    <th data-column-id="service" data-formatter="lookupservice">{{ lang._('Service') }}</th>
                     <th data-column-id="pct" data-formatter="pct" data-width="10em">{{ lang._('% of total') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
                     <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
-                    <th data-column-id="first" data-formatter="datetime">{{ lang._('First') }}</th>
-                    <th data-column-id="last" data-formatter="datetime">{{ lang._('Last') }}</th>
+                    <th data-column-id="first" data-formatter="datetime" data-width="11em">{{ lang._('First seen') }}</th>
+                    <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
                 </tr></thead>
                 <tbody></tbody>
             </table>
