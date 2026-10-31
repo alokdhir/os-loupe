@@ -51,7 +51,7 @@ POSSIBILITY OF SUCH DAMAGE.
         const allPicked = () => picked.length === Object.keys(networks).length;
         /* the filter sent: '' for all networks (one added later is included too), 'none' for none */
         const netFilter = () => allPicked() ? '' : (picked.join(',') || 'none');
-        let chart = null, current = null, q = '';
+        let current = null, q = '';
         const grids = {};
         const fresh = new Set();      /* lists to fetch anew (not configd's cached copy) on their next request */
         /* values from the network (host names, vendor classes) also land in attributes: escape quotes too.
@@ -114,21 +114,26 @@ POSSIBILITY OF SUCH DAMAGE.
             services: function (column, row) {
                 return (row.top || []).length ? row.top.map(esc).join(', ') : dash;
             },
-            service: function (column, row) {
-                return (row.service && row.service !== 'Other' ? esc(row.service) : dash)
-                    + (row.names && row.names.length ? ' <span class="text-muted">' + esc(row.names.slice(0, 3).join(', ')) + '</span>' : '');
+            devtraffic: function (column, row) {      /* a service row, or one of its sites (its addresses on hover) */
+                if (!row.servers) {
+                    return row.service === 'Other' ? '<span class="text-muted">{{ lang._('Other') }}</span>'
+                        : '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>';
+                }
+                return '<a href="#q=' + encodeURIComponent(row.label) + '" title="' + esc(row.servers.join(', ')) + '">'
+                    + esc(row.label) + '</a>' + inferred(row)
+                    + ((row.ports || []).length ? ' <span class="text-muted">' + row.ports.map(esc).join(', ') + '</span>' : '');
             },
-            site: function (column, row) {
-                return '<a href="#q=' + encodeURIComponent(row.name) + '">' + esc(row.name) + '</a>';
-            },
-            sitesvc: function (column, row) {
-                return row.service && row.service !== 'Other' ? esc(row.service) + inferred(row) : dash;
+            pct: function (column, row) {             /* the number, on a bar as long as its share */
+                const p = Math.max(0, Math.min(100, +row.pct || 0));
+                return '<div style="background: linear-gradient(90deg, rgba(54,162,235,0.25) ' + p + '%, transparent ' + p
+                    + '%); padding: 0 4px">' + (p < 0.1 && row.pct > 0 ? '&lt;0.1' : p.toFixed(1)) + '%</div>';
             },
             ago: function (column, row) {
                 return ago(row[column.id]);
             },
             lookupdevice: function (column, row) {
-                return '<a href="#device=' + esc(row.mac || row.ip) + '">' + esc(row.device) + '</a>'
+                return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
+                    + '<a href="#device=' + esc(row.mac || row.ip) + '">' + esc(row.device) + '</a>'
                     + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '');
             },
             lookupsite: function (column, row) {
@@ -168,7 +173,7 @@ POSSIBILITY OF SUCH DAMAGE.
             sync();
         }
 
-        function grid(id, endpoint, extra) {
+        function grid(id, endpoint, extra, tabulatorOptions) {
             if (grids[id]) {
                 $('#' + id).bootgrid('reload');
                 return;
@@ -185,9 +190,49 @@ POSSIBILITY OF SUCH DAMAGE.
                         return Object.assign(request, extra ? extra() : {});
                     },
                     formatters: formatters
-                }
+                },
+                tabulatorOptions: tabulatorOptions || {}
             });
             clearable(id);
+        }
+
+        /* a device's traffic: each service, with its sites when opened (core's tree, as Unbound's overrides) */
+        const TREE = {dataTree: true, dataTreeElementColumn: 'label',
+            dataTreeCollapseElement: '<i class="fa-regular fa-square-minus" style="margin-right: 6px"></i>',
+            dataTreeExpandElement: '<i class="fa-regular fa-square-plus" style="margin-right: 6px"></i>'};
+
+        /* a chart of a device's or a service's traffic: Mbps down and up, each point the average over its bucket */
+        const charts = {};
+        function drawChart(canvas, data) {
+            const tl = data.timeline || [], step = data.step || 300;
+            const mbps = b => b * 8 / step / 1e6;
+            if (charts[canvas]) charts[canvas].destroy();
+            charts[canvas] = new Chart(document.getElementById(canvas), {
+                type: 'line',
+                data: {
+                    labels: tl.map(p => (p[0] + step / 2) * 1000),     /* each point at the middle of its bucket */
+                    datasets: [
+                        {label: '{{ lang._("Down") }}', data: tl.map(p => mbps(p[1])), bytes: tl.map(p => p[1]),
+                         borderColor: 'rgba(54,162,235,1)', backgroundColor: 'rgba(54,162,235,0.25)', fill: 'origin'},
+                        {label: '{{ lang._("Up") }}', data: tl.map(p => mbps(p[2])), bytes: tl.map(p => p[2]),
+                         borderColor: 'rgba(255,159,64,1)', backgroundColor: 'rgba(255,159,64,0.25)', fill: 'origin'}
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false, animation: false,
+                    interaction: {mode: 'index', intersect: false},
+                    elements: {
+                        line: {borderWidth: 1.5, cubicInterpolationMode: 'monotone'},   /* smooth, never overshoots */
+                        point: {radius: 0, hoverRadius: 3}
+                    },
+                    scales: {
+                        x: {type: 'time', time: {tooltipFormat: step >= 86400 ? 'll' : 'lll'}},
+                        y: {beginAtZero: true, title: {display: true, text: 'Mbps'}, ticks: {callback: v => +v.toFixed(2)}}
+                    },
+                    plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + c.raw.toFixed(c.raw < 10 ? 2 : 1)
+                        + ' Mbps (' + byteFormat(c.dataset.bytes[c.dataIndex], 1) + ')'}}}
+                }
+            });
         }
 
         /* Devices tab: the list, or one device */
@@ -200,7 +245,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* a device page's Network columns: only for a device that was on several networks in the period */
         let deviceNetworks = 0;
-        const DEVICE_GRIDS = '#grid-services, #grid-sites, #grid-devnames';
+        const DEVICE_GRIDS = '#grid-devtraffic';
         function deviceColumns($grids) {
             $grids.each(function () {
                 try {
@@ -215,16 +260,9 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#tab_devices .loupe-netpick').hide();       /* a device's page shows all its traffic: no filter */
             $('#loupe-list').hide();
             $('#loupe-detail').show();
-            /* the header runs the report and configd keeps it: the grids ask once it has, and get that copy */
-            const dev = () => ({device: current});
-            const loadGrids = function () {
-                grid('grid-services', '/api/loupe/report/search_services', dev);
-                grid('grid-sites', '/api/loupe/report/search_sites', dev);
-                grid('grid-ports', '/api/loupe/report/search_ports', dev);
-                grid('grid-devnames', '/api/loupe/report/search_names', dev);
-            };
+            /* the header runs the report and configd keeps it: the lists ask once it has, and get that copy */
             ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
-                loadGrids();
+                grid('grid-devtraffic', '/api/loupe/report/search_device_traffic', () => ({device: current}), TREE);
                 if (!data || data.error) { $('#loupe-detail-title').text((data || {}).error || ''); return; }
                 const d = data.device || {};
                 deviceNetworks = (data.networks || []).length;
@@ -233,35 +271,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     + esc(d.name || d.ip || id) + editButton(d)
                     + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
                     + ' ' + (data.networks || []).map(n => pill(n.id)).join('') + '</small>');
-                const tl = data.timeline, step = data.step || 300;
-                const mbps = b => b * 8 / step / 1e6;          /* average rate over the bar */
-                if (chart) chart.destroy();
-                chart = new Chart(document.getElementById('loupe-chart'), {
-                    type: 'line',
-                    data: {
-                        labels: tl.map(p => (p[0] + step / 2) * 1000),     /* each point at the middle of its bucket */
-                        datasets: [
-                            {label: '{{ lang._("Down") }}', data: tl.map(p => mbps(p[1])), bytes: tl.map(p => p[1]),
-                             borderColor: 'rgba(54,162,235,1)', backgroundColor: 'rgba(54,162,235,0.25)', fill: 'origin'},
-                            {label: '{{ lang._("Up") }}', data: tl.map(p => mbps(p[2])), bytes: tl.map(p => p[2]),
-                             borderColor: 'rgba(255,159,64,1)', backgroundColor: 'rgba(255,159,64,0.25)', fill: 'origin'}
-                        ]
-                    },
-                    options: {
-                        maintainAspectRatio: false, animation: false,
-                        interaction: {mode: 'index', intersect: false},
-                        elements: {
-                            line: {borderWidth: 1.5, cubicInterpolationMode: 'monotone'},   /* smooth, never overshoots */
-                            point: {radius: 0, hoverRadius: 3}
-                        },
-                        scales: {
-                            x: {type: 'time', time: {tooltipFormat: 'lll'}},
-                            y: {beginAtZero: true, title: {display: true, text: 'Mbps'}, ticks: {callback: v => +v.toFixed(2)}}
-                        },
-                        plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + c.raw.toFixed(c.raw < 10 ? 2 : 1)
-                            + ' Mbps (' + byteFormat(c.dataset.bytes[c.dataIndex], 1) + ')'}}}
-                    }
-                });
+                drawChart('loupe-chart', data);
             });
         }
 
@@ -276,12 +286,11 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-overview').hide();
             $('#loupe-results').show();
             $('#loupe-service-title').text(q);
-            const query = () => ({q: q});
-            /* both grids show the same report: the second asks once the first has it, and gets configd's copy */
-            $('#grid-traffic').off('loaded.loupenames').one('loaded.rs.jquery.bootgrid.loupenames', function () {
-                grid('grid-names', '/api/loupe/report/search_lookup_names', query);
+            grid('grid-traffic', '/api/loupe/report/search_lookup_traffic', () => ({q: q}));
+            const asked = q + '|' + hours;
+            ajaxCall('/api/loupe/report/service_chart', {q: q, hours: hours, networks: netFilter()}, function (data) {
+                if (asked === q + '|' + hours && data && !data.error) drawChart('loupe-service-chart', data);
             });
-            grid('grid-traffic', '/api/loupe/report/search_lookup_traffic', query);
         }
 
         /* Settings tabs */
@@ -625,65 +634,20 @@ POSSIBILITY OF SUCH DAMAGE.
                 <h2 id="loupe-detail-title" class="loupe-detail-title"></h2>
             </div>
             <div style="height: 220px; padding: 0 15px 10px"><canvas id="loupe-chart"></canvas></div>
-            <ul class="nav nav-tabs" data-tabs="tabs">
-                <li class="active"><a data-toggle="tab" href="#tab-services">{{ lang._('Services') }}</a></li>
-                <li><a data-toggle="tab" href="#tab-sites">{{ lang._('Sites') }}</a></li>
-                <li><a data-toggle="tab" href="#tab-ports">{{ lang._('Protocols and ports') }}</a></li>
-                <li><a data-toggle="tab" href="#tab-devnames">{{ lang._('Lookups') }}</a></li>
-            </ul>
-            <div class="tab-content">
-                <div id="tab-services" class="tab-pane fade in active">
-                    <table id="grid-services" class="table table-condensed table-hover table-striped table-responsive">
-                        <thead><tr>
-                            <th data-column-id="service" data-identifier="true" data-formatter="service">{{ lang._('Service') }}</th>
-                            <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
-                            <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
-                            <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
-                            <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
-                        </tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div id="tab-sites" class="tab-pane fade in">
-                    <table id="grid-sites" class="table table-condensed table-hover table-striped table-responsive">
-                        <thead><tr>
-                            <th data-column-id="name" data-identifier="true" data-formatter="site">{{ lang._('Site') }}</th>
-                            <th data-column-id="service" data-formatter="sitesvc">{{ lang._('Service') }}</th>
-                            <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
-                            <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
-                            <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
-                            <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
-                            <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
-                        </tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div id="tab-ports" class="tab-pane fade in">
-                    <table id="grid-ports" class="table table-condensed table-hover table-striped table-responsive">
-                        <thead><tr>
-                            <th data-column-id="port" data-identifier="true">{{ lang._('Protocol / port') }}</th>
-                            <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
-                            <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
-                            <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
-                        </tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div id="tab-devnames" class="tab-pane fade in">
-                    <table id="grid-devnames" class="table table-condensed table-hover table-striped table-responsive">
-                        <thead><tr>
-                            <th data-column-id="name" data-identifier="true" data-formatter="site">{{ lang._('Name') }}</th>
-                            <th data-column-id="service" data-formatter="sitesvc">{{ lang._('Service') }}</th>
-                            <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
-                            <th data-column-id="sources" data-width="9em">{{ lang._('Seen in') }}</th>
-                            <th data-column-id="count" data-width="7em">{{ lang._('Times') }}</th>
-                            <th data-column-id="first" data-formatter="datetime">{{ lang._('First') }}</th>
-                            <th data-column-id="last" data-formatter="datetime">{{ lang._('Last') }}</th>
-                        </tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+            <table id="grid-devtraffic" class="table table-condensed table-hover table-striped table-responsive">
+                <thead><tr>
+                    <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
+                    <th data-column-id="label" data-formatter="devtraffic">{{ lang._('Service / Site') }}</th>
+                    <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
+                    <th data-column-id="pct" data-formatter="pct" data-width="10em">{{ lang._('% of total') }}</th>
+                    <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
+                    <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
+                    <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
+                    <th data-column-id="first" data-formatter="datetime" data-width="11em">{{ lang._('First seen') }}</th>
+                    <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 
@@ -718,42 +682,22 @@ POSSIBILITY OF SUCH DAMAGE.
                 <a href="#services">&larr; {{ lang._('All services') }}</a>
                 <h2 id="loupe-service-title" class="loupe-detail-title"></h2>
             </div>
-            <ul class="nav nav-tabs" data-tabs="tabs">
-                <li class="active"><a data-toggle="tab" href="#tab-traffic">{{ lang._('Traffic') }}</a></li>
-                <li><a data-toggle="tab" href="#tab-names">{{ lang._('Looked up or connected to') }}</a></li>
-            </ul>
-            <div class="tab-content">
-                <div id="tab-traffic" class="tab-pane fade in active">
-                    <table id="grid-traffic" class="table table-condensed table-hover table-striped table-responsive">
-                        <thead><tr>
-                            <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
-                            <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
-                            <th data-column-id="name" data-formatter="lookupsite">{{ lang._('Site') }}</th>
-                            <th data-column-id="service" data-formatter="lookupservice">{{ lang._('Service') }}</th>
-                            <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
-                            <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
-                            <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
-                            <th data-column-id="first" data-formatter="datetime">{{ lang._('First') }}</th>
-                            <th data-column-id="last" data-formatter="datetime">{{ lang._('Last') }}</th>
-                        </tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div id="tab-names" class="tab-pane fade in">
-                    <table id="grid-names" class="table table-condensed table-hover table-striped table-responsive">
-                        <thead><tr>
-                            <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
-                            <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
-                            <th data-column-id="name" data-formatter="copy">{{ lang._('Name') }}</th>
-                            <th data-column-id="source" data-width="7em">{{ lang._('Seen in') }}</th>
-                            <th data-column-id="count" data-width="7em">{{ lang._('Times') }}</th>
-                            <th data-column-id="first" data-formatter="datetime">{{ lang._('First') }}</th>
-                            <th data-column-id="last" data-formatter="datetime">{{ lang._('Last') }}</th>
-                        </tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
+            <div style="height: 220px; padding: 0 15px 10px"><canvas id="loupe-service-chart"></canvas></div>
+            <table id="grid-traffic" class="table table-condensed table-hover table-striped table-responsive">
+                <thead><tr>
+                    <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
+                    <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
+                    <th data-column-id="name" data-formatter="lookupsite">{{ lang._('Site') }}</th>
+                    <th data-column-id="service" data-formatter="lookupservice">{{ lang._('Service') }}</th>
+                    <th data-column-id="pct" data-formatter="pct" data-width="10em">{{ lang._('% of total') }}</th>
+                    <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
+                    <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
+                    <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
+                    <th data-column-id="first" data-formatter="datetime">{{ lang._('First') }}</th>
+                    <th data-column-id="last" data-formatter="datetime">{{ lang._('Last') }}</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 

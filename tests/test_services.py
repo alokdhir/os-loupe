@@ -153,36 +153,31 @@ class TestSharedServer(unittest.TestCase):
                 db.close()
 
 
-class TestDeviceNames(unittest.TestCase):
-    def test_by_mac_and_old_rows_by_address(self):
+class TestTrafficTree(unittest.TestCase):
+    def test_services_with_their_sites(self):
+        import collections
         import query
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "loupe.db")
-            s = store.Store(path)
-            now = int(time.time())
-            day = now - 3600
-            mac = "02:00:00:00:00:50"
-            s.write({}, {(day, "10.9.1.50", "a.example", "dns"): [2, now - 60, now - 50, mac],
-                         (day, "2001:db8::50", "a.example", "sni"): [1, now - 40, now - 40, mac],
-                         (day, "10.9.1.50", "b.example", "dns"): [1, now - 30, now - 30, ""],
-                         (day, "10.9.1.51", "c.example", "dns"): [1, now - 20, now - 20, "02:00:00:00:00:51"]},
-                    {mac: {"ip": "10.9.1.50", "ts": now}})
-            s.close()
-            old = query.DB, query.CONF, query.load
-            opened = []
+        site = lambda down, ports: {"down": down, "up": 0, "conns": 1, "first": down, "last": 5, "inferred": False,
+                                    "servers": {"192.0.2.1"}, "on": set(), "ports": collections.Counter(ports)}
+        services = {"Netflix": {"down": 30, "up": 0, "conns": 2, "on": set()},
+                    "Other": {"down": 50, "up": 0, "conns": 1, "on": set()}}
+        sites = {("Netflix", "a.example"): site(10, {"tcp/443": 10}),
+                 ("Netflix", "b.example"): site(20, {"udp/443": 20}),
+                 ("Other", "198.51.100.7"): site(50, {"udp/51820": 40, "tcp/443": 10})}
+        tree = query.traffic_tree(services, sites)
+        self.assertEqual([r["service"] for r in tree], ["Other", "Netflix"])          # biggest first
+        self.assertEqual([c["label"] for c in tree[1]["_children"]], ["b.example", "a.example"])
+        self.assertEqual(tree[1]["search"], "b.example a.example")
+        self.assertEqual(tree[1]["_children"][0]["ports"], [])                         # web ports aren't listed
+        self.assertEqual(tree[0]["_children"][0]["ports"], ["udp/51820"])
+        self.assertEqual(len({r["id"] for r in tree} | {c["id"] for r in tree for c in r["_children"]}), 5)
+        self.assertEqual([r["pct"] for r in tree], [62.5, 37.5])                      # of the device's traffic
+        self.assertEqual([c["pct"] for c in tree[1]["_children"]], [25.0, 12.5])
+        self.assertEqual(tree[1]["first"], 10)                                         # its earliest site
 
-            def load():
-                opened.append(old[2]())
-                return opened[-1]
-            query.DB, query.CONF, query.load = path, os.path.join(d, "none.json"), load
-            try:
-                names = query.cmd_device(mac, 24)["names"]
-            finally:
-                query.DB, query.CONF, query.load = old
-                for db, *_ in opened:
-                    db.close()
-            self.assertEqual([(n["name"], n["sources"], n["count"]) for n in names],
-                             [("b.example", "dns", 1), ("a.example", "dns, sni", 3)])
+
+def q_lookup(query, row, hours):
+    return query.cmd_lookup(row, hours, True)["traffic"]
 
 
 class TestIdentities(unittest.TestCase):
@@ -365,11 +360,20 @@ class TestDailySummary(unittest.TestCase):
         self.summarize()
         self.assertTrue(self.store.db.execute("SELECT count(*) FROM sites_1d").fetchone()[0])
         self.assertEqual(self.drilldowns(), live)
+        for h in (72, 168, 720):        # the chart adds up to the list: from the flows up to a week, by the day beyond
+            for row in ("netflix", "192.0.2.20", "vpn (wireguard)"):
+                rows = q_lookup(self.query, row, h)
+                listed = sum(r["down"] + r["up"] for r in rows)
+                self.assertAlmostEqual(sum(r["pct"] for r in rows), 100, delta=0.1 * len(rows))
+                chart = self.query.cmd_lookup(row, h, True, chart=True)
+                self.assertEqual(sum(p[1] + p[2] for p in chart["timeline"]), listed, (row, h))
+                self.assertEqual(chart["step"], 86400 if h > 168 else 3600)
         # the days before today come from the summary alone; today's hours since loupd built it are named here
         self.store.db.execute("DELETE FROM flows_1h WHERE bucket < ?", (self.today,))
         self.assertEqual(self.drilldowns(), live)
         netflix = {(r["mac"], r["name"]): r for r in live[0][0]}
         self.assertEqual(netflix[("02:00:00:00:00:61", "www.netflix.com")]["servers"], ["192.0.2.10"])
+        self.assertIsInstance(netflix[("02:00:00:00:00:61", "www.netflix.com")]["icon"], str)    # shown by the name
 
     def test_site_names(self):
         """Each site, service and address the summaries hold, with the last day: what the search looks up first.
@@ -406,7 +410,8 @@ class TestDailySummary(unittest.TestCase):
             self.assertNotIn("Netflix", {r["service"] for r in self.query.cmd_sites(72, "", {"opt1"})["rows"]})
             page = self.query.cmd_device(a, 72)
             self.assertEqual(page["networks"], [{"id": "lan", "name": "LAN"}])
-            self.assertEqual({tuple(r["networks"]) for r in page["services"] + page["sites"]}, {("lan",)})
+            rows = page["traffic"] + [c for r in page["traffic"] for c in r["_children"]]
+            self.assertEqual({tuple(r["networks"]) for r in rows}, {("lan",)})
         finally:
             self.query.Networks.__init__ = orig
 
@@ -458,8 +463,8 @@ class TestNamedByDay(unittest.TestCase):
                         row = next(r for r in query.cmd_devices(hours)["rows"] if r["mac"] == mac)
                         self.assertEqual(row["top"], ["Netflix"], (summarized, hours))
                     page = query.cmd_device(mac, 1)
-                    self.assertEqual([(x["service"], x["down"]) for x in page["services"]], [("Netflix", 7000)])
-                    self.assertTrue(page["sites"][0]["inferred"])
+                    self.assertEqual([(x["service"], x["down"]) for x in page["traffic"]], [("Netflix", 7000)])
+                    self.assertTrue(page["traffic"][0]["_children"][0]["inferred"])
             finally:
                 query.DB, query.CONF, query.load = old
                 for db, *_ in opened:

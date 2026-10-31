@@ -120,6 +120,7 @@ Today is built every 10 minutes (~0.6 s), each day once more after it ends, and 
 | Sorting, paging, searching a list | configd's cached copy | ~0.04 s |
 | Device page | that device's traffic rows, named with its stored evidence, each device/server/port/name once | ~0.05 s (1 h), ~0.5 s (7 days) |
 | A service's traffic, services search: up to 2 days | all traffic rows in the period, a day at a time | ~0.8 s (24 h) |
+| A service's chart | up to a week: the service's sites (by name, or by server for nameless traffic) in each device's traffic rows over the period, only when they counted for the service, one read per device; longer: the list's daily rows, by day | 24 h and 7 days: ~0.5–2 s (Apple, iCloud: the most devices); 30 days and longer: as the list |
 | A service's traffic, services search: longer | stored sites (a click: by the row's index; a search: the sites and services `site_names` matches, by index), plus today's traffic since loupd's last build, named here | 7 days: ~0.5 s a click, ~0.2 s a search (was ~2.8 s and ~0.9 s). A synthetic year on a desktop: ~0.1–0.4 s a click or search, ~1.5 s for a search matching sites every device used every day, ~7 s for one matching a third of all traffic (it reads most of it) |
 
 The short lists are a rolling window, current to the minute. The long ones are whole local days: "7 days" is today and the six days before it, and today is up to 10 minutes behind. A service's traffic and the services search cover the same days as the list, and are current to the minute: today's hours since loupd's last build are named when asked for.
@@ -143,7 +144,7 @@ The summaries hold names and what the reports read, so they're built again whene
 
 ### Cached lists
 
-The grids sort, page and search on the server, so each click and keystroke asks for the report again. The device and service lists, a service's traffic and the services search go through a configd action with a 60-second cache (`loupe list`), which configd keys by its arguments (report, period, text, networks). The page asks for a fresh copy (configd's `!` prefix) when it opens, when the period changes and after a save; the requests in between get the cached one. A service's two grids (traffic, lookups) show the same report: the second asks once the first has loaded, and gets the cached copy. A device's page works the same way: its header and chart ask for a fresh copy of the device report, and its four grids ask once that has loaded, so opening a device runs the report once rather than five times.
+The grids sort, page and search on the server, so each click and keystroke asks for the report again. The device and service lists, a service's traffic and the services search go through a configd action with a 60-second cache (`loupe list`), which configd keys by its arguments (report, period, text, networks). The page asks for a fresh copy (configd's `!` prefix) when it opens, when the period changes and after a save; the requests in between get the cached one. A device's page asks for a fresh copy of the device report for its header and chart, and its list (each service, opening to its sites: the grid's tree) asks once that has loaded and gets the cached copy, so opening a device runs the report once. A service's chart is a request of its own (`query.py servicechart`, not cached), so its list doesn't wait for it.
 
 ### Naming traffic
 
@@ -179,12 +180,13 @@ On a gigabit home link running on an Intel N150: about 0.5–0.8% of one core id
 - **Traffic that never crosses the router** (device to device on the LAN) is invisible by design.
 - **Traffic between local networks** (VLAN to VLAN) crosses the router but isn't counted: Loupe tracks devices' internet traffic, and same-network traffic can't be seen anyway, so a partial local view would mislead. Firewall logs and NetFlow cover it.
 - **Slow reports over long periods:** a services search that matches a large share of all traffic (a fragment like `.com`) reads most of the period's site rows: ~7 s for a synthetic year on a desktop. The 1-year device and service lists grow with the days kept (~1.5 s for a synthetic year on a desktop). The device page reads that device's raw traffic rows (~0.5 s at 7 days on an N150), once per open. After an update or a service names change, periods that reach days not rebuilt yet are read the slow way until loupd catches up.
+- **A service's chart can be a little over its list:** the chart adds up the traffic rows carrying the service's site names, while the list follows each connection's final name; where a DNS guess named a connection that was then listed under another site, the chart counts it too (Apple: 4–5% over a day on the dev network; the other services checked matched exactly). Past a week the chart is daily and matches the list.
 
 ## Untested / open risks
 
 - **Kea and ISC DHCP** lease and config formats are read from their documentation and tested with sample files; Loupe has only run against dnsmasq so far.
-- **IPv6** is implemented (filters, parsing) but has not seen real traffic yet.
-- **VLANs / several LAN interfaces:** supported by configuration, tested only on one bridged LAN.
+- **IPv6** has been tested on a test network (a VM router with routed /64s, clients with privacy addresses): states counted per device, names from TLS and QUIC, rotating addresses kept as one device. It has not seen a real ISP's IPv6 yet.
+- **VLANs / several LAN interfaces** have been tested on the same test network (an untagged LAN and two VLANs, a device on two of them): traffic per device matched what the clients sent and received to within header overhead.
 - **Large state tables:** the state table is read every 10 seconds. The kernel hands it over in ~1.5 ms for 1,000 states, but decoding it in Python costs ~25 µs per state on an N150 (`tools/bench_pfstate.py`): ~0.25% of a core at 1,000 states, ~12% at 50,000. Beyond that it would need a compiled helper or a longer poll interval (pf keeps closed states only 30–45 s, so the interval can't go much past 20 s).
 - **External commands:** none. pf states, neighbour tables, interface addresses, the filter compiler (libpcap) and Unbound's cache are all read natively. A failed netlink read is logged and retried at the next poll.
 - **pf's netlink attributes** (`netpfil/pf/pf_nl.h`) are a kernel interface that can grow between FreeBSD releases; Loupe reads only the fields it needs by number and skips a state missing one of them.

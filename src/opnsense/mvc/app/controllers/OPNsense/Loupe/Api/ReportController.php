@@ -125,8 +125,8 @@ class ReportController extends ApiControllerBase
     }
 
     /* a whole-house report (devices, services, a service's traffic): configd keeps it for a minute, so sorting, paging
-       and searching the grid, or a second grid showing the same report, don't run it again; the page asks for a fresh
-       one when it loads or the period changes ("!" makes configd run it again) */
+       and searching the grid don't run it again; the page asks for a fresh one when it loads or the period changes
+       ("!" makes configd run it again) */
     private function cachedList($report)
     {
         $args = $report === 'sites' ? ['sites', $this->postHours(), '', $this->postNetworks()]
@@ -149,12 +149,8 @@ class ReportController extends ApiControllerBase
     /* what each grid's search box matches: the columns it shows, never the explanations behind them */
     private const SEARCH = [
         'devices' => ['name', 'shown_type', 'ip', 'vendor'],
-        'services' => ['service', 'names'],
-        'sites' => ['name', 'service', 'servers'],
-        'ports' => ['port'],
-        'names' => ['name', 'service', 'sources'],
+        'device' => ['label', 'search'],                // a service, or any of its sites
         'traffic' => ['device', 'ip', 'name', 'service', 'servers'],
-        'lookups' => ['device', 'ip', 'name', 'source'],
     ];
 
     private function grid(array $rows, string $defaultSort = 'down', $searchClauses = null, $fields = null)
@@ -178,34 +174,15 @@ class ReportController extends ApiControllerBase
         return $this->grid($rows, 'down', null, self::SEARCH['devices']);
     }
 
-    private function deviceSection($section, $sort = 'down')
+    /* a device's traffic: each service with its sites under it (the grid's tree) */
+    public function searchDeviceTrafficAction()
     {
         $id = $this->postDevice();
         if ($id === null) {
             return $this->searchRecordsetBase([]);
         }
         $data = $this->cached(['device', $id, $this->postHours()]);
-        return $this->grid($data[$section] ?? [], $sort, null, self::SEARCH[$section]);
-    }
-
-    public function searchServicesAction()
-    {
-        return $this->deviceSection('services');
-    }
-
-    public function searchSitesAction()
-    {
-        return $this->deviceSection('sites');
-    }
-
-    public function searchPortsAction()
-    {
-        return $this->deviceSection('ports');
-    }
-
-    public function searchNamesAction()
-    {
-        return $this->deviceSection('names', 'last');
+        return $this->grid($data['traffic'] ?? [], 'down', null, self::SEARCH['device']);
     }
 
     /* a service, site or address: any printable text except double quotes, backslash and backtick
@@ -224,16 +201,6 @@ class ReportController extends ApiControllerBase
             return $this->searchRecordsetBase([]);
         }
         return $this->grid($data['rows'] ?? [], 'down', ['']);
-    }
-
-    private function lookupSection($section, $sort)
-    {
-        $text = trim((string)$this->request->getPost('q', null, ''));
-        if (!preg_match(self::TEXT, $text)) {
-            return $this->searchRecordsetBase([]);
-        }
-        $data = $this->cached(['lookup', $text, $this->postHours(), 'exact', $this->postNetworks()]);
-        return $this->grid($data[$section] ?? [], $sort, null, self::SEARCH[$section]);
     }
 
     /* the shipped rule files, read-only (Settings: Built-in) */
@@ -304,13 +271,24 @@ class ReportController extends ApiControllerBase
         return $this->searchRecordsetBase($rows, ['match', 'type', 'note'], 'order', null, SORT_NUMERIC);
     }
 
+    /* one row of the services list: its traffic per device and site */
     public function searchLookupTrafficAction()
     {
-        return $this->lookupSection('traffic', 'down');
+        $text = trim((string)$this->request->getPost('q', null, ''));
+        if (!preg_match(self::TEXT, $text)) {
+            return $this->searchRecordsetBase([]);
+        }
+        $data = $this->cached(['lookup', $text, $this->postHours(), 'exact', $this->postNetworks()]);
+        return $this->grid($data['traffic'] ?? [], 'down', null, self::SEARCH['traffic']);
     }
 
-    public function searchLookupNamesAction()
+    /* the same row's chart: asked separately, so the list doesn't wait for it */
+    public function serviceChartAction()
     {
-        return $this->lookupSection('lookups', 'last');
+        $text = trim((string)$this->request->getPost('q', null, ''));
+        if (!preg_match(self::TEXT, $text)) {
+            return ['error' => 'enter a service, site or address'];
+        }
+        return $this->query(['servicechart', $text, $this->postHours(), $this->postNetworks()]);
     }
 }

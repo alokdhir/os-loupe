@@ -395,6 +395,34 @@ def device_filter(arg):
     return ("mac", arg.lower()) if arg.count(":") == 5 and len(arg) == 17 else ("ip", str(ipaddress.ip_address(arg)))
 
 
+WEB_PORTS = {"tcp/443", "udp/443", "tcp/80"}
+
+
+def traffic_tree(services, sites):
+    """A device's traffic as the device page lists it: each service, biggest first, with its sites under it
+    (`_children`, the grid's tree), each with its percent of the device's traffic. A site's ports are listed when
+    they aren't the web's: SSH, a game, a VPN."""
+    total = sum(v["down"] + v["up"] for v in services.values()) or 1
+
+    def pct(v):
+        return round(100 * (v["down"] + v["up"]) / total, 1)
+
+    kids = collections.defaultdict(list)
+    for (s, name), v in sites.items():
+        kids[s].append({"id": f"{s}\0{name}", "label": name, "service": s, "inferred": v["inferred"], "pct": pct(v),
+                        **{x: v[x] for x in ("down", "up", "conns", "first", "last")},
+                        "servers": sorted(v["servers"])[:5], "networks": nets.sort(v["on"]),
+                        "ports": [p for p, _ in v["ports"].most_common() if p not in WEB_PORTS][:3]})
+    rows = []
+    for s, v in services.items():
+        children = sorted(kids[s], key=lambda r: -(r["down"] + r["up"]))[:200]
+        rows.append({"id": s, "label": s, "service": s, "down": v["down"], "up": v["up"], "conns": v["conns"], "pct": pct(v),
+                     "first": min((c["first"] for c in children), default=0),
+                     "last": max((c["last"] for c in children), default=0), "networks": nets.sort(v["on"]),
+                     "search": " ".join(c["label"] for c in children), "_children": children})
+    return sorted(rows, key=lambda r: -(r["down"] + r["up"]))
+
+
 def cmd_device(arg, hours):
     db, svc, ov = load()
     col, val = device_filter(arg)
@@ -410,10 +438,9 @@ def cmd_device(arg, hours):
         row = db.execute("SELECT info FROM devices WHERE mac = ?", (dev["mac"],)).fetchone()
         fqdn = (json.loads(row[0] or "{}").get("dhcp_fqdn") or "").rstrip(".") if row else ""
         dev = {**dev, "fqdn": fqdn if "." in fqdn else ""}
-    services = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "names": collections.Counter(), "on": set()})
-    sites = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "last": 0, "service": "", "inferred": False,
-                                             "servers": set(), "on": set()})
-    ports = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0})
+    services = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "on": set()})
+    sites = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "service": "", "inferred": False,
+                                             "servers": set(), "on": set(), "ports": collections.Counter()})
     timeline = collections.defaultdict(lambda: [0, 0])
     on = set()
     for day, a, b in pieces(start, int(time.time()) + 1):       # each day's traffic named with that day's evidence
@@ -432,53 +459,27 @@ def cmd_device(arg, hours):
             sv["down"] += down
             sv["up"] += up
             sv["conns"] += conns
-            sv["names"][name or server] += up + down
             sv["on"].add(net)
-            site = sites[name or server]
+            site = sites[(s, name or server)]
             site["down"] += down
             site["up"] += up
             site["conns"] += conns
             site["last"] = max(site["last"], bucket, last)
+            site["first"] = bucket if site["first"] is None else min(site["first"], bucket)
             site["service"] = s
             site["inferred"] = inferred
             site["servers"].add(server)
             site["on"].add(net)
-            p = ports[f"{proto}/{port}" + (" in" if inbound else "")]
-            p["down"] += down
-            p["up"] += up
-            p["conns"] += conns
+            site["ports"][f"{proto}/{port}" + (" in" if inbound else "")] += up + down
             tl = timeline[bucket - bucket % step]
             tl[0] += down
             tl[1] += up
-    # names it looked up or connected to, by MAC (rows from before the MAC was known: by its address)
-    names = collections.defaultdict(lambda: {"count": 0, "first": None, "last": 0, "sources": set(), "on": set()})
-    cond, args = ("(mac = ? OR (mac = '' AND ip = ?))", (val, (dev or {}).get("ip") or "")) if col == "mac" else ("ip = ?", (val,))
-    for name, ip, source, count, first_seen, last_seen in db.execute(
-            f"SELECT name, ip, source, sum(count), min(first_seen), max(last_seen) FROM lookups "
-            f"WHERE {cond} AND day >= ? AND last_seen >= ? GROUP BY name, ip, source", (*args, start - 86400, start)):
-        n = names[name]
-        n["on"].add(nets.of(ip))
-        n["count"] += count
-        n["first"] = first_seen if n["first"] is None else min(n["first"], first_seen)
-        n["last"] = max(n["last"], last_seen)
-        n["sources"].add(source)
     now = int(time.time())
     first = start - start % step
     return {
         "hours": hours, "device": dev or {"ip": val if col == "ip" else "", "mac": val if col == "mac" else ""},
         "networks": [n for n in nets.shown() if n["id"] in on],
-        "services": sorted(({"service": k, "down": v["down"], "up": v["up"], "conns": v["conns"],
-                             "names": [n for n, _ in v["names"].most_common(5)], "networks": nets.sort(v["on"])}
-                            for k, v in services.items()),
-                           key=lambda r: -(r["down"] + r["up"])),
-        "sites": sorted(({"name": k, **{x: v[x] for x in ("down", "up", "conns", "last", "service", "inferred")},
-                          "servers": sorted(v["servers"])[:5], "networks": nets.sort(v["on"])} for k, v in sites.items()),
-                        key=lambda r: -(r["down"] + r["up"]))[:500],
-        "ports": sorted(({"port": k, **v} for k, v in ports.items()), key=lambda r: -(r["down"] + r["up"]))[:50],
-        "names": sorted(({"name": k, "service": svc.by_name(k) or "", "sources": ", ".join(sorted(v["sources"])),
-                          "networks": nets.sort(v["on"]), **{x: v[x] for x in ("count", "first", "last")}}
-                         for k, v in names.items()),
-                        key=lambda r: -r["last"])[:2000],
+        "traffic": traffic_tree(services, sites),
         "step": step,
         "timeline": [[b, *timeline.get(b, [0, 0])] for b in range(first, now + 1, step)],
     }
@@ -521,17 +522,53 @@ def cmd_sites(hours, text="", want=None):
     return {"hours": hours, "rows": sorted(out, key=lambda r: -(r["down"] + r["up"]))}
 
 
-def cmd_lookup(text, hours, exact=False, want=None):
-    """Traffic and lookups matching a site name, a service name (YouTube also finds googlevideo.com) or an address.
+def chart_timeline(db, table, spans, start, step):
+    """The service chart: each device's traffic to its matched sites (or, without a name, servers), only when they
+    counted for the service (a server's nameless traffic can belong to another service on another day). One read
+    per device, by the (ip, bucket) index."""
+    size = 60 if table == "flows_1m" else 300 if table == "flows_5m" else 3600
+    by_ip = collections.defaultdict(dict)       # ip -> {(name, server or None): [(from, to)]}
+    for (ip, name, server), times in spans.items():
+        by_ip[ip][(name, server)] = [(a - a % size, b) for a, b in times]
+    timeline = collections.defaultdict(lambda: [0, 0])
+    for ip, wanted in by_ip.items():
+        lo = max(start, min(a for t in wanted.values() for a, _ in t))
+        hi = max(b for t in wanted.values() for _, b in t)
+        for bucket, name, server, down, up in db.execute(
+                f"SELECT bucket, name, server, down, up FROM {table} WHERE ip = ? AND bucket BETWEEN ? AND ?", (ip, lo, hi)):
+            times = wanted.get((name, None)) if name else wanted.get(("", server))
+            if times and any(a <= bucket <= b for a, b in times):
+                tl = timeline[bucket - bucket % step]
+                tl[0] += down
+                tl[1] += up
+    return timeline
 
-    exact: one row of the services list - its service, or for nameless traffic its site name or address."""
+
+def cmd_lookup(text, hours, exact=False, want=None, chart=False):
+    """Traffic matching a site name, a service name (YouTube also finds googlevideo.com) or an address.
+
+    exact: one row of the services list - its service, or for nameless traffic its site name or address.
+    chart: its chart instead (a separate request, so the list doesn't wait for it): up to a week from the flows,
+    longer by the day from the same rows as the list. The flows are those of the list's sites; a few a DNS guess named
+    were listed under another site, so a service like Apple can chart a few percent more than it lists."""
     db, svc, ov = load()
-    _table, start = period(hours)
+    table, start = period(hours)
     info = devices_info(db, ov)
     text = text.strip().lower()
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
+    spans = collections.defaultdict(list)      # the chart's traffic: (ip, site name or "", server or None) -> times
+    daily = collections.defaultdict(lambda: [0, 0])
     for ip, mac, site, named, s, inferred, up, down, conns, first, last, servers in matching_sites(db, svc, hours, text, exact):
         if want and nets.of(ip) not in want:
+            continue
+        if chart:
+            if hours > 168:
+                day = daily[local_day(first)]
+                day[0] += down
+                day[1] += up
+            else:
+                for key in [(ip, site, None)] if named and not inferred else [(ip, "", server) for server in servers]:
+                    spans[key].append((first, last))
             continue
         name = site if named else ""
         r = rows[(mac or ip, name or (s and "\0" + s) or site)]     # nameless traffic: one row per service
@@ -544,29 +581,25 @@ def cmd_lookup(text, hours, exact=False, want=None):
         r["first"] = first if r["first"] is None else min(r["first"], first)
         r["last"] = max(r["last"], last)
         r["servers"].update(servers)
-    looked = []
-    day0 = start - 86400
-    for ip, mac, name, source, count, first, last in db.execute(
-            "SELECT ip, mac, name, source, sum(count), min(first_seen), max(last_seen) FROM lookups "
-            "WHERE day >= ? AND last_seen >= ? GROUP BY ip, mac, name, source", (day0, start)):
-        if want and nets.of(ip) not in want:
-            continue
-        if exact:
-            if (svc.by_name(name) or name).lower() != text:
-                continue
-        elif not matches(text, name, svc.by_name(name)):
-            continue
-        dev = info.get(mac) or next((d for d in info.values() if d["ip"] == ip), None)
-        looked.append({"ip": ip, "mac": mac, "device": label(dev, ip), "type": (dev or {}).get("type", ""), "name": name,
-                       "source": source, "count": count, "first": first, "last": last})
     out = []
     for (key, _name), r in rows.items():
         dev = info.get(r["mac"]) or next((d for d in info.values() if d["ip"] == r["ip"]), None)
         out.append({**{k: r[k] for k in ("ip", "mac", "name", "service", "inferred", "down", "up", "conns", "first", "last")},
                     "device": label(dev, r["ip"]), "type": (dev or {}).get("type", ""),
-                    "servers": sorted(r["servers"])[:5]})
-    return {"hours": hours, "query": text, "traffic": sorted(out, key=lambda r: -(r["down"] + r["up"])),
-            "lookups": sorted(looked, key=lambda r: -r["last"])[:2000]}
+                    "icon": (dev or {}).get("icon") or "", "servers": sorted(r["servers"])[:5]})
+    if not chart:
+        total = sum(r["down"] + r["up"] for r in out) or 1
+        for r in out:
+            r["pct"] = round(100 * (r["down"] + r["up"]) / total, 1)
+        return {"hours": hours, "query": text, "traffic": sorted(out, key=lambda r: -(r["down"] + r["up"]))}
+    now = int(time.time())
+    if hours > 168:
+        return {"hours": hours, "query": text, "step": 86400,
+                "timeline": [[d, *daily.get(d, [0, 0])] for d in days(start, local_day(now))]}
+    step = window(hours)[2]
+    timeline = chart_timeline(db, table, spans, start, step)
+    return {"hours": hours, "query": text, "step": step,
+            "timeline": [[b, *timeline.get(b, [0, 0])] for b in range(start - start % step, now + 1, step)]}
 
 
 def cmd_networks():
@@ -656,6 +689,8 @@ def main(argv):
             out = cmd_sites(hours_arg(argv[2]), arg(3).strip().lower(), wanted(arg(4)))
         elif cmd == "lookup":
             out = cmd_lookup(argv[2], hours_arg(argv[3]), arg(4) == "exact", wanted(arg(5)))
+        elif cmd == "servicechart":     # one row of the services list, charted
+            out = cmd_lookup(argv[2], hours_arg(argv[3]), True, wanted(arg(4)), chart=True)
         elif cmd == "networks":
             out = cmd_networks()
         elif cmd == "icons":

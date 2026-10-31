@@ -12,12 +12,8 @@ Devices are identified automatically, not left as IP addresses. A layered, evide
 
 - **Device identification**: a multi-tier rule engine names each device and works out what it is from the evidence it gives off, strongest first (see [Identifying devices](#identifying-devices)). Every identification shows the evidence it rests on.
 - **Devices**: every device with its name, type and icon (e.g. *MacBook Air 15″ (M3)*, *Apple TV 4K*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and its top three services, for the last hour, 3 hours, day, week, month or year.
-- **Device detail**: a traffic chart over time, and what the device talked to:
-  - by service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (NordVPN)*…), including unnamed traffic as *Other*
-  - by site name
-  - by protocol and port
-  - every name it looked up or connected to, how often, and when first and last
-- **Services**: every service the house used in the period, with the devices that used it. Search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`) to see which devices used it, how much, and when, including names that were only looked up in DNS.
+- **Device detail**: a traffic chart over time, and what the device talked to: each service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (NordVPN)*…, unnamed traffic as *Other*), opening to the sites it used. Traffic that isn't the web shows its protocol and port (SSH, a game, a VPN).
+- **Services**: every service the house used in the period, with the devices that used it. Open one, or search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`), for a chart of its traffic over time and which devices used it, how much, and when.
 - **Networks (VLANs)**: when Loupe watches more than one network, the device and service lists show each device's network and can be filtered to one or more. A device on several networks shows them all, and its page shows which network each service and site was used from. Network colours match *Reporting → Traffic*.
 - **Sensible service names**: traffic named only for its CDN (Fastly, Akamai, CloudFront…), or with no name at all, takes the service the same device was using on the same server, marked *(same server)*. Streaming services that share another company's servers are told apart (Hulu on Disney's servers).
 - **Your own names, types and icons**: rename a device, correct its type or pick its icon from any report page. Overrides follow the device by MAC address, and an icon picked for one device applies to every device of that type. Rules type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*; a compound rule combines clues (MAC vendor Espressif *and* a host name starting `shelly`).
@@ -47,7 +43,7 @@ Each connection gets the name from its own handshake first, then from the DNS an
 | Per minute | 4&nbsp;hours | periods up to 3 hours |
 | Per 5 minutes | 30&nbsp;days | periods up to 2 days |
 | Per hour | 1&nbsp;year | longer periods, charted by the day past 90 days |
-| Site lookups | 30&nbsp;days | the Lookups tab and search |
+| Site lookups | 30&nbsp;days | naming VPN tunnels, recognising devices by the domains they use |
 
 Site lookups are kept per device per day, with a count and the first and last time seen. Retention for all but the minute rows is set under *Settings → General*: **Keep 5-minute detail**, **Keep hourly totals** and **Keep site lookups** (in days). Past 2 days, reports read hourly rows even where 5-minute rows still exist: a week or a month by the hour is plenty, and far fewer rows to read.
 
