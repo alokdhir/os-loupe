@@ -8,6 +8,8 @@ Loupe is about each device's traffic to and from the internet. Traffic between y
 
 Devices are identified automatically, not left as IP addresses. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and goes with the strongest evidence, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 135 rules covering 71 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
 
+![A device's page: its traffic over the last day, and each service it used, opening to its sites](docs/images/device.png)
+
 ## Features
 
 - **Device identification**: a multi-tier rule engine names each device and works out what it is from the evidence it gives off, strongest first (see [Identifying devices](#identifying-devices)). Every identification shows the evidence it rests on.
@@ -19,6 +21,32 @@ Devices are identified automatically, not left as IP addresses. A layered, evide
 - **Your own names, types and icons**: rename a device, correct its type or pick its icon from any report page. Overrides follow the device by MAC address, and an icon picked for one device applies to every device of that type. Rules type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*; a compound rule combines clues (MAC vendor Espressif *and* a host name starting `shelly`).
 - **Your own service names**: add domains (including patterns like `cdn-*.example.com`), addresses, ports or VPN app domains. *Settings → Service names / Device rules → Built-in* shows what Loupe ships with.
 - **Dashboard widget**: the last 24 hours at a glance, with totals, an hourly chart and the top devices.
+
+## Screenshots
+
+All from a real home network (names blurred).
+
+**Devices**: every device, its type, vendor, traffic and top services.
+
+![Devices list](docs/images/devices.png)
+
+**Services**: every service the house used, and which devices used it.
+
+![Services list](docs/images/services.png)
+
+**A service**: its traffic over time, and each device's share.
+
+![Netflix's page: its chart and the devices that used it](docs/images/service.png)
+
+**Dashboard widget**: the last 24 hours and the top devices (here next to the [eero plugin's](https://github.com/alokdhir/os-eero) widget).
+
+![The OPNsense dashboard with Loupe's widget](docs/images/dashboard.png)
+
+**Your own names and types** for single devices, and **rules** for many at once.
+
+![Overrides: names and types set by hand](docs/images/overrides.png)
+
+![Device rules: a custom rule typing five MAC prefixes as window shades](docs/images/rules.png)
 
 ## How it works
 
