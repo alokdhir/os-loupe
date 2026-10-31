@@ -617,7 +617,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <th data-column-id="mac" data-visible="false" data-formatter="copy">{{ lang._('MAC address') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
-                    <th data-column-id="conns" data-visible="false" data-width="8em">{{ lang._('Connections') }}</th>
+                    <th data-column-id="conns" data-visible="false" data-width="6em">{{ lang._('Conns') }}</th>
                     <th data-column-id="top" data-formatter="services" data-sortable="false">{{ lang._('Top services') }}</th>
                     <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
                 </tr>
@@ -639,7 +639,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <th data-column-id="pct" data-formatter="pct" data-width="10em">{{ lang._('% of total') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
-                    <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
+                    <th data-column-id="conns" data-width="6em">{{ lang._('Conns') }}</th>
                     <th data-column-id="first" data-formatter="datetime" data-width="11em">{{ lang._('First seen') }}</th>
                     <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
                 </tr></thead>
@@ -668,7 +668,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <th data-column-id="devices" data-formatter="housedevices">{{ lang._('Devices') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
-                    <th data-column-id="conns" data-visible="false" data-width="8em">{{ lang._('Connections') }}</th>
+                    <th data-column-id="conns" data-visible="false" data-width="6em">{{ lang._('Conns') }}</th>
                     <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
                 </tr></thead>
                 <tbody></tbody>
@@ -688,7 +688,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <th data-column-id="pct" data-formatter="pct" data-width="10em">{{ lang._('% of total') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
-                    <th data-column-id="conns" data-width="8em">{{ lang._('Connections') }}</th>
+                    <th data-column-id="conns" data-width="6em">{{ lang._('Conns') }}</th>
                     <th data-column-id="first" data-formatter="datetime" data-width="11em">{{ lang._('First seen') }}</th>
                     <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
                 </tr></thead>
