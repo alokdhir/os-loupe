@@ -13,47 +13,4 @@ Plugin Changelog
 
 1.0
 
-* Long periods in a fraction of a second: loupd keeps a daily summary per
-  device and service, so 7 days, 30 days and a year read days instead of
-  hours; lists up to 48 hours read stored hourly summaries
-* The same traffic gets the same service name in every period: rows are named
-  with the evidence of their own day
-* Device and service lists are kept for a minute while you sort, page and
-  search them
-* Devices are classified every minute, right after each write (was every 10
-  minutes)
-* Traffic is recorded per MAC as well as address, so a device that takes over
-  another's address gets its own rows; existing tables are converted once on
-  the first start after updating
-* Random IDs in Bonjour names (an iPhone's UUID host names) no longer push out
-  a real host name; "localnetworkprivacy" and Spotify group sessions are never
-  used as device names
-
-0.9
-
-* One page with Devices, Services and Settings tabs
-* Services tab: every service the house used, with the devices that used it;
-  search matches services, sites and addresses
-* Device identification rules and service names are data (devices.json,
-  services.json), with an icon and maker per device type
-* VPN tunnels named by provider; Schlage locks, NanoKVM/PiKVM, HDHomeRun,
-  Azure Sphere devices and Linux distributions recognised
-* Last seen accurate to the minute
-* 1-minute detail for the last few hours: the 1 and 3 hour views chart minutes
-  (after updating, they fill in over the first 3 hours); charts in Mbps
-* Reads neighbour tables, interface addresses and Unbound's cache natively;
-  compiles its capture filter with libpcap; pf states parsed 2x faster
-* Hardened against malformed packets and database errors; device-supplied
-  names escaped in the GUI
-* tools/install.sh and tools/uninstall.sh to install from the repository
-* Sub-Zero/Wolf/Cove appliances recognised (they show as Card Access or Azure
-  Sphere); fanSync fans named Fanimation, not their Wi-Fi module maker
-* Bonjour evidence keeps when it was last seen: what a device announces now
-  outranks older announcements (a stale relayed model no longer decides the
-  type); long hex IDs and "-hap" names are not used as device names
-* identities query for other plugins: name, type and icon for a list of MAC
-  addresses (configctl loupe query identities, /api/loupe/report/identities)
-
-0.1
-
 * Initial release
