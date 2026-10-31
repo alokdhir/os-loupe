@@ -42,7 +42,7 @@
     const pattern = new RegExp(parts.join('|'), 'gi');                     // just the word: "Bob" of Bobs-iPhone
     const matches = s => { pattern.lastIndex = 0; return pattern.test(s); };
     const SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'NOSCRIPT']);
-    const BLUR = 'filter: blur(5px); user-select: none;';
+    const BLUR = 'filter: blur(0.3em); user-select: none;';            // in em: a heading needs more than body text
     const TITLES = ['title', 'data-original-title'];
 
     function blurText(node) {
@@ -75,7 +75,7 @@
         });
         if ((el.tagName === 'INPUT' || el.tagName === 'SELECT') && matches(el.value || '')) {
             el.setAttribute('data-shield-style', el.getAttribute('style') || '');
-            el.style.filter = 'blur(5px)';
+            el.style.filter = 'blur(0.3em)';
         }
     }
 

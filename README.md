@@ -24,7 +24,7 @@ Devices are identified automatically, not left as IP addresses. A layered, evide
 
 ## Screenshots
 
-All from a real home network (names blurred).
+All from a real home network, with people's names blurred. The address bar shows the router's IP address, not its host name, on purpose: it keeps the domain out of the pictures.
 
 **Devices**: every device, its type, vendor, traffic and top services.
 
