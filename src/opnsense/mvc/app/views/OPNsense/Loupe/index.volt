@@ -126,7 +126,7 @@ POSSIBILITY OF SUCH DAMAGE.
             pct: function (column, row) {             /* the number, on a bar as long as its share */
                 const p = Math.max(0, Math.min(100, +row.pct || 0));
                 return '<div style="background: linear-gradient(90deg, rgba(54,162,235,0.25) ' + p + '%, transparent ' + p
-                    + '%); padding: 0 4px">' + (p < 0.1 && row.pct > 0 ? '&lt;0.1' : p.toFixed(1)) + '%</div>';
+                    + '%); padding: 0 4px">' + (p > 0 && p < 0.05 ? '&lt;0.1' : p.toFixed(1)) + '%</div>';
             },
             ago: function (column, row) {
                 return ago(row[column.id]);
@@ -200,6 +200,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* a chart of a device's or a service's traffic: Mbps down and up, each point the average over its bucket */
         const charts = {};
+        function clearChart(canvas) {
+            if (charts[canvas]) charts[canvas].destroy();
+            delete charts[canvas];
+        }
         function drawChart(canvas, data) {
             const tl = data.timeline || [], step = data.step || 300;
             const mbps = b => b * 8 / step / 1e6;
@@ -284,9 +288,11 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-results').show();
             $('#loupe-service-title').text(q);
             grid('grid-traffic', '/api/loupe/report/search_lookup_traffic', () => ({q: q}));
-            const asked = q + '|' + hours;
+            /* only the answer to the latest request is drawn; until it comes, and if it fails, no chart (not the last one) */
+            const asked = q + '|' + hours + '|' + netFilter();
+            clearChart('loupe-service-chart');
             ajaxCall('/api/loupe/report/service_chart', {q: q, hours: hours, networks: netFilter()}, function (data) {
-                if (asked === q + '|' + hours && data && !data.error) drawChart('loupe-service-chart', data);
+                if (asked === q + '|' + hours + '|' + netFilter() && data && !data.error) drawChart('loupe-service-chart', data);
             });
         }
 

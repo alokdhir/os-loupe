@@ -42,7 +42,8 @@
     const pattern = new RegExp(parts.join('|'), 'gi');                     // just the word: "Bob" of Bobs-iPhone
     const matches = s => { pattern.lastIndex = 0; return pattern.test(s); };
     const SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'NOSCRIPT']);
-    const BLUR = 'filter: blur(0.3em); user-select: none;';            // in em: a heading needs more than body text
+    const FILTER = 'blur(max(5px, 0.3em))';     // at least 5px for small text, more for headings
+    const BLUR = 'filter: ' + FILTER + '; user-select: none;';
     const TITLES = ['title', 'data-original-title'];
 
     function blurText(node) {
@@ -66,16 +67,19 @@
     }
 
     function blurElement(el) {
-        TITLES.forEach(function (attr) {                                     /* tooltips: masked, not blurred */
+        /* tooltips: masked, not blurred. The original is kept once per element: Bootstrap may move the masked
+           title into data-original-title, and off() puts the original back in whichever holds the mask */
+        TITLES.forEach(function (attr) {
             const v = el.getAttribute(attr);
             if (v && matches(v)) {
-                el.setAttribute('data-shield-' + attr, v);
+                if (!el.hasAttribute('data-shield-orig')) el.setAttribute('data-shield-orig', v);
                 el.setAttribute(attr, v.replace(pattern, '•••'));
             }
         });
-        if ((el.tagName === 'INPUT' || el.tagName === 'SELECT') && matches(el.value || '')) {
+        if ((el.tagName === 'INPUT' || el.tagName === 'SELECT') && matches(el.value || '')
+                && !el.hasAttribute('data-shield-style')) {     // once: a second pass would save the blurred style
             el.setAttribute('data-shield-style', el.getAttribute('style') || '');
-            el.style.filter = 'blur(0.3em)';
+            el.style.filter = FILTER;
         }
     }
 
@@ -116,11 +120,11 @@
                 parent.replaceChild(document.createTextNode(s.textContent), s);
                 parent.normalize();
             });
-            TITLES.forEach(function (attr) {
-                document.querySelectorAll('[data-shield-' + attr + ']').forEach(function (el) {
-                    el.setAttribute(attr, el.getAttribute('data-shield-' + attr));
-                    el.removeAttribute('data-shield-' + attr);
+            document.querySelectorAll('[data-shield-orig]').forEach(function (el) {
+                TITLES.forEach(function (attr) {
+                    if ((el.getAttribute(attr) || '').includes('•••')) el.setAttribute(attr, el.getAttribute('data-shield-orig'));
                 });
+                el.removeAttribute('data-shield-orig');
             });
             document.querySelectorAll('[data-shield-style]').forEach(function (el) {
                 el.setAttribute('style', el.getAttribute('data-shield-style'));

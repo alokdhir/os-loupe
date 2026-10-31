@@ -159,8 +159,8 @@ class TestTrafficTree(unittest.TestCase):
         import query
         site = lambda down, ports: {"down": down, "up": 0, "conns": 1, "first": down, "last": 5, "inferred": False,
                                     "servers": {"192.0.2.1"}, "on": set(), "ports": collections.Counter(ports)}
-        services = {"Netflix": {"down": 30, "up": 0, "conns": 2, "on": set()},
-                    "Other": {"down": 50, "up": 0, "conns": 1, "on": set()}}
+        services = {"Netflix": {"down": 30, "up": 0, "conns": 2, "first": 7, "last": 9, "on": set()},
+                    "Other": {"down": 50, "up": 0, "conns": 1, "first": 5, "last": 5, "on": set()}}
         sites = {("Netflix", "a.example"): site(10, {"tcp/443": 10}),
                  ("Netflix", "b.example"): site(20, {"udp/443": 20}),
                  ("Other", "198.51.100.7"): site(50, {"udp/51820": 40, "tcp/443": 10})}
@@ -173,7 +173,7 @@ class TestTrafficTree(unittest.TestCase):
         self.assertEqual(len({r["id"] for r in tree} | {c["id"] for r in tree for c in r["_children"]}), 5)
         self.assertEqual([r["pct"] for r in tree], [62.5, 37.5])                      # of the device's traffic
         self.assertEqual([c["pct"] for c in tree[1]["_children"]], [25.0, 12.5])
-        self.assertEqual(tree[1]["first"], 10)                                         # its earliest site
+        self.assertEqual((tree[1]["first"], tree[1]["last"]), (7, 9))                  # from all its traffic, not its top sites
 
 
 def q_lookup(query, row, hours):
@@ -425,6 +425,47 @@ class TestDailySummary(unittest.TestCase):
         self.daemon.map_fingerprint = "two"
         self.summarize(budget=0)
         self.assertEqual({d: fp for d, (fp, _) in self.store.summary_state(0).items() if fp == "two"}, {self.today: "two"})
+
+
+class TestServiceChart(unittest.TestCase):
+    def test_adds_up_to_the_list(self):
+        """Named traffic, a CDN name and nameless traffic that take the service from the same server all count;
+        nameless traffic its port gives another service (NTP) doesn't. On the VPN's server, the web traffic next to
+        its port is the VPN's, as the list names it."""
+        import query
+        now = int(time.time())
+        mac, ip, server, vpn = "02:00:00:00:00:72", "10.9.3.72", "192.0.2.31", "192.0.2.32"
+        t = now - now % 300 - 1800
+        flows = {(t, ip, server, 443, "tcp", "www.netflix.com"): [mac, "sni", 0, 10, 5000, 3, 1],
+                 (t + 300, ip, server, 443, "tcp", "x.fastly.net"): [mac, "sni", 0, 10, 900, 3, 1],
+                 (t + 600, ip, server, 443, "tcp", ""): [mac, "", 0, 10, 700, 3, 1],
+                 (t + 600, ip, server, 123, "udp", ""): [mac, "", 0, 10, 50, 3, 1],     # NTP by its port: not Netflix
+                 (t + 600, ip, vpn, 51820, "udp", ""): [mac, "", 0, 10, 300, 3, 1],
+                 (t + 900, ip, vpn, 443, "tcp", ""): [mac, "", 0, 10, 100, 3, 1]}
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            s.write(flows, {}, {mac: {"ip": ip, "ts": now}}, now)
+            old = query.DB, query.CONF, query.load
+            opened = []
+
+            def load():
+                opened.append(old[2]())
+                return opened[-1]
+            query.DB, query.CONF, query.load = path, os.path.join(d, "none.json"), load
+            try:
+                for hours in (3, 24):
+                    for service, total in (("netflix", 6630), ("vpn (wireguard)", 420), ("ntp", 60)):
+                        rows = query.cmd_lookup(service, hours, True)["traffic"]
+                        listed = sum(r["down"] + r["up"] for r in rows)
+                        chart = query.cmd_lookup(service, hours, True, chart=True)["timeline"]
+                        self.assertEqual(listed, total, (service, hours))
+                        self.assertEqual(sum(p[1] + p[2] for p in chart), listed, (service, hours))
+            finally:
+                query.DB, query.CONF, query.load = old
+                for db, *_ in opened:
+                    db.close()
+                s.close()
 
 
 class TestNamedByDay(unittest.TestCase):
