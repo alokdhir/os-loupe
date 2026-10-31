@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# stop loupd before its files go (after an upgrade, +POST_INSTALL starts it again)
+service loupe onestop >/dev/null 2>&1 || :

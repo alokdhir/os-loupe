@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# an upgrade leaves the old loupd running: restart it with the new code (only if it is enabled)
+if service loupe enabled; then
+	service loupe restart
+fi

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# Python's byte-code caches are not in the package: remove them so the directory goes too
+rm -rf /usr/local/opnsense/scripts/loupe/__pycache__ /usr/local/opnsense/scripts/loupe/lib/__pycache__
+rmdir /usr/local/opnsense/scripts/loupe/lib /usr/local/opnsense/scripts/loupe 2>/dev/null || :
