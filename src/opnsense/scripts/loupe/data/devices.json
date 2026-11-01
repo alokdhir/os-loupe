@@ -13,6 +13,7 @@
  "rules": [
   {"when": {"mac_prefix": "52:54:00"}, "type": "Virtual machine", "vendor": "QEMU/KVM", "example": {"mac": "52:54:00:00:00:01"}},
   {"when": {"vendor": "Tesla"}, "tier": "mac_prefix", "type": "Tesla", "note": "Tesla's own MAC block, only on Tesla hardware; the car's DHCP client says MSFT 5.0", "example": {"vendor": "Tesla,Inc.", "info": {"dhcp_vendor_class": "MSFT 5.0"}}},
+  {"when": {"vendor": "Miele"}, "tier": "mac_prefix", "type": "Miele appliance", "note": "Miele's own MAC block, on the Wi-Fi modules (XKM) in its ovens, washers, dishwashers and coffee machines", "example": {"vendor": "Miele & Cie. KG"}},
   {"when": {"mdns_model": "^AppleTV"}, "type": "Apple TV", "example": {"info": {"mdns_models": ["model=AppleTV14,1"]}}},
   {"when": {"mdns_model": "^AudioAccessory"}, "type": "HomePod", "example": {"info": {"mdns_models": ["model=AudioAccessory5,1"]}}},
   {"when": {"mdns_model": "^(MacBook|Macmini|MacPro|iMac|Mac\\d|MacStudio)"}, "type": "Mac", "example": {"info": {"mdns_models": ["model=Mac14,14"]}}},
@@ -58,6 +59,7 @@
   {"all": [{"mdns_service": "_hap._tcp"}, {"mdns_service": ["_smb._tcp", "_channels_dvr._tcp", "_plexmediasvr._tcp"]}], "tier": "role", "type": "Server", "note": "serves files or media next to HomeKit", "example": {"info": {"mdns_services": ["_hap._tcp", "_channels_dvr._tcp"]}}},
   {"when": {"mdns_service": "_googlecast._tcp"}, "type": "Google Cast device", "example": {"info": {"mdns_services": ["_googlecast._tcp"]}}, "tier": "strong_service"},
   {"when": {"mdns_service": "_sonos._tcp"}, "type": "Sonos speaker", "example": {"info": {"mdns_services": ["_sonos._tcp"]}}, "tier": "strong_service"},
+  {"when": {"mdns_service": "_mieleathome._tcp"}, "type": "Miele appliance", "vendor": "Miele", "note": "Miele@home, announced by the appliance's Wi-Fi module", "example": {"info": {"mdns_services": ["_mieleathome._tcp"]}}, "tier": "strong_service"},
   {"when": {"mdns_service": "_ipp._tcp"}, "type": "Printer", "example": {"info": {"mdns_services": ["_ipp._tcp"]}}, "tier": "strong_service"},
   {"when": {"mdns_service": "_ipps._tcp"}, "type": "Printer", "example": {"info": {"mdns_services": ["_ipps._tcp"]}}, "tier": "strong_service"},
   {"when": {"mdns_service": "_printer._tcp"}, "type": "Printer", "example": {"info": {"mdns_services": ["_printer._tcp"]}}, "tier": "strong_service"},
@@ -219,6 +221,7 @@
   "Smart lock": {"icon": "fa-solid fa-lock"},
   "Azure Sphere device": {"icon": "fa-solid fa-microchip"},
   "Sub-Zero appliance": {"icon": "fa-solid fa-kitchen-set", "vendor": "Sub-Zero"},
+  "Miele appliance": {"icon": "fa-solid fa-kitchen-set", "vendor": "Miele"},
   "Window shade": {"icon": "fa-solid fa-table-columns"},
   "TV tuner": {"icon": "fa-solid fa-tower-broadcast", "vendor": "SiliconDust"},
   "Appliance (GE / Haier module)": {"icon": "fa-solid fa-house-signal"}
