@@ -38,7 +38,7 @@ All from a real home network, with people's names blurred. The address bar shows
 
 ![Netflix's page: its chart and the devices that used it](docs/images/service.png)
 
-**Dashboard widget**: the last 24 hours and the top devices. Also shown here, at the bottom right, is the [eero plugin's](https://github.com/alokdhir/os-eero) widget.
+**Dashboard widget**: the last 24 hours and the top devices. Also shown here, at the bottom left, is the [eero plugin's](https://github.com/alokdhir/os-eero) widget.
 
 ![The OPNsense dashboard with Loupe's widget](docs/images/dashboard.png)
 
