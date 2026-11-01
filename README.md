@@ -168,7 +168,7 @@ In a workplace, tell people that their devices' traffic is recorded this way. Pe
 
 ## Install
 
-Loupe is not in the official plugin list yet. To try it, install it from this repository on the OPNsense box itself — from the console (option 8, *Shell*) or SSH, as root:
+Loupe is not in the official plugin list [yet](https://github.com/opnsense/plugins/issues/5854). To try it, install it from this repository on the OPNsense box itself — from the console (option 8, *Shell*) or SSH, as root:
 
 ```sh
 fetch -o - https://github.com/alokdhir/os-loupe/archive/refs/heads/master.tar.gz | tar -xzf - -C /tmp
