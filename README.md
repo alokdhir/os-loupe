@@ -158,7 +158,7 @@ and icons for eero Wi-Fi clients.
 
 ## Footprint
 
-On a gigabit home link running on an Intel N150: about 0.5% of one CPU core idle, ~4% during a full-speed transfer, and 30–50 MB of memory.
+On a gigabit home link, on an Intel N150, Loupe uses about 0.5% of one CPU core when the network is quiet, ~2% at around 175 Mbit/s, ~4% during a full-speed transfer, and about 75 MB of memory.
 
 ## Privacy
 
