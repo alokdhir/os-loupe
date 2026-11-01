@@ -29,7 +29,7 @@ usage:
   query.py devices HOURS
   query.py device IP HOURS
   query.py sites HOURS [TEXT] [NETWORKS]
-  query.py lookup TEXT HOURS [exact] [NETWORKS]
+  query.py service TEXT HOURS [NETWORKS]
   query.py servicechart TEXT HOURS [NETWORKS]
   query.py widget
   query.py summary
@@ -569,10 +569,9 @@ def chart_timeline(db, svc, table, spans, start, step):
     return timeline
 
 
-def cmd_lookup(text, hours, exact=False, want=None, chart=False):
-    """Traffic matching a site name, a service name (YouTube also finds googlevideo.com) or an address.
+def cmd_service(text, hours, want=None, chart=False):
+    """One row of the services list: the traffic of its service, or for nameless traffic its site name or address.
 
-    exact: one row of the services list - its service, or for nameless traffic its site name or address.
     chart: its chart instead (a separate request, so the list doesn't wait for it): up to a week from the flows,
     longer by the day from the same rows as the list. The flows are those of the list's sites; a few a DNS guess named
     were listed under another site, so a service like Apple can chart a little more than it lists."""
@@ -583,7 +582,7 @@ def cmd_lookup(text, hours, exact=False, want=None, chart=False):
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
     spans = {}      # the chart's traffic: (ip, site name or "", server or None) -> ([times], service)
     daily = collections.defaultdict(lambda: [0, 0])
-    for ip, mac, site, named, s, inferred, up, down, conns, first, last, servers in matching_sites(db, svc, hours, text, exact):
+    for ip, mac, site, named, s, inferred, up, down, conns, first, last, servers in matching_sites(db, svc, hours, text, True):
         if want and nets.of(ip) not in want:
             continue
         if chart:
@@ -712,10 +711,10 @@ def main(argv):
             out = cmd_device(argv[2], hours_arg(argv[3]))
         elif cmd == "sites":
             out = cmd_sites(hours_arg(argv[2]), fold(arg(3).strip()), wanted(arg(4)))
-        elif cmd == "lookup":
-            out = cmd_lookup(argv[2], hours_arg(argv[3]), arg(4) == "exact", wanted(arg(5)))
+        elif cmd == "service":
+            out = cmd_service(argv[2], hours_arg(argv[3]), wanted(arg(4)))
         elif cmd == "servicechart":     # one row of the services list, charted
-            out = cmd_lookup(argv[2], hours_arg(argv[3]), True, wanted(arg(4)), chart=True)
+            out = cmd_service(argv[2], hours_arg(argv[3]), wanted(arg(4)), chart=True)
         elif cmd == "networks":
             out = cmd_networks()
         elif cmd == "icons":

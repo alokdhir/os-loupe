@@ -92,7 +92,7 @@ POSSIBILITY OF SUCH DAMAGE.
         const pill = id => networks[id] ? '<span class="badge loupe-net" style="background:' + COLORS[networks[id].color % COLORS.length]
             + '">' + esc(networks[id].name) + '</span>' : '';
 
-        /* formatters for the report grids (device list, device detail, lookup) */
+        /* formatters for the report grids (device list, device detail, service) */
         const formatters = {
             networks: function (column, row) {
                 return (row.networks || []).map(pill).join('');
@@ -131,12 +131,12 @@ POSSIBILITY OF SUCH DAMAGE.
             ago: function (column, row) {
                 return ago(row[column.id]);
             },
-            lookupdevice: function (column, row) {
+            servicedevice: function (column, row) {
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
                     + '<a href="#device=' + esc(row.mac || row.ip) + '">' + esc(row.device) + '</a>'
                     + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '');
             },
-            lookupsite: function (column, row) {
+            servicesite: function (column, row) {
                 return copyable(row.name || (row.servers || []).join(', ')) + inferred(row);
             },
             copy: function (column, row) {
@@ -287,7 +287,7 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-overview').hide();
             $('#loupe-results').show();
             $('#loupe-service-title').text(q);
-            grid('grid-traffic', '/api/loupe/report/search_lookup_traffic', () => ({q: q}));
+            grid('grid-traffic', '/api/loupe/report/search_service_traffic', () => ({q: q}));
             /* only the answer to the latest request is drawn; until it comes, and if it fails, no chart (not the last one) */
             const asked = q + '|' + hours + '|' + netFilter();
             clearChart('loupe-service-chart');
@@ -380,7 +380,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         function tabOf(hash) {
             if (/^#device=/.test(hash)) return 'devices';
-            if (/^#(q=|lookup$|sites$)/.test(hash)) return 'services';
+            if (/^#(q=|sites$)/.test(hash)) return 'services';
             const t = (hash.replace(/^#/, '') || '{{ activetab }}').replace(/^devicenames$/, 'overrides');
             return PAGES.indexOf(t) >= 0 ? 'settings' : (TABS[t] ? t : 'devices');
         }
@@ -690,9 +690,9 @@ POSSIBILITY OF SUCH DAMAGE.
             <div style="height: 220px; padding: 0 15px 10px"><canvas id="loupe-service-chart"></canvas></div>
             <table id="grid-traffic" class="table table-condensed table-hover table-striped table-responsive">
                 <thead><tr>
-                    <th data-column-id="device" data-formatter="lookupdevice">{{ lang._('Device') }}</th>
+                    <th data-column-id="device" data-formatter="servicedevice">{{ lang._('Device') }}</th>
                     <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
-                    <th data-column-id="name" data-formatter="lookupsite">{{ lang._('Site') }}</th>
+                    <th data-column-id="name" data-formatter="servicesite">{{ lang._('Site') }}</th>
                     <th data-column-id="pct" data-formatter="pct" data-width="10em">{{ lang._('% of total') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>

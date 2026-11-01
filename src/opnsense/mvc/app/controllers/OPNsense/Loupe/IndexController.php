@@ -59,11 +59,6 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->page('devices');
     }
 
-    public function lookupAction()
-    {
-        $this->page('services');
-    }
-
     public function settingsAction()
     {
         $this->page('general');

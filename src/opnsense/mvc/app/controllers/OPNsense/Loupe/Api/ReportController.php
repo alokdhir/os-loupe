@@ -61,15 +61,6 @@ class ReportController extends ApiControllerBase
         return $this->query(['device', $id, $this->hours($hours)], '!loupe list');
     }
 
-    public function lookupAction($text = '', $hours = 24)
-    {
-        $text = rawurldecode($text);
-        if (!preg_match(self::TEXT, $text)) {
-            return ['error' => 'enter a service, site or address'];
-        }
-        return $this->query(['lookup', $text, $this->hours($hours)]);
-    }
-
     /**
      * The networks to filter by (none when Loupe watches just one), each with its place in Reporting -> Traffic's
      * interface list: the GUI colours it from that place, so a network has the same colour on both pages.
@@ -272,13 +263,13 @@ class ReportController extends ApiControllerBase
     }
 
     /* one row of the services list: its traffic per device and site */
-    public function searchLookupTrafficAction()
+    public function searchServiceTrafficAction()
     {
         $text = trim((string)$this->request->getPost('q', null, ''));
         if (!preg_match(self::TEXT, $text)) {
             return $this->searchRecordsetBase([]);
         }
-        $data = $this->cached(['lookup', $text, $this->postHours(), 'exact', $this->postNetworks()]);
+        $data = $this->cached(['service', $text, $this->postHours(), $this->postNetworks()]);
         return $this->grid($data['traffic'] ?? [], 'down', null, self::SEARCH['traffic']);
     }
 

@@ -176,8 +176,8 @@ class TestTrafficTree(unittest.TestCase):
         self.assertEqual((tree[1]["first"], tree[1]["last"]), (7, 9))                  # from all its traffic, not its top sites
 
 
-def q_lookup(query, row, hours):
-    return query.cmd_lookup(row, hours, True)["traffic"]
+def q_service(query, row, hours):
+    return query.cmd_service(row, hours)["traffic"]
 
 
 class TestIdentities(unittest.TestCase):
@@ -370,7 +370,7 @@ class TestDailySummary(unittest.TestCase):
     def drilldowns(self):
         """A service's traffic (a services list row clicked) and the services search, over periods read by day."""
         q = self.query
-        return [(q.cmd_lookup(row, h, True)["traffic"], q.cmd_sites(h, text)["rows"])
+        return [(q.cmd_service(row, h)["traffic"], q.cmd_sites(h, text)["rows"])
                 for h in (72, 168) for row, text in (("netflix", "netflix"), ("192.0.2.20", "192.0.2.20"),
                                                      ("vpn (wireguard)", "198.51.100.7"))]
 
@@ -382,10 +382,10 @@ class TestDailySummary(unittest.TestCase):
         self.assertEqual(self.drilldowns(), live)
         for h in (72, 168, 720):        # the chart adds up to the list: from the flows up to a week, by the day beyond
             for row in ("netflix", "192.0.2.20", "vpn (wireguard)"):
-                rows = q_lookup(self.query, row, h)
+                rows = q_service(self.query, row, h)
                 listed = sum(r["down"] + r["up"] for r in rows)
                 self.assertAlmostEqual(sum(r["pct"] for r in rows), 100, delta=0.1 * len(rows))
-                chart = self.query.cmd_lookup(row, h, True, chart=True)
+                chart = self.query.cmd_service(row, h, chart=True)
                 self.assertEqual(sum(p[1] + p[2] for p in chart["timeline"]), listed, (row, h))
                 self.assertEqual(chart["step"], 86400 if h > 168 else 3600)
         # the days before today come from the summary alone; today's hours since loupd built it are named here
@@ -487,9 +487,9 @@ class TestServiceChart(unittest.TestCase):
             try:
                 for hours in (3, 24):
                     for service, total in (("netflix", 6630), ("vpn (wireguard)", 420), ("ntp", 60)):
-                        rows = query.cmd_lookup(service, hours, True)["traffic"]
+                        rows = query.cmd_service(service, hours)["traffic"]
                         listed = sum(r["down"] + r["up"] for r in rows)
-                        chart = query.cmd_lookup(service, hours, True, chart=True)["timeline"]
+                        chart = query.cmd_service(service, hours, chart=True)["timeline"]
                         self.assertEqual(listed, total, (service, hours))
                         self.assertEqual(sum(p[1] + p[2] for p in chart), listed, (service, hours))
             finally:
