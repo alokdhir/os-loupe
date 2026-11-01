@@ -8,7 +8,7 @@ Loupe is about each device's traffic to and from the internet. Traffic between y
 
 Devices are identified automatically, not left as IP addresses. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and goes with the strongest evidence, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 135 rules covering 71 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
 
-![A device's page: its traffic over the last day, and each service it used, opening to its sites](docs/images/device.png)
+![Devices list: every device, its type, vendor, traffic and top services](docs/images/devices.png)
 
 ## Features
 
@@ -26,9 +26,9 @@ Devices are identified automatically, not left as IP addresses. A layered, evide
 
 All from a real home network, with people's names blurred. The address bar shows the router's IP address, not its host name, on purpose: it keeps the domain out of the pictures.
 
-**Devices**: every device, its type, vendor, traffic and top services.
+**A device**: its traffic over time, and each service it used, opening to its sites.
 
-![Devices list](docs/images/devices.png)
+![A device's page: its traffic over the last day, and each service it used, opening to its sites](docs/images/device.png)
 
 **Services**: every service the house used, and which devices used it.
 
