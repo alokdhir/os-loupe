@@ -65,8 +65,9 @@ def flow_indexes(t):
 
 SCHEMA = ";\n".join(FLOWS.format(t=t).strip() + ";\n" + ";\n".join(flow_indexes(t)) for t in FLOW_INDEXES) + """;
 
--- names each device asked for or connected to, per day (also names that moved no bytes we saw)
-CREATE TABLE IF NOT EXISTS lookups (
+-- sites each device was seen using, per day: names from DNS answers it received and from its TLS and QUIC
+-- connections (also names that moved no bytes we saw). Evidence for naming traffic and identifying devices.
+CREATE TABLE IF NOT EXISTS sites_seen (
     day INTEGER NOT NULL,
     ip TEXT NOT NULL,
     mac TEXT NOT NULL DEFAULT '',   -- the device at that address then ('' = not known)
@@ -186,6 +187,7 @@ class Store:
         self.db = sqlite3.connect(path, isolation_level=None)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
+        self._rename_lookups()
         self.db.executescript(SCHEMA)
         cols = {r[1] for r in self.db.execute("PRAGMA table_info(devices)")}
         for col in ("name", "model"):      # added after the first release
@@ -203,9 +205,16 @@ class Store:
             # reading a day of it got ~1.7 times slower. Rewrite the file in order once, and give back the log.
             self.db.execute("VACUUM")
             self.db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        if "mac" not in {r[1] for r in self.db.execute("PRAGMA table_info(lookups)")}:
-            self._add_lookups_mac()
-        self.db.execute("CREATE INDEX IF NOT EXISTS lookups_mac ON lookups (mac, day)")
+        if "mac" not in {r[1] for r in self.db.execute("PRAGMA table_info(sites_seen)")}:
+            self._add_sites_seen_mac()
+        self.db.execute("CREATE INDEX IF NOT EXISTS sites_seen_mac ON sites_seen (mac, day)")
+
+    def _rename_lookups(self):
+        """Renamed later: sites_seen was called lookups (it also holds TLS and QUIC names, not just DNS)."""
+        tables = {r[0] for r in self.db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if "lookups" in tables and "sites_seen" not in tables:
+            self.db.execute("DROP INDEX IF EXISTS lookups_mac")
+            self.db.execute("ALTER TABLE lookups RENAME TO sites_seen")
 
     def _key_with_mac(self, table):
         """Added later: the MAC is part of a traffic row's key, so a device that takes over an address within a
@@ -224,18 +233,18 @@ class Store:
             db.execute("ROLLBACK")
             raise
 
-    def _add_lookups_mac(self):
-        """Added later: older lookups get the device that used the address that day, from the traffic rows
+    def _add_sites_seen_mac(self):
+        """Added later: older rows get the device that used the address that day, from the traffic rows
         (one query per address and day, not per row: a busy device has thousands of traffic rows an hour)."""
         db = self.db
         db.execute("BEGIN")
         try:
-            db.execute("ALTER TABLE lookups ADD COLUMN mac TEXT NOT NULL DEFAULT ''")
-            for ip, day in db.execute("SELECT DISTINCT ip, day FROM lookups").fetchall():
+            db.execute("ALTER TABLE sites_seen ADD COLUMN mac TEXT NOT NULL DEFAULT ''")
+            for ip, day in db.execute("SELECT DISTINCT ip, day FROM sites_seen").fetchall():
                 row = db.execute("SELECT mac FROM flows_1h WHERE ip = ? AND bucket >= ? AND bucket < ? AND mac != '' "
                                  "GROUP BY mac ORDER BY count(*) DESC LIMIT 1", (ip, day, day + 90000)).fetchone()
                 if row:         # 25 h: a day with a clock change is 23 or 25 hours long
-                    db.execute("UPDATE lookups SET mac = ? WHERE day = ? AND ip = ?", (row[0], day, ip))
+                    db.execute("UPDATE sites_seen SET mac = ? WHERE day = ? AND ip = ?", (row[0], day, ip))
             db.execute("COMMIT")
         except BaseException:
             db.execute("ROLLBACK")
@@ -244,10 +253,10 @@ class Store:
     def close(self):
         self.db.close()
 
-    def write(self, flows, lookups, devices, now=None):
+    def write(self, flows, sites_seen, devices, now=None):
         """flows: {(bucket1m, ip, server, port, proto, name): [mac, source, inbound, up, down, pkts, conns]}
         (minute buckets; the 5-minute and hourly rows are derived)
-        lookups: {(day, ip, name, source): [count, first, last, mac]}
+        sites_seen: {(day, ip, name, source): [count, first, last, mac]}
         devices: {mac: {"ip", "ts", "hostname"?, "info"?: {...}}}"""
         db = self.db
         db.execute("BEGIN")
@@ -259,11 +268,11 @@ class Store:
             db.executemany(UPSERT.format(t="flows_5m"), [(r[0] - r[0] % 300, *r[1:]) for r in rows])
             db.executemany(UPSERT.format(t="flows_1h"), [(r[0] - r[0] % 3600, *r[1:]) for r in rows])
             db.executemany(
-                "INSERT INTO lookups (day, ip, name, source, count, first_seen, last_seen, mac) VALUES (?,?,?,?,?,?,?,?) "
+                "INSERT INTO sites_seen (day, ip, name, source, count, first_seen, last_seen, mac) VALUES (?,?,?,?,?,?,?,?) "
                 "ON CONFLICT (day, ip, name, source) DO UPDATE SET count = count + excluded.count, "
                 "last_seen = max(last_seen, excluded.last_seen), "
                 "mac = CASE WHEN excluded.mac != '' THEN excluded.mac ELSE mac END",
-                [(d, ip, n, s, *v) for (d, ip, n, s), v in lookups.items()])
+                [(d, ip, n, s, *v) for (d, ip, n, s), v in sites_seen.items()])
             for mac, d in devices.items():
                 old = db.execute("SELECT info FROM devices WHERE mac = ?", (mac,)).fetchone()
                 info = json.loads(old[0]) if old else {}
@@ -289,7 +298,7 @@ class Store:
     def devices_with_names(self, since):
         """[(mac, ip, hostname, info dict, [names looked up since `since`])] - by MAC; rows without one by address"""
         by_mac, by_ip = {}, {}
-        for mac, ip, name in self.db.execute("SELECT DISTINCT mac, ip, name FROM lookups WHERE day >= ?", (since,)):
+        for mac, ip, name in self.db.execute("SELECT DISTINCT mac, ip, name FROM sites_seen WHERE day >= ?", (since,)):
             if mac:
                 by_mac.setdefault(mac, set()).add(name)
             else:
@@ -347,7 +356,7 @@ class Store:
             db.execute("ROLLBACK")
             raise
 
-    def prune(self, now, days_5m=30, days_1h=365, days_lookups=30):
+    def prune(self, now, days_5m=30, days_1h=365, days_sites_seen=30):
         db = self.db
         db.execute("DELETE FROM flows_1m WHERE bucket < ?", (now - KEEP_1M,))
         db.execute("DELETE FROM flows_5m WHERE bucket < ?", (now - days_5m * 86400,))
@@ -362,5 +371,5 @@ class Store:
         db.execute("DELETE FROM summary_days WHERE day < ?", (oldest,))
         db.execute("DELETE FROM day_names WHERE day < ?", (oldest,))
         db.execute("DELETE FROM services_1h WHERE hour < ?", (now - KEEP_1H_SUMMARY,))
-        db.execute("DELETE FROM lookups WHERE day < ?", (now - days_lookups * 86400,))
+        db.execute("DELETE FROM sites_seen WHERE day < ?", (now - days_sites_seen * 86400,))
         db.execute("PRAGMA optimize")

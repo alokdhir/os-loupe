@@ -1,6 +1,6 @@
 <model>
     <mount>//OPNsense/Loupe</mount>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <description>Loupe per-device traffic monitor</description>
     <items>
         <general>
@@ -31,12 +31,12 @@
                 <MinimumValue>1</MinimumValue>
                 <MaximumValue>3650</MaximumValue>
             </retention_1h>
-            <retention_lookups type="IntegerField">
+            <retention_sites_seen type="IntegerField">
                 <Default>30</Default>
                 <Required>Y</Required>
                 <MinimumValue>1</MinimumValue>
                 <MaximumValue>365</MaximumValue>
-            </retention_lookups>
+            </retention_sites_seen>
         </general>
         <services>
             <service type="ArrayField">

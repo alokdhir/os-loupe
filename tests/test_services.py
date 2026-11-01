@@ -240,7 +240,7 @@ class TestIcons(unittest.TestCase):
 
 class TestVpnLabels(unittest.TestCase):
     def test_rebuild_keeps_the_provider(self):
-        """A day rebuilt after its lookups were pruned keeps the VPN provider it was named with (day_names)."""
+        """A day rebuilt after its sites seen were pruned keeps the VPN provider it was named with (day_names)."""
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "loupe.db")
             s = store.Store(path)
@@ -252,7 +252,7 @@ class TestVpnLabels(unittest.TestCase):
             db = sqlite3.connect(path)
             try:
                 svc = services.ServiceMap()
-                self.assertEqual({k[2] for k in report.build_day(db, svc, day)[0]}, {"VPN (WireGuard)"})   # no lookups
+                self.assertEqual({k[2] for k in report.build_day(db, svc, day)[0]}, {"VPN (WireGuard)"})   # no sites seen
                 db.execute("INSERT INTO day_names (day, kind, ip, server, value) VALUES (?, 'provider', ?, '', 'NordVPN')",
                            (day, mac))
                 self.assertEqual({k[2] for k in report.build_day(db, svc, day)[0]}, {"VPN (NordVPN)"})

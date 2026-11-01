@@ -22,9 +22,9 @@
         <type>text</type>
     </field>
     <field>
-        <id>loupe.general.retention_lookups</id>
-        <label>Keep site lookups (days)</label>
+        <id>loupe.general.retention_sites_seen</id>
+        <label>Keep sites seen (days)</label>
         <type>text</type>
-        <help>Names each device looked up or connected to, including ones that moved no data.</help>
+        <help>Site names each device used (from DNS answers and TLS and QUIC connections), kept to name its traffic and identify it.</help>
     </field>
 </form>

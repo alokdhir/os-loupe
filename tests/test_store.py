@@ -148,7 +148,7 @@ class TestStore(unittest.TestCase):
             # address had in that hour
             self.assertEqual(sorted(db.execute("SELECT bucket, mac, up, down, conns FROM flows_1h")),
                              [(3600, "", 1, 2, 0), (3600, "02:00:00:00:00:01", 10, 100, 1)])
-            self.assertEqual(db.execute("SELECT count, first_seen, last_seen, mac FROM lookups").fetchone(),
+            self.assertEqual(db.execute("SELECT count, first_seen, last_seen, mac FROM sites_seen").fetchone(),
                              (3, 5, 9, "02:00:00:00:00:01"))
             row = db.execute("SELECT ip, hostname, info, first_seen, last_seen FROM devices").fetchone()
             self.assertEqual(row, ("10.9.1.20", "box", '{"mdns_models": ["model=X", "model=Y"]}', 5, 9))
@@ -164,7 +164,7 @@ class TestStore(unittest.TestCase):
             self.assertEqual(db.execute("SELECT count(*) FROM flows_1h").fetchone(), (2,))
 
 
-    def test_lookups_by_mac(self):
+    def test_sites_seen_by_mac(self):
         """Names follow the device across addresses; rows without a MAC still count by address."""
         with tempfile.TemporaryDirectory() as d:
             s = store.Store(os.path.join(d, "loupe.db"))
@@ -177,12 +177,13 @@ class TestStore(unittest.TestCase):
             [(m, ip, _hn, _info, names)] = s.devices_with_names(0)
             self.assertEqual((m, ip, names), (mac, "10.9.1.99", ["a.example", "b.example", "c.example"]))
 
-    def test_lookups_mac_migration(self):
-        """An older database gets the column, filled from the traffic rows of that day."""
+    def test_old_lookups_migration(self):
+        """An older database's lookups table becomes sites_seen and gets the MAC column, filled from the traffic
+        rows of that day."""
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "loupe.db")
             db = sqlite3.connect(path)
-            db.executescript(store.SCHEMA.replace("    mac TEXT NOT NULL DEFAULT '',   -- the device at that address then ('' = not known)\n", ""))
+            db.executescript(store.SCHEMA.replace("sites_seen", "lookups").replace("    mac TEXT NOT NULL DEFAULT '',   -- the device at that address then ('' = not known)\n", ""))
             db.execute("INSERT INTO lookups VALUES (86400, '10.9.1.22', 'a.example', 'dns', 1, 86400, 86400)")
             db.execute("INSERT INTO lookups VALUES (86400, '10.9.1.23', 'b.example', 'dns', 1, 86400, 86400)")
             db.execute("INSERT INTO flows_1h (bucket, ip, mac, server, port, proto) "
@@ -191,7 +192,7 @@ class TestStore(unittest.TestCase):
             db.close()
             s = store.Store(path)
             self.addCleanup(s.close)
-            self.assertEqual(s.db.execute("SELECT ip, mac FROM lookups ORDER BY ip").fetchall(),
+            self.assertEqual(s.db.execute("SELECT ip, mac FROM sites_seen ORDER BY ip").fetchall(),
                              [("10.9.1.22", "02:00:00:00:00:03"), ("10.9.1.23", "")])
 
 

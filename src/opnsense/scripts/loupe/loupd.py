@@ -65,7 +65,7 @@ class Loupe:
         self.ip_mac = {}
         self.flows = {}
         self.held = []
-        self.lookups = {}
+        self.sites_seen = {}
         self.devices = collections.defaultdict(dict)
         self.live = set()
         self.error_hour, self.errors_logged = None, 0
@@ -95,11 +95,11 @@ class Loupe:
             self.names.tls(ev, "sni" if kind == "tls" else "quic")
             self.ip_mac[ev["client"]] = ev["mac"]       # the frame's own source: who has the address now
             if ev.get("sni"):
-                self.lookup(ev["ts"], ev["client"], ev["sni"], kind if kind == "quic" else "sni")
+                self.saw_site(ev["ts"], ev["client"], ev["sni"], kind if kind == "quic" else "sni")
         elif kind == "dns":
             if self.is_local(ev["client"]):
                 self.names.dns_answer(ev)
-                self.lookup(ev["ts"], ev["client"], ev["name"], "dns")
+                self.saw_site(ev["ts"], ev["client"], ev["name"], "dns")
         elif kind == "dhcp":
             d = self.devices[ev["mac"]]
             d["ts"] = ev["ts"]
@@ -124,11 +124,11 @@ class Loupe:
                     for item in items:
                         seen[devid.seen_key(k, item)] = int(ev["ts"])
 
-    def lookup(self, ts, ip, name, source):
+    def saw_site(self, ts, ip, name, source):
         k = (local_day(ts), ip, name, source)
-        v = self.lookups.get(k)
+        v = self.sites_seen.get(k)
         if v is None:
-            self.lookups[k] = [1, int(ts), int(ts), self.ip_mac.get(ip, "")]
+            self.sites_seen[k] = [1, int(ts), int(ts), self.ip_mac.get(ip, "")]
         else:
             v[0] += 1
             v[2] = int(ts)
@@ -253,20 +253,20 @@ class Loupe:
                 if ":" not in ip:
                     d.setdefault("ip", ip)      # IPv4 only: static mappings and fallbacks match IPv4
                 d["ts"] = max(d.get("ts", 0), now)
-        for (_d, ip, *_rest), v in self.lookups.items():
+        for (_d, ip, *_rest), v in self.sites_seen.items():
             if not v[3]:
                 v[3] = self.ip_mac.get(ip, "")
         devices = {m: d for m, d in self.devices.items() if "ts" in d}
         self.names.expire(self.live, now)      # also while the database fails: it must not grow
         try:
-            self.store.write(self.flows, self.lookups, devices, now)
+            self.store.write(self.flows, self.sites_seen, devices, now)
         except Exception:
-            if len(self.flows) + len(self.lookups) > MAX_BUFFERED:     # the database has been failing for a while
+            if len(self.flows) + len(self.sites_seen) > MAX_BUFFERED:     # the database has been failing for a while
                 syslog.syslog(syslog.LOG_ERR, f"loupe: dropping {len(self.flows)} unwritten traffic rows")
-                self.flows, self.lookups = {}, {}
+                self.flows, self.sites_seen = {}, {}
                 self.devices = collections.defaultdict(dict)
             raise
-        self.flows, self.lookups = {}, {}
+        self.flows, self.sites_seen = {}, {}
         self.devices = collections.defaultdict(dict)
 
 
@@ -291,7 +291,7 @@ def main():
         syslog.syslog(syslog.LOG_WARNING, f"loupe: skipping device rule {json.dumps(rule)}: {problem}")
     r = conf.get("retention", {})
     lp = Loupe(ifaces, args.db, args.poll, args.flush,
-               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_lookups", 30)), conf.get("services"))
+               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_sites_seen", 30)), conf.get("services"))
     cap = Capture(lp.emit)
 
     def stop(*_):

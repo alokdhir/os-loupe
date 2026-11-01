@@ -83,7 +83,7 @@ Identification is **data, not code**: `data/devices.json` holds the rules, the i
 SQLite at `/var/db/loupe/loupe.db`, WAL mode: `loupd` is the only writer; `query.py` opens it read-only from configd.
 
 - `flows_1m` / `flows_5m` / `flows_1h`: per bucket, device (address and MAC), server, port, protocol and name — bytes up/down, packets, connections, and when loupd last added to the row. All three are written in the same transaction each minute (no separate roll-up). Kept 4 hours / 30 days / 365 days (the last two are settings).
-- `lookups`: names each device looked up or connected to, per day and device (address and MAC), including ones that moved no data. 30 days by default.
+- `sites_seen`: site names each device used, per day and device (address and MAC): from the DNS answers it received and from its TLS and QUIC connections, including ones that moved no data. 30 days by default.
 - `devices`: detected facts only.
 - `services_1h` / `services_1d`: per hour (the last 3 days) and per local day, device and service — bytes, connections, last seen. `sites_1d`: per local day, device, site (server name, or address) and service — bytes, connections, first and last seen, the site's addresses, and whether its service was inferred. `site_names`: each site, service and address in `sites_1d`, and the last day it was there. `day_names`: the evidence each day's traffic was named with. `summary_days`: when each day was built, and with which service map. loupd builds them from `flows_1h` (see Performance); the daily rows and evidence are pruned with `flows_1h`.
 
@@ -99,7 +99,7 @@ The device and service lists show a row per device or service, but they're made 
 
 ### Naming by day
 
-Some traffic is named from other traffic: nameless traffic takes the service of named traffic between the same device and server, and a VPN tunnel takes the provider whose domain the device looked up. The evidence for that is gathered per local day — every report, whatever its period, names traffic with the evidence of the day it happened. So the same traffic has the same name in the 1-hour, 24-hour and 30-day views, and an hour of a thermostat's nameless traffic is named from the lookup it made that morning.
+Some traffic is named from other traffic: nameless traffic takes the service of named traffic between the same device and server, and a VPN tunnel takes the provider whose domain the device looked up. The evidence for that is gathered per local day — every report, whatever its period, names traffic with the evidence of the day it happened. So the same traffic has the same name in the 1-hour, 24-hour and 30-day views, and an hour of a thermostat's nameless traffic is named from the DNS answer it received that morning.
 
 loupd builds each day from `flows_1h` with the reports' naming code (`build_day` in `lib/report.py`) and stores:
 
@@ -149,7 +149,7 @@ The grids sort, page and search on the server, so each click and keystroke asks 
 ### Naming traffic
 
 - **Address ranges.** Nameless traffic is named by who owns the server's address (Apple, Google…). The ranges are held per prefix length (`AddressTable` in `lib/services.py`): one dictionary lookup per length rather than a test against each range, and the answer is kept per address, since a report asks about the same servers many times. The result is the same as taking the first matching range in the list.
-- **Evidence for recent minutes.** Traffic loupd hasn't built yet is named with the day's stored evidence plus its own (`Namer` in `lib/report.py`), so a report reads those rows once and only the lookups made since the last build; traffic loupd has built uses the stored evidence alone.
+- **Evidence for recent minutes.** Traffic loupd hasn't built yet is named with the day's stored evidence plus its own (`Namer` in `lib/report.py`), so a report reads those rows once and only the sites seen since the last build; traffic loupd has built uses the stored evidence alone.
 
 ### Storage growth
 

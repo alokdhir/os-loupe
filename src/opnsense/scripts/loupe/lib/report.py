@@ -92,23 +92,23 @@ class Labels:
     Built from a window's traffic (the constructor), or from a day's stored evidence (`from_evidence`).
     """
 
-    def __init__(self, db, svc, table, start, flows=None, end=None, lookups_from=None, keys=None):
+    def __init__(self, db, svc, table, start, flows=None, end=None, sites_from=None, keys=None):
         """The evidence in [start, end) of `table`. `flows`: that window's rows from flow_totals() (or any rows
         starting ip, mac, name, server, port, proto), when the caller has them (saves two scans of the table).
-        VPN providers come from lookups since a day before the window, or since `lookups_from`. `keys` (addresses
+        VPN providers come from the sites seen since a day before the window, or since `sites_from`. `keys` (addresses
         and MACs): only those devices' evidence - all of it is per device, so it's the same for them."""
         self.svc = svc
-        counts = collections.defaultdict(collections.Counter)      # by MAC; lookups without one by address
+        counts = collections.defaultdict(collections.Counter)      # by MAC; sites seen without one by address
         end = end or 1 << 62
-        since = start - 86400 if lookups_from is None else lookups_from
+        since = start - 86400 if sites_from is None else sites_from
         mine, look, args = "", "", ()
         if keys is not None:
             args = (json.dumps(sorted(keys)),)
             mine = " AND ip IN (SELECT value FROM json_each(?))"
-            # providers are kept by MAC (by address for lookups without one): written so both use the MAC index
+            # providers are kept by MAC (by address for rows without one): written so both use the MAC index
             look = " AND (mac IN (SELECT value FROM json_each(?)) OR (mac = '' AND ip IN (SELECT value FROM json_each(?))))"
         # day < end: implied by first_seen < end, and without it SQLite skip-scans the MAC index (10x slower)
-        for mac, ip, name, n in db.execute(f"SELECT mac, ip, name, sum(count) FROM lookups WHERE day >= ? AND day < ? "
+        for mac, ip, name, n in db.execute(f"SELECT mac, ip, name, sum(count) FROM sites_seen WHERE day >= ? AND day < ? "
                                            f"AND last_seen >= ? AND first_seen < ?{look} GROUP BY mac, ip, name",
                                            (since - 86400, end, since, end, *args * 2)):
             p = svc.vpn_provider(name)
@@ -154,7 +154,7 @@ class Labels:
 
     def evidence(self):
         """What a day's names were decided from: (kind, ip, server, value). 'provider' rows hold the MAC (or the
-        address, for lookups without one) in `ip`."""
+        address, for sites seen without one) in `ip`."""
         out = [("owner", ip, server, s) for (ip, server), v in self.owners.items() for s in v]
         out += [("tunnel", ip, server, t) for (ip, server), t in self.tunnels.items()]
         out += [("provider", k, "", p) for k, p in self.provider.items()]
@@ -312,7 +312,7 @@ def build_day(db, svc, day, end=None, until=None):
     rows = db.execute("SELECT bucket, ip, mac, name, server, port, proto, up, down, conns, max(bucket, last) FROM flows_1h "
                       "WHERE bucket >= ? AND bucket < ?", (day, end)).fetchall()
     lab = Labels(db, svc, "flows_1h", day, [r[1:7] for r in rows], end)
-    # VPN providers the day was named with before: its lookups are kept for fewer days than its traffic, so a
+    # VPN providers the day was named with before: its sites seen are kept for fewer days than its traffic, so a
     # rebuild of an older day (a service names change) would otherwise call NordVPN plain WireGuard
     for key, provider in db.execute("SELECT ip, value FROM day_names WHERE day = ? AND kind = 'provider'", (day,)):
         lab.provider.setdefault(key, provider)
