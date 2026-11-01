@@ -407,7 +407,7 @@ class TestDailySummary(unittest.TestCase):
         db.execute("INSERT INTO site_names VALUES ('www.netflix.com', 1, 'Old name', '192.0.2.10', ?)", (self.today,))
         self.assertEqual(self.drilldowns(), before)
         self.assertEqual(self.query.cmd_sites(168, "old name")["rows"], [])
-        self.store.prune(self.today + 2 * 86400, days_1h=1)
+        self.store.prune(self.today + 3 * 86400, days_1h=1)     # not 2 days: today may have 25 hours
         self.assertEqual(db.execute("SELECT count(*) FROM site_names").fetchone(), (0,))
 
     def test_prune_keeps_whole_days(self):
