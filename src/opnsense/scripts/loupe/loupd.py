@@ -43,6 +43,7 @@ from lib import devid, names, neighbours, pfstate, report, services, store, unbo
 from lib.report import local_day  # noqa: E402
 
 
+CATCHUP_BUDGET = 5.0        # seconds of summary work per poll while days wait to be built
 MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
 
 
@@ -58,6 +59,7 @@ class Loupe:
         self.next_prune = time.monotonic() + 300
         self.next_classify = time.monotonic() + 30
         self.next_summary = time.monotonic() + 45
+        self.behind = False
         self.svc = services.ServiceMap(service_map)
         self.map_fingerprint = report.map_fingerprint(self.svc)
         self.stopping = False
@@ -157,8 +159,11 @@ class Loupe:
             self.guarded("networks", self.refresh_networks)
             self.guarded("classify", self.classify, now)
         if mono >= self.next_summary:
-            self.next_summary = mono + self.flush_every
-            self.guarded("summary", self.summarize, now)
+            # a second's work a minute; while days wait to be built (an update, a service names change), 5 s every
+            # poll: pf keeps closed states 30-45 s and capture's kernel buffer holds far longer than that of the
+            # handshakes and DNS it matches, so nothing is missed while it works
+            self.behind = self.guarded("summary", self.summarize, now, CATCHUP_BUDGET if self.behind else 1.0)
+            self.next_summary = mono + (self.poll_every if self.behind else self.flush_every)
         if mono >= self.next_prune:
             self.next_prune = mono + 3600
             self.guarded("prune", self.store.prune, now, *self.retention)
@@ -166,7 +171,7 @@ class Loupe:
     @staticmethod
     def guarded(what, fn, *args):
         try:
-            fn(*args)
+            return fn(*args)
         except Exception as e:
             syslog.syslog(syslog.LOG_ERR, f"loupe: {what} failed: {e!r}")
 
@@ -191,10 +196,10 @@ class Loupe:
 
     def summarize(self, now, budget=1.0):
         """Keep the summaries current: today every 10 minutes, a day again once it has ended, and every day after
-        the service map changed - newest first, about `budget` seconds of work a call."""
+        the service map changed - newest first, about `budget` seconds of work a call. True while days are left."""
         oldest = self.store.oldest_hour()
         if oldest is None:
-            return
+            return False
         first, today = local_day(oldest), local_day(now)
         state = self.store.summary_state(first)
         due = []
@@ -204,13 +209,14 @@ class Loupe:
                 due.append(d)
         t0 = time.monotonic()
         recent = local_day(now - report.HOURLY_DAYS * 86400)
-        for d in due:
+        for i, d in enumerate(due):
             end = report.next_day(d)
             daily, hourly, lab, sites = report.build_day(self.store.db, self.svc, d, end, report.sites_until(end, int(now)))
             self.store.replace_day(d, end, daily, hourly if d >= recent else None, lab.evidence(), self.map_fingerprint, now,
                                    sites)
             if time.monotonic() - t0 >= budget:
-                break
+                return i + 1 < len(due)
+        return False
 
     def refresh_macs(self):
         """The kernel's neighbour tables as they are now (not added to: rotating IPv6 privacy addresses would grow
