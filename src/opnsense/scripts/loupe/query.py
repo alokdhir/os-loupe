@@ -46,8 +46,8 @@ sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from lib import netif  # noqa: E402
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
-from lib.report import (Namer, add, add_site, build_day, days, local_day, next_day, pieces, recent_rows,  # noqa: E402
-                        site_rows)
+from lib.report import (WEB_PORTS, Namer, add, add_site, build_day, days, local_day, next_day, pieces, port_key,  # noqa: E402
+                        recent_rows, site_rows)
 from lib.services import HOSTING, ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
@@ -411,9 +411,6 @@ def device_filter(arg):
     return ("mac", arg.lower()) if MAC.match(arg.lower()) else ("ip", str(ipaddress.ip_address(arg)))
 
 
-WEB_PORTS = {"tcp/443", "udp/443", "tcp/80"}
-
-
 def traffic_tree(services, sites):
     """A device's traffic as the device page lists it: each service, biggest first, with its sites under it
     (`_children`, the grid's tree), each with its percent of the device's traffic. A site's ports are listed when
@@ -428,7 +425,8 @@ def traffic_tree(services, sites):
         kids[s].append({"id": f"{s}\0{name}", "label": name, "service": s, "inferred": v["inferred"], "pct": pct(v),
                         **{x: v[x] for x in ("down", "up", "conns", "first", "last")},
                         "servers": sorted(v["servers"])[:5], "networks": nets.sort(v["on"]),
-                        "ports": [p for p, _ in v["ports"].most_common() if p not in WEB_PORTS][:3]})
+                        "ports": [p for p, _ in sorted(v["ports"].items(), key=lambda kv: (-kv[1], kv[0]))
+                                  if p not in WEB_PORTS][:3]})
     rows = []
     for s, v in services.items():
         children = sorted(kids[s], key=lambda r: -(r["down"] + r["up"]))[:200]
@@ -460,7 +458,60 @@ def cmd_device(arg, hours):
                                              "servers": set(), "on": set(), "ports": collections.Counter()})
     timeline = collections.defaultdict(lambda: [0, 0])
     on = set()
-    for day, a, b in pieces(start, int(time.time()) + 1):       # each day's traffic named with that day's evidence
+
+    def count(ip, s, site_name, inferred, up, down, conns, first, last, servers, ports):
+        net = nets.of(ip)
+        on.add(net)
+        s = s or "Other"
+        sv = services[s]
+        sv["down"] += down
+        sv["up"] += up
+        sv["conns"] += conns
+        sv["on"].add(net)
+        sv["first"] = first if sv["first"] is None else min(sv["first"], first)
+        sv["last"] = max(sv["last"], last)
+        site = sites[(s, site_name)]
+        site["down"] += down
+        site["up"] += up
+        site["conns"] += conns
+        site["last"] = max(site["last"], last)
+        site["first"] = first if site["first"] is None else min(site["first"], first)
+        site["inferred"] = inferred if site["inferred"] is None else site["inferred"] and inferred    # as add_site()
+        site["servers"].update(servers)
+        site["on"].add(net)
+        site["ports"].update(ports)
+
+    # past two days the days loupd has summarized come from its site summary (named already); the rest - days not
+    # built yet, and today since its last build - is named here from the device's own rows, a day at a time
+    stored, live = [], []
+    for day, a, b in pieces(start, int(time.time()) + 1):
+        cut = min(b, namer.sites_until(day)) if table == "flows_1h" and a == day else a
+        if cut > a:
+            stored.append((day, cut))
+        if cut < b:
+            live.append((day, cut, b))
+    addresses = set()
+    if stored:
+        for day, ip, s, site_name, named, inferred, up, down, conns, first, last, servers, ports in db.execute(
+                f"SELECT day, ip, service, site, named, inferred, up, down, conns, first, last, servers, ports FROM sites_1d "
+                f"WHERE {col} = ? AND {DAYS_IN}", (val, json.dumps([d for d, _ in stored]))):
+            addresses.add(ip)
+            count(ip, s, site_name, bool(inferred), up, down, conns, first, last,
+                  servers.split() if named else [site_name], json.loads(ports) if ports else {})
+            if step >= 86400:
+                tl = timeline[day]
+                tl[0] += down
+                tl[1] += up
+        if step < 86400 and addresses:      # the chart by the hour: just bytes, no names needed
+            for day, cut in stored:
+                for bucket, down, up in db.execute(
+                        f"SELECT bucket, sum(down), sum(up) FROM {table} WHERE ip IN (SELECT value FROM json_each(?)) "
+                        f"AND bucket >= ? AND bucket < ? AND {col} = ? GROUP BY bucket",
+                        (json.dumps(sorted(addresses)), day, cut, val)):
+                    tl = timeline[slot(bucket)]
+                    tl[0] += down
+                    tl[1] += up
+    for day, a, b in live:       # each day's traffic named with that day's evidence
         rows = db.execute(f"SELECT bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns FROM {table} "
                           f"WHERE {col} = ? AND bucket >= ? AND bucket < ?", (val, a, b)).fetchall()
         if not rows:
@@ -468,27 +519,10 @@ def cmd_device(arg, hours):
         keys = tuple(sorted({r[2] for r in rows} | {r[3] for r in rows if r[3]}))
         lab = namer.labels(day, table, a, b, [r[2:8] for r in rows], keys)
         for bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns in rows:
-            net = nets.of(ip)
-            on.add(net)
             s, inferred = lab.named(ip, name, server, port, proto, mac)
-            s = s or "Other"
-            sv = services[s]
-            sv["down"] += down
-            sv["up"] += up
-            sv["conns"] += conns
-            sv["on"].add(net)
-            sv["first"] = bucket if sv["first"] is None else min(sv["first"], bucket)
-            sv["last"] = max(sv["last"], bucket, last)
-            site = sites[(s, name or server)]
-            site["down"] += down
-            site["up"] += up
-            site["conns"] += conns
-            site["last"] = max(site["last"], bucket, last)
-            site["first"] = bucket if site["first"] is None else min(site["first"], bucket)
-            site["inferred"] = inferred if site["inferred"] is None else site["inferred"] and inferred    # as add_site()
-            site["servers"].add(server)
-            site["on"].add(net)
-            site["ports"][f"{proto}/{port}" + (" in" if inbound else "")] += up + down
+            p = port_key(proto, port, inbound)
+            count(ip, s, name or server, inferred, up, down, conns, bucket, max(bucket, last), [server],
+                  {} if p in WEB_PORTS else {p: up + down})
             tl = timeline[slot(bucket)]
             tl[0] += down
             tl[1] += up

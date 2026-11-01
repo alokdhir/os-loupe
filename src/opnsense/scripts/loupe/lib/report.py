@@ -38,9 +38,10 @@ import time
 
 from .services import DATA_JSON, HOSTING
 
-SUMMARY_VERSION = 4     # raise when the naming or what the summaries hold changes, so loupd builds them again
+SUMMARY_VERSION = 5     # raise when the naming or what the summaries hold changes, so loupd builds them again
 HOURLY_DAYS = 3         # days kept in the hourly summary (report periods up to 48 hours)
 SETTLE = 120            # seconds until loupd has written a minute's traffic (it writes once a minute)
+WEB_PORTS = {"tcp/443", "udp/443", "tcp/80"}      # a site's ports are kept and shown when they aren't these
 
 
 def map_fingerprint(svc):
@@ -275,14 +276,19 @@ def add(out, key, up, down, conns, last):
         r[3] = max(r[3], last)
 
 
-def add_site(out, ip, mac, name, server, service, inferred, up, down, conns, first, last):
+def port_key(proto, port, inbound):
+    return f"{proto}/{port}" + (" in" if inbound else "")
+
+
+def add_site(out, ip, mac, name, server, service, inferred, up, down, conns, first, last, port=None):
     """Traffic per device, site and service: the site is the server's name, or its address when it has none.
-    {(ip, mac, site, named, service): [inferred, up, down, conns, first, last, {servers}]}; inferred while all of
-    it was named from other traffic on the same server."""
+    {(ip, mac, site, named, service): [inferred, up, down, conns, first, last, {servers}, Counter(port: bytes)]};
+    inferred while all of it was named from other traffic on the same server. `port` (port_key()): counted when
+    it isn't the web's."""
     k = (ip, mac, name or server, 1 if name else 0, service)
     r = out.get(k)
     if r is None:
-        out[k] = [inferred, up, down, conns, first, last, {server}]
+        r = out[k] = [inferred, up, down, conns, first, last, {server}, collections.Counter()]
     else:
         r[0] = r[0] and inferred
         r[1] += up
@@ -291,11 +297,13 @@ def add_site(out, ip, mac, name, server, service, inferred, up, down, conns, fir
         r[4] = min(r[4], first)
         r[5] = max(r[5], last)
         r[6].add(server)
+    if port and port not in WEB_PORTS:
+        r[7][port] += up + down
 
 
 def site_rows(sites):
     """add_site()'s totals as rows: (ip, mac, site, named, service, inferred, up, down, conns, first, last, servers)."""
-    return [(*k, *v) for k, v in sites.items()]
+    return [(*k, *v[:7]) for k, v in sites.items()]
 
 
 def sites_until(end, built):
@@ -309,7 +317,8 @@ def build_day(db, svc, day, end=None, until=None):
     last]}, {(hour, ip, mac, service): [...]}, Labels, add_site()'s totals of the hours before `until`)."""
     end = end or next_day(day)
     until = end if until is None else until
-    rows = db.execute("SELECT bucket, ip, mac, name, server, port, proto, up, down, conns, max(bucket, last) FROM flows_1h "
+    rows = db.execute("SELECT bucket, ip, mac, name, server, port, proto, up, down, conns, max(bucket, last), inbound "
+                      "FROM flows_1h "
                       "WHERE bucket >= ? AND bucket < ?", (day, end)).fetchall()
     lab = Labels(db, svc, "flows_1h", day, [r[1:7] for r in rows], end)
     # VPN providers the day was named with before: its sites seen are kept for fewer days than its traffic, so a
@@ -317,13 +326,14 @@ def build_day(db, svc, day, end=None, until=None):
     for key, provider in db.execute("SELECT ip, value FROM day_names WHERE day = ? AND kind = 'provider'", (day,)):
         lab.provider.setdefault(key, provider)
     daily, hourly, sites = {}, {}, {}
-    for bucket, ip, mac, name, server, port, proto, up, down, conns, last in rows:
+    for bucket, ip, mac, name, server, port, proto, up, down, conns, last, inbound in rows:
         s, inferred = lab.named(ip, name, server, port, proto, mac)
         s = s or ""
         add(daily, (ip, mac, s), up, down, conns, last)
         add(hourly, (bucket, ip, mac, s), up, down, conns, last)
         if bucket < until:
-            add_site(sites, ip, mac, name, server, s, bool(s) and inferred, up, down, conns, bucket, last)
+            add_site(sites, ip, mac, name, server, s, bool(s) and inferred, up, down, conns, bucket, last,
+                     port_key(proto, port, inbound))
     return daily, hourly, lab, sites
 
 

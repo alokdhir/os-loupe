@@ -139,7 +139,8 @@ CREATE TABLE IF NOT EXISTS sites_1d (
     conns INTEGER NOT NULL DEFAULT 0,
     first INTEGER NOT NULL DEFAULT 0,
     last INTEGER NOT NULL DEFAULT 0,
-    servers TEXT NOT NULL DEFAULT ''        -- a named site's addresses, space-separated
+    servers TEXT NOT NULL DEFAULT '',       -- a named site's addresses, space-separated
+    ports TEXT NOT NULL DEFAULT ''          -- JSON {port: bytes} of the ports that aren't the web's ('' = none)
 );
 -- one row per day, device, site and service (loupd writes a day at a time). A rowid table: its indexes hold the
 -- rowid, not the whole key. By day (a day replaced, the search), and by the services list row (its service, or
@@ -147,6 +148,7 @@ CREATE TABLE IF NOT EXISTS sites_1d (
 CREATE INDEX IF NOT EXISTS sites_1d_day ON sites_1d (day);
 CREATE INDEX IF NOT EXISTS sites_1d_listed ON sites_1d (lower(CASE WHEN service != '' THEN service ELSE site END), day);
 CREATE INDEX IF NOT EXISTS sites_1d_site ON sites_1d (site, day);
+CREATE INDEX IF NOT EXISTS sites_1d_mac ON sites_1d (mac, day);
 CREATE INDEX IF NOT EXISTS services_1d_service ON services_1d (service, day);
 -- each site, service and address in sites_1d, and the last day it was there: the services search finds what matches
 -- its text here (thousands of rows a year, not millions), then reads only those sites' and services' rows. Rows
@@ -193,6 +195,8 @@ class Store:
         for col in ("name", "model"):      # added after the first release
             if col not in cols:
                 self.db.execute(f"ALTER TABLE devices ADD COLUMN {col} TEXT")
+        if "ports" not in {r[1] for r in self.db.execute("PRAGMA table_info(sites_1d)")}:     # added later; the
+            self.db.execute("ALTER TABLE sites_1d ADD COLUMN ports TEXT NOT NULL DEFAULT ''")    # days are rebuilt
         rebuilt = False
         for table in FLOW_INDEXES:
             if "last" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
@@ -336,8 +340,9 @@ class Store:
                            [(day, *k, *v) for k, v in daily.items()])
             db.execute("DELETE FROM sites_1d WHERE day = ?", (day,))
             db.executemany("INSERT INTO sites_1d (day, ip, mac, site, named, service, inferred, up, down, conns, first, last, "
-                           "servers) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                           [(day, *k, int(v[0]), *v[1:6], " ".join(sorted(v[6])) if k[3] else "")
+                           "servers, ports) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                           [(day, *k, int(v[0]), *v[1:6], " ".join(sorted(v[6])) if k[3] else "",
+                             json.dumps(dict(v[7]), sort_keys=True) if len(v) > 7 and v[7] else "")
                             for k, v in (sites or {}).items()])
             names = {(k[2], k[3], k[4], server) for k, v in (sites or {}).items() for server in (v[6] if k[3] else (k[2],))}
             db.executemany("INSERT INTO site_names (site, named, service, server, last_day) VALUES (?,?,?,?,?) "

@@ -367,6 +367,19 @@ class TestDailySummary(unittest.TestCase):
         self.assertEqual(devices["02:00:00:00:00:61"]["down"], 3 * (1000 + 1001 + 1002) + 9 * 70)
         self.assertEqual(devices["02:00:00:00:00:61"]["top"][0], "Netflix")
 
+    def test_same_device_page_from_the_summary(self):
+        """Past two days a device's page reads the built days from the site summary: the same tree (ports too) and
+        chart as naming its hourly rows."""
+        pages = lambda: [self.query.cmd_device(mac, h) for mac in ("02:00:00:00:00:61", "02:00:00:00:00:62")
+                         for h in (168, 8760)]
+        unsummarized = pages()
+        self.summarize()
+        self.assertEqual(pages(), unsummarized)
+        tree = unsummarized[0]["traffic"]
+        self.assertEqual([c["ports"] for r in tree for c in r["_children"]], [[], ["udp/51820"]])
+        self.assertEqual(self.store.db.execute("SELECT DISTINCT ports FROM sites_1d WHERE ports != ''").fetchall(),
+                         [('{"udp/51820": 360}',)])
+
     def drilldowns(self):
         """A service's traffic (a services list row clicked) and the services search, over periods read by day."""
         q = self.query
