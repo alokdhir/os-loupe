@@ -73,7 +73,7 @@ Each connection gets the name from its own handshake first, then from the DNS an
 | Per hour | 1&nbsp;year | longer periods, charted by the day past 90 days |
 | Site lookups | 30&nbsp;days | naming VPN tunnels, recognising devices by the domains they use |
 
-Site lookups are kept per device per day, with a count and the first and last time seen. Retention for all but the minute rows is set under *Settings → General*: **Keep 5-minute detail**, **Keep hourly totals** and **Keep site lookups** (in days). Past 2 days, reports read hourly rows even where 5-minute rows still exist: a week or a month by the hour is plenty, and far fewer rows to read.
+Site lookups (names a device looked up or connected to) are kept per device per day, as evidence for naming; reports don't list them. Retention for all but the minute rows is set under *Settings → General*: **Keep 5-minute detail**, **Keep hourly totals** and **Keep site lookups** (in days). Past 2 days, reports read hourly rows even where 5-minute rows still exist: a week or a month by the hour is plenty, and far fewer rows to read.
 
 **Names.** Renaming a device or a service changes its whole history. Device names, types and icons are applied when a report is built. Service names are kept in daily summaries, which Loupe builds again, newest day first, after you change the service names or update Loupe; until it has finished, periods of 7 days and longer load slower, and the Devices and Services tabs show how many days are left.
 
@@ -100,9 +100,9 @@ Each identification records the evidence it rests on, shown as a tooltip on the 
 
 OPNsense's NetFlow on a bridged LAN misses LAN→internet packets on ingress — uploads only show up after NAT, with the router's public address — so per-device upload totals in Insight are wrong. NetFlow also exports long connections only every 30 minutes and has no site names. Loupe's pf counters are exact in both directions and per device.
 
-### Site lookups and Unbound's DNS reporting
+### Unbound's DNS reporting
 
-Both show which device looked up which name, but Loupe needs its own record anyway: it uses the DNS answers a device received to name that device's connections, the domains it talks to to recognise its type, and VPN providers' domains to label its tunnels. Loupe also sees names in TLS and QUIC connection setup, so it catches devices that bypass the router's DNS (DNS over HTTPS, hard-coded resolvers), it works with dnsmasq as well as Unbound, it ties lookups to the device by MAC, and it keeps them 30 days (Unbound's report keeps 7). Unbound's report is the place for per-query detail: query types, response times and blocklist results.
+To see which device looked up which name, use Unbound's report: it has per-query detail (query types, response times, blocklist results). Loupe doesn't list lookups. It keeps its own record of them only as evidence: the DNS answers a device received name that device's connections, the domains it uses help recognise its type, and VPN providers' domains label its tunnels. It also takes names from TLS and QUIC connection setup, so it names traffic from devices that bypass the router's DNS (DNS over HTTPS, hard-coded resolvers), and it works with dnsmasq as well as Unbound.
 
 ### Compared with ntopng and Zenarmor
 
