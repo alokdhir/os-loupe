@@ -191,7 +191,7 @@ Reply with ONE JSON object in a single ```json code block. No comments inside th
 }}
 ```
 - "model" only if the evidence shows it; otherwise leave it out. "confidence": high, medium or low.
-- "models": for rows whose model column is a code rather than a product name (e.g. AppleTV14,1, Mac16,1), the product's name, whether or not you also wrote a rule for the row. Leave out codes you don't know.
+- "models": for every row whose model column isn't the name people know the product by - an internal identifier (Apple's Mac16,1), a part number or SKU (any maker's: a streaming stick's ABCD002, a thermostat's XY501) - the product's everyday name with its generation, whether or not you also wrote a rule for the row. Check identifiers against a reliable source (e.g. the maker's support pages or a model identifier list); leave out codes you can't confirm, and models that are already a readable name.
 - "devices" lists row ids exactly as they appear in the table; every row appears in a rule's "devices" or in "unknown".
 - Don't invent evidence that isn't in the table.
 
