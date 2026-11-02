@@ -586,6 +586,100 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $(document).on('submit', '.modal form', function (e) { e.preventDefault(); });
 
+        /* AI Rule Generator: ask (the table and question), paste the answer, review what each rule would change, save */
+        const ai = {ids: {}, names: {}, prompt: '', picked: null};
+        const AI_FIELDS = {vendor: '{{ lang._("MAC vendor") }}', hostname: '{{ lang._("Host name") }}',
+            mdns_name: '{{ lang._("Bonjour name") }}', mdns_model: '{{ lang._("Bonjour model") }}',
+            mdns_service: '{{ lang._("Bonjour service") }}', category: '{{ lang._("Category code") }}',
+            dhcp_vendor: '{{ lang._("DHCP vendor class") }}', talks_to: '{{ lang._("Talks to") }}'};
+        function aiLoad() {
+            const macs = ai.picked === null ? '' : Array.from(ai.picked).join(',');
+            ajaxCall('/api/loupe/settings/ai_table', {macs: macs}, function (data) {
+                if (!data || data.error) { $('#ai-summary').text((data || {}).error || ''); return; }
+                ai.prompt = data.prompt || '';
+                ai.ids = {}; ai.names = {};
+                (data.rows || []).forEach(r => { ai.ids[r.id] = r.macs; ai.names[r.id] = r.names; });
+                const n = (data.rows || []).reduce((a, r) => a + r.macs.length, 0);
+                $('#ai-summary').text(n ? n + ' {{ lang._("devices") }}' + ((data.rows || []).length < n
+                    ? ' {{ lang._("in") }} ' + data.rows.length + ' {{ lang._("rows (identical ones share a row)") }}' : '')
+                    : '{{ lang._("No devices to ask about.") }}');
+                $('#ai-copy').prop('disabled', !ai.prompt);
+                $('#ai-prompt').text(ai.prompt);
+                if (ai.picked === null) {           /* the choice list, with Loupe's pick ticked */
+                    ai.picked = new Set((data.devices || []).filter(d => d.picked).map(d => d.mac));
+                    $('#ai-devices').html((data.devices || []).map(d => '<div class="checkbox" style="margin: 2px 0"><label>'
+                        + '<input type="checkbox" value="' + esc(d.mac) + '"' + (d.picked ? ' checked' : '') + '> '
+                        + esc(d.name) + ' <span class="text-muted">' + esc(d.type || '{{ lang._("no type") }}') + '</span></label></div>').join(''));
+                }
+            });
+        }
+        $('#ai-devices').on('change', 'input', function () {
+            this.checked ? ai.picked.add(this.value) : ai.picked.delete(this.value);
+            aiLoad();
+        });
+        $('#ai-choose').click(function (e) { e.preventDefault(); $('#ai-devices').toggle(); });
+        $('#ai-show').click(function (e) { e.preventDefault(); $('#ai-prompt').toggle(); });
+        $('#ai-copy').click(function () {
+            const done = () => $(this).find('i').removeClass('fa-copy').addClass('fa-check');
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(ai.prompt).then(done);
+            } else {
+                $('#ai-prompt').show();
+                const range = document.createRange();
+                range.selectNodeContents($('#ai-prompt')[0]);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                document.execCommand('copy');
+                done();
+            }
+        });
+        function aiWhen(when) {
+            return Object.entries(when || {}).map(([f, v]) => (AI_FIELDS[f] || f) + ' ' + (Array.isArray(v) ? v.join(' or ') : v))
+                .join(' {{ lang._("and") }} ');
+        }
+        let aiChecked = [];
+        $('#ai-check').click(function () {
+            $('#ai-saved').text('');
+            ajaxCall('/api/loupe/settings/ai_preview', {reply: $('#ai-reply').val(), ids: JSON.stringify(ai.ids)}, function (data) {
+                $('#ai-review').show();
+                const $body = $('#ai-rules tbody').empty();
+                if (!data || data.error) { $('#ai-problem').text((data || {}).error || '{{ lang._("No answer from Loupe.") }}').show(); return; }
+                $('#ai-problem').text(data.problem || '').toggle(!!data.problem);
+                aiChecked = data.rules || [];
+                aiChecked.forEach(function (r, i) {
+                    const flags = [];
+                    if (r.invalid) flags.push('<span class="text-danger">' + esc(r.invalid) + '</span>');
+                    if (r.spills) flags.push('<span class="text-danger">{{ lang._("also changes") }} ' + r.spills + ' {{ lang._("other devices") }}</span>');
+                    if (r.nothing && !r.invalid) flags.push('<span class="text-warning">{{ lang._("changes nothing") }}</span>');
+                    if (r.vaguer) flags.push('<span class="text-warning">{{ lang._("makes a type vaguer") }}</span>');
+                    const changes = (r.changes || []).map(c => c[2] + ' × ' + esc(c[0] || '{{ lang._("no type") }}') + ' → ' + esc(c[1])).join('<br>');
+                    const rows = (r.devices || []).map(d => esc((ai.names[d] || [d]).join(', '))).join('; ');
+                    $body.append('<tr><td><input type="checkbox" data-i="' + i + '"' + (r.pick ? ' checked' : '') + (r.fields ? '' : ' disabled') + '></td>'
+                        + '<td>' + esc(r.type) + (r.vendor ? ' <span class="text-muted">' + esc(r.vendor) + '</span>' : '')
+                        + (r.model ? ' <span class="text-muted">' + esc(r.model) + '</span>' : '') + '</td>'
+                        + '<td>' + esc(aiWhen(r.when)) + '</td><td>' + rows + '</td><td>' + (changes || '—') + '</td>'
+                        + '<td>' + flags.concat(r.confidence ? ['{{ lang._("confidence") }}: ' + esc(r.confidence)] : [])
+                            .concat(r.note ? [esc(r.note)] : []).join('<br>') + '</td></tr>');
+                });
+                const unknown = (data.unknown || []).map(u => esc((u.devices || []).map(d => (ai.names[d] || [d]).join(', ')).join('; '))
+                    + (u.note ? ': ' + esc(u.note) : ''));
+                $('#ai-unknown').html(unknown.length ? '<b>{{ lang._("Not identified") }}</b><br>' + unknown.join('<br>') : '');
+            });
+        });
+        $('#ai-save').click(function () {
+            const picked = $('#ai-rules input:checked').map(function () { return aiChecked[$(this).data('i')]; }).get();
+            if (!picked.length) { $('#ai-saved').text('{{ lang._("Tick the rules to save.") }}'); return; }
+            const rules = picked.map(r => Object.assign({}, r.fields,
+                {description: [r.vendor, r.model, r.note].filter(Boolean).join(' · ')}));
+            ajaxCall('/api/loupe/settings/ai_save', {rules: rules, ai_model: $('#ai-model').val()}, function (data) {
+                if (!data || data.result !== 'saved') { $('#ai-saved').addClass('text-danger').text((data || {}).error || '{{ lang._("Not saved.") }}'); return; }
+                $('#ai-saved').removeClass('text-danger').text(data.saved + ' {{ lang._("rules saved under Custom, source AI. Apply to use them.") }}');
+                $('#ai-rules input:checked').prop('checked', false).prop('disabled', true);
+                $('#{{ formGridRules['table_id'] }}').bootgrid('reload');
+            });
+        });
+        $('.loupe-source .btn[data-source="ai"]').click(function () { if (ai.picked === null) aiLoad(); });
+
         $('#reconfigureAct').SimpleActionButton({
             onPreAction: function () {
                 const dfObj = new $.Deferred();
@@ -764,9 +858,11 @@ POSSIBILITY OF SUCH DAMAGE.
                 <div class="btn-group btn-group-xs loupe-source">
                     <button type="button" class="btn btn-default active" data-source="mine">{{ lang._('Custom') }}</button>
                     <button type="button" class="btn btn-default" data-source="builtin">{{ lang._('Built-in') }}</button>
+                    <button type="button" class="btn btn-default" data-source="ai">{{ lang._('AI Rule Generator') }}</button>
                 </div>
                 <p class="loupe-source-help" data-for="mine" style="margin: 8px 0 0">{{ lang._('Set the type of every device that matches, e.g. all devices whose MAC vendor is Tuya are Window shades. Your rules are checked before the built-in ones; an override for one device still wins. Your rules are tried by their strongest clue (MAC prefix, Bonjour model, host name, DHCP vendor class, domain, Bonjour service, MAC vendor), then in the order you added them; the first that matches decides. Apply to use them: devices are reclassified within a minute.') }}</p>
                 <p class="loupe-source-help" data-for="builtin" style="margin: 8px 0 0; display: none">{{ lang._('The rules Loupe ships with, in the order they are tried within each kind of evidence (Bonjour model, host name, DHCP, domains it talks to, MAC vendor). The first one that matches decides the type.') }}</p>
+                <p class="loupe-source-help" data-for="ai" style="margin: 8px 0 0; display: none">{{ lang._('Ask any AI chat (Claude, ChatGPT, Gemini...) what the devices Loupe can only guess at are, and turn its answer into rules. Loupe sends nothing anywhere: you copy the question and paste the answer. The question carries what the devices announce and the domains they use, without MAC or IP addresses.') }}</p>
             </div>
             <div data-source-pane="mine">
                 {{ partial('layout_partials/base_bootgrid_table', formGridRules) }}
@@ -788,6 +884,41 @@ POSSIBILITY OF SUCH DAMAGE.
                     </tr></thead>
                     <tbody></tbody>
                 </table>
+            </div>
+            <div data-source-pane="ai" style="display: none">
+                <div class="loupe-ai-step">
+                    <h4>{{ lang._('1. Ask') }}</h4>
+                    <p class="text-muted">{{ lang._('Copy the question into an AI chat, ideally one that can search the web. It covers the devices below: those with no type or only a generic one, unless you choose others.') }}</p>
+                    <p><span id="ai-summary"></span> <a href="#" id="ai-choose">{{ lang._('Choose devices') }}</a></p>
+                    <div id="ai-devices" style="display: none; max-height: 18em; overflow-y: auto; margin-bottom: 10px"></div>
+                    <div class="form-inline" style="margin-bottom: 6px">
+                        <input id="ai-model" type="text" class="form-control" style="width: 16em" placeholder="{{ lang._('AI model, e.g. Claude Opus 5.5') }}">
+                        <button type="button" class="btn btn-primary" id="ai-copy"><i class="fa fa-copy fa-fw"></i> {{ lang._('Copy question') }}</button>
+                        <a href="#" id="ai-show">{{ lang._('Show question') }}</a>
+                    </div>
+                    <pre id="ai-prompt" style="display: none; max-height: 24em; overflow: auto; white-space: pre-wrap"></pre>
+                </div>
+                <div class="loupe-ai-step">
+                    <h4>{{ lang._('2. Paste the answer') }}</h4>
+                    <p class="text-muted">{{ lang._('Paste the whole reply; the rules are read from it, even when the reply is cut off.') }}</p>
+                    <textarea id="ai-reply" class="form-control" rows="8" style="font-family: monospace"></textarea>
+                    <button type="button" class="btn btn-default" id="ai-check" style="margin-top: 6px"><i class="fa fa-check fa-fw"></i> {{ lang._('Check rules') }}</button>
+                </div>
+                <div class="loupe-ai-step" id="ai-review" style="display: none">
+                    <h4>{{ lang._('3. Review') }}</h4>
+                    <p class="text-muted">{{ lang._('What each rule would change on your network. Rules that reach other devices, change nothing or make a type vaguer start unticked.') }}</p>
+                    <div id="ai-problem" class="alert alert-warning" style="display: none"></div>
+                    <table class="table table-condensed table-striped" id="ai-rules">
+                        <thead><tr>
+                            <th style="width: 2em"></th><th>{{ lang._('Type') }}</th><th>{{ lang._('Matches') }}</th>
+                            <th>{{ lang._('For') }}</th><th>{{ lang._('Would change') }}</th><th>{{ lang._('Notes') }}</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                    <p id="ai-unknown" class="text-muted"></p>
+                    <button type="button" class="btn btn-primary" id="ai-save"><i class="fa fa-save fa-fw"></i> {{ lang._('Save selected as rules') }}</button>
+                    <span id="ai-saved" style="margin-left: 10px"></span>
+                </div>
             </div>
         </div>
         <div id="page_overrides" class="loupe-page">

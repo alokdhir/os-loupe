@@ -161,9 +161,9 @@ class SettingsController extends ApiMutableModelControllerBase
      * A rule needs at least one clue. Host name, Bonjour model and DHCP vendor patterns are regular expressions:
      * refuse ones that don't compile here, where the dialog can show it, instead of loupd skipping them later.
      */
-    private function checkRule()
+    private function checkRule(?array $rule = null)
     {
-        $rule = $this->request->getPost('rule');
+        $rule = $rule ?? $this->request->getPost('rule');
         $rule = is_array($rule) ? $rule : [];
         $clue = fn($field) => trim((string)($rule[$field] ?? ''));
         if (count(array_filter(array_keys(self::RULE_FIELDS), fn($f) => $clue($f) !== '')) === 0) {
@@ -193,6 +193,81 @@ class SettingsController extends ApiMutableModelControllerBase
     private function ruleError(string $field, string $message)
     {
         return ['result' => 'failed', 'validations' => [$field => $message]];
+    }
+
+    /* ---- AI Rule Generator: the table and prompt, the reply checked, the rules picked saved (query.py, lib/airules.py) */
+
+    private function aiQuery(array $args)
+    {
+        $out = json_decode((new Backend())->configdpRun('loupe query', $args) ?? '', true);
+        return is_array($out) ? $out : ['error' => gettext('No answer from Loupe.')];
+    }
+
+    /* the devices to ask about (MACs picked by hand, comma-separated; none: the ones Loupe can't tell apart) */
+    public function aiTableAction()
+    {
+        $macs = strtolower(trim((string)$this->request->getPost('macs', null, '')));
+        if ($macs !== '' && !preg_match('/^[0-9a-f]{2}(:[0-9a-f]{2}){5}(,[0-9a-f]{2}(:[0-9a-f]{2}){5})*$/', $macs)) {
+            return ['error' => gettext('Invalid device list.')];
+        }
+        return $this->aiQuery(['aitable', $macs]);
+    }
+
+    /* the AI's reply, checked against every device: left in a file for query.py (too long for an argument), which removes it */
+    public function aiPreviewAction()
+    {
+        $reply = (string)$this->request->getPost('reply', null, '');
+        $ids = json_decode((string)$this->request->getPost('ids', null, ''), true);
+        if (trim($reply) === '' || strlen($reply) > 262144 || !is_array($ids)) {
+            return ['error' => gettext('Paste the AI\'s answer first.')];
+        }
+        foreach ($ids as $id => $macs) {
+            if (!preg_match('/^D\d{1,3}$/', (string)$id) || !is_array($macs)) {
+                return ['error' => gettext('Ask again: the device list is out of date.')];
+            }
+        }
+        $path = '/tmp/loupe-ai-' . bin2hex(random_bytes(8)) . '.json';
+        if (@file_put_contents($path, json_encode(['reply' => $reply, 'ids' => $ids])) === false) {
+            return ['error' => gettext('Could not keep the answer for checking.')];
+        }
+        @chmod($path, 0600);
+        $out = $this->aiQuery(['aipreview', $path]);
+        @unlink($path);
+        return $out;
+    }
+
+    /* the rules picked, saved as the user's own with source AI; validated as the rule dialog does */
+    public function aiSaveAction()
+    {
+        $rules = $this->request->getPost('rules');
+        $model = trim((string)$this->request->getPost('ai_model', null, ''));
+        if (!$this->request->isPost() || !is_array($rules) || empty($rules) || strlen($model) > 64) {
+            return ['result' => 'failed', 'error' => gettext('Nothing to save.')];
+        }
+        $allowed = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description']);
+        Config::getInstance()->lock();
+        $mdl = $this->getModel();
+        $saved = 0;
+        foreach ($rules as $i => $rule) {
+            $rule = is_array($rule) ? array_intersect_key($rule, array_flip($allowed)) : [];
+            $rule['description'] = mb_substr(trim((string)($rule['description'] ?? '')), 0, 255);
+            $bad = $this->checkRule($rule);
+            if ($bad !== null || trim((string)($rule['type'] ?? '')) === '') {
+                return ['result' => 'failed', 'error' => sprintf(gettext('Rule %d: %s'), $i + 1,
+                    $bad ? implode(' ', $bad['validations']) : gettext('it has no type.'))];
+            }
+            $node = $mdl->rules->rule->Add();
+            $node->setNodes($rule + ['source' => 'ai', 'ai_model' => $model]);
+            $saved++;
+        }
+        $messages = $mdl->performValidation();
+        if (count($messages)) {
+            foreach ($messages as $msg) {
+                return ['result' => 'failed', 'error' => $msg->getField() . ': ' . $msg->getMessage()];
+            }
+        }
+        $this->save(false, true);
+        return ['result' => 'saved', 'saved' => $saved];
     }
 
     public function addRuleAction()
