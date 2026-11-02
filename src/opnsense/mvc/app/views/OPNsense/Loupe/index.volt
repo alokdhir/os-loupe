@@ -137,11 +137,13 @@ POSSIBILITY OF SUCH DAMAGE.
                 return ago(row[column.id]);
             },
             servicedevice: function (column, row) {
+                if (!row.device) return '';             /* a site row under its device */
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
                     + '<a href="#device=' + esc(row.mac || row.ip) + '">' + esc(row.device) + '</a>'
                     + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '');
             },
             servicesite: function (column, row) {
+                if (row._children) return '<span class="text-muted">' + row.sites + ' {{ lang._("sites") }}</span>';
                 return copyable(row.name || (row.servers || []).join(', ')) + inferred(row);
             },
             copy: function (column, row) {
@@ -324,7 +326,8 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-results').show();
             $('#loupe-service-title').text(q);
             chartSpan('loupe-service-chart', null);
-            grid('grid-traffic', '/api/loupe/report/search_service_traffic', () => Object.assign({q: q}, ZOOMED['loupe-service-chart'].range || {}));
+            grid('grid-traffic', '/api/loupe/report/search_service_traffic', () => Object.assign({q: q}, ZOOMED['loupe-service-chart'].range || {}),
+                 Object.assign({}, TREE, {dataTreeElementColumn: 'device'}));       /* devices opening to their sites */
             /* only the answer to the latest request is drawn; until it comes, and if it fails, no chart (not the last one) */
             const asked = q + '|' + hours + '|' + netFilter();
             clearChart('loupe-service-chart');
@@ -945,6 +948,7 @@ POSSIBILITY OF SUCH DAMAGE.
             <p id="svcspan-note" class="text-muted" style="display: none; margin: 4px 0 0"></p>
             <table id="grid-traffic" class="table table-condensed table-hover table-striped table-responsive">
                 <thead><tr>
+                    <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
                     <th data-column-id="device" data-formatter="servicedevice">{{ lang._('Device') }}</th>
                     <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
                     <th data-column-id="name" data-formatter="servicesite">{{ lang._('Site') }}</th>

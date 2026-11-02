@@ -318,7 +318,55 @@ class ReportController extends ApiControllerBase
             $args[] = "{$start}-{$end}";
         }
         $data = $this->cached($args);
-        return $this->grid($data['traffic'] ?? [], 'down', null, self::SEARCH['traffic']);
+        /* one row per device, opening to its sites (the grid's tree, as a device's page); a search keeps a device
+           whose name or address matches with all its sites, else only the matching sites under their device, opened */
+        $words = preg_split('/\s+/', trim((string)$this->request->getPost('searchPhrase', null, '')), -1, PREG_SPLIT_NO_EMPTY);
+        $match = function ($text) use ($words) {
+            foreach ($words as $w) {
+                if (mb_stripos($text, $w) === false) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $devices = [];
+        foreach ($data['traffic'] ?? [] as $r) {
+            $key = $r['mac'] ?: $r['ip'];
+            if (!isset($devices[$key])) {
+                $devices[$key] = [
+                    'id' => $key, 'device' => $r['device'], 'type' => $r['type'], 'icon' => $r['icon'], 'mac' => $r['mac'],
+                    'ip' => $r['ip'], 'down' => 0, 'up' => 0, 'conns' => 0, 'pct' => 0, 'first' => $r['first'],
+                    'last' => 0, '_children' => [],
+                ];
+            }
+            $d = &$devices[$key];
+            foreach (['down', 'up', 'conns', 'pct'] as $f) {
+                $d[$f] += $r[$f] ?? 0;
+            }
+            $d['first'] = min($d['first'], $r['first']);
+            $d['last'] = max($d['last'], $r['last']);
+            $d['_children'][] = ['id' => $key . "\0" . ($r['name'] ?: implode(' ', $r['servers'] ?? [])), 'device' => '',
+                'ip' => '', 'name' => $r['name'], 'servers' => $r['servers'] ?? [], 'inferred' => $r['inferred'] ?? false,
+                'pct' => $r['pct'] ?? 0, 'down' => $r['down'], 'up' => $r['up'], 'conns' => $r['conns'],
+                'first' => $r['first'], 'last' => $r['last']];
+            unset($d);
+        }
+        $rows = [];
+        foreach ($devices as $d) {
+            if (!empty($words) && !$match($d['device'] . ' ' . $d['ip'])) {
+                $d['_children'] = array_values(array_filter($d['_children'], fn($c) =>
+                    $match($c['name'] . ' ' . implode(' ', $c['servers']))));
+                if (empty($d['_children'])) {
+                    continue;
+                }
+                $d['_open'] = true;
+            }
+            usort($d['_children'], fn($a, $b) => ($b['down'] + $b['up']) <=> ($a['down'] + $a['up']));
+            $d['sites'] = count($d['_children']);
+            $d['pct'] = round($d['pct'], 3);
+            $rows[] = $d;
+        }
+        return $this->grid($rows, 'down', []);       /* searched here: no row search on top */
     }
 
     /* the same row's chart: asked separately, so the list doesn't wait for it */
