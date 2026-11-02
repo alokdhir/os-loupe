@@ -37,6 +37,7 @@ usage:
 import collections
 import ipaddress
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -44,7 +45,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib import netif  # noqa: E402
+from lib import airules, devid, netif  # noqa: E402
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
 from lib.report import (WEB_PORTS, Namer, add, add_site, build_day, days, local_day, next_day, pieces, port_key,  # noqa: E402
                         recent_rows, site_rows)
@@ -808,6 +809,80 @@ def hours_arg(v):
     return h
 
 
+# ---- AI Rule Generator (lib/airules.py) ---------------------------------------------------------------------------
+AI_REPLY = re.compile(r"^/tmp/loupe-ai-[A-Za-z0-9]{6,32}\.json$")      # where the GUI leaves a pasted reply
+
+
+def ai_devices(db, ov):
+    """The devices seen in the last week as loupd classifies them: [{mac, name, type, type_source, vendor, model,
+    hostname, private, custom, info, names, for_rules: (mac, host name, info, names)}]; a linked device once."""
+    since = time.time() - 7 * 86400
+    seen = {}
+    for mac, ip, name in db.execute("SELECT DISTINCT mac, ip, name FROM sites_seen WHERE day >= ?", (since,)):
+        seen.setdefault(mac or ip, set()).add(name)
+    info = devices_info(db, ov)
+    leases, hosts = devid.leases(), devid.static_hosts()
+    out = []
+    for mac, ip, hostname, raw in db.execute("SELECT mac, ip, hostname, info FROM devices WHERE last_seen >= ?", (since,)):
+        d = info.get(mac) or {}
+        if d.get("mac", mac) != mac:            # another MAC of a linked device
+            continue
+        current = devid.current_mdns(json.loads(raw or "{}"))
+        names = sorted(seen.get(mac, set()) | seen.get(ip, set()))
+        out.append({"mac": mac, "name": d.get("name") or hostname or ip or mac, "type": d.get("type") or "",
+                    "type_source": d.get("type_source") or "", "vendor": d.get("vendor") or "",
+                    "model": d.get("model") or "", "hostname": hostname or "", "private": is_private(mac),
+                    "custom": d.get("type_source") == "set by you", "info": current, "names": names,
+                    "for_rules": (mac, leases.get(mac) or hosts.get(ip) or hostname,
+                                  {**current, "dhcp_hostname": hostname}, names)})
+    return sorted(out, key=lambda d: (d["type"], d["name"].lower()))
+
+
+def cmd_aitable(arg):
+    """The AI Rule Generator's table and prompt: the devices Loupe can't tell apart (no type, or a generic one; not
+    ones you typed), or the MACs in `arg` (comma-separated). Also every device, for picking others."""
+    macs = {m.strip().lower() for m in (arg or "").split(",") if m.strip()}
+    if macs and not all(MAC.match(m) for m in macs):
+        raise ValueError("expected a comma-separated list of MAC addresses")
+    db, _, ov = load()
+    devs = ai_devices(db, ov)
+    chosen = [d for d in devs if d["mac"] in macs] if macs else \
+        [d for d in devs if airules.needs_help(d["type"]) and not d["custom"]]
+    table = airules.rows([(d["mac"], airules.evidence(d)) for d in chosen])
+    by_mac = {d["mac"]: d for d in devs}
+    return {"prompt": airules.prompt(table, rules().types) if table else "",
+            "rows": [{"id": rid, "macs": ms, "names": [by_mac[m]["name"] for m in ms], "type": by_mac[ms[0]]["type"]}
+                     for rid, ms, _ev in table],
+            "devices": [{"mac": d["mac"], "name": d["name"], "type": d["type"], "picked": d in chosen} for d in devs]}
+
+
+def cmd_aipreview(path):
+    """The AI's reply (a file the GUI wrote: {"reply": text, "ids": {"D1": [macs]}}) checked against every device;
+    the file is removed once read."""
+    if not AI_REPLY.match(path or ""):
+        raise ValueError("expected a reply file")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    suggested, unknown, problem = airules.parse(data.get("reply") or "")
+    ids = {str(k): [m.lower() for m in v] for k, v in (data.get("ids") or {}).items() if isinstance(v, list)}
+    try:
+        with open(CONF) as f:
+            user = json.load(f).get("rules", [])
+    except (OSError, ValueError):
+        user = []
+    db, _, ov = load()
+    devs = [d["for_rules"] for d in ai_devices(db, ov)]
+    checked = airules.preview(suggested, devs, ids, user, devid.load_oui()) if suggested else []
+    return {"problem": problem, "rules": checked,
+            "unknown": [{"devices": u.get("devices") or [], "note": u.get("note") or ""} for u in unknown]}
+
+
 def main(argv):
     try:
         cmd = argv[1] if len(argv) > 1 else ""
@@ -832,6 +907,10 @@ def main(argv):
             out = cmd_widget()
         elif cmd == "summary":
             out = cmd_summary()
+        elif cmd == "aitable":
+            out = cmd_aitable(arg(2))
+        elif cmd == "aipreview":
+            out = cmd_aipreview(arg(2))
         else:
             out = {"error": "unknown command"}
     except (IndexError, ValueError) as e:

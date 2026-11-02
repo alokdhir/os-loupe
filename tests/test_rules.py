@@ -73,7 +73,7 @@ class TestDeviceRules(unittest.TestCase):
     def test_types(self):
         for t, v in self.data["types"].items():
             with self.subTest(type=t):
-                self.assertLessEqual(set(v), {"icon", "vendor"})
+                self.assertLessEqual(set(v), {"icon", "vendor", "generic"})
                 self.assertRegex(v.get("icon", ""), r"^(fa-(brands|solid|regular) fa-[a-z0-9-]+)?$")
 
     def test_examples(self):
