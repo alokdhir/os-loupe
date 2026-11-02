@@ -446,9 +446,11 @@ class TestDailySummary(unittest.TestCase):
                 self.summarize()
             by_site = {r["service"]: r for r in self.query.cmd_sites(72, "oca7")["rows"]}
             self.assertEqual((by_site["Netflix"]["down"], by_site["Netflix"]["up"]), (7, 1), summarized)
+            self.assertEqual(by_site["Netflix"]["matched"], ["oca7.nflxvideo.net"], summarized)   # says why
             everything = {r["service"]: r for r in self.query.cmd_sites(72)["rows"]}["Netflix"]
             by_name = {r["service"]: r for r in self.query.cmd_sites(72, "netflix")["rows"]}["Netflix"]
             self.assertEqual(by_name["down"], everything["down"], summarized)
+            self.assertEqual(by_name["matched"], [], summarized)                          # its name matched
 
     def test_linked_macs_are_one_device(self):
         """MACs loupd linked (a bridge and its NIC, wired and Wi-Fi) are one device in every report."""

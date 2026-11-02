@@ -418,7 +418,8 @@ def matching_sites(db, svc, hours, text, exact):
 
 
 def search_rows(db, svc, hours, text):
-    """The services search's traffic: (ip, mac, listed as, up, down, conns, last, matched). A service whose name
+    """The services search's traffic: (ip, mac, listed as, up, down, conns, last, matched: True, or the site whose
+    name or address matched when that's all that matched for a service). A service whose name
     matches is listed with all its traffic; otherwise only the traffic of its sites that match (a 70-byte CDN host
     whose name happens to contain the text doesn't list the whole CDN), and traffic without a service as its site.
     Where loupd's summaries have it: services from the daily summary (from the site summary for today's summarized
@@ -439,7 +440,7 @@ def search_rows(db, svc, hours, text):
                 f"AND site IN (SELECT value FROM json_each(?)) AND {DAYS_IN} GROUP BY ip, mac, site, service "
                 "ORDER BY min(day), ip, mac, site", (names, in_days)):
             if s not in services:
-                matched.append((ip, mac, s or site, up, down, conns, last, True))
+                matched.append((ip, mac, s or site, up, down, conns, last, site if s else True))
         # a site on the address: the days it was there
         for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in db.execute(
                 f"SELECT {SITE_COLS} FROM sites_1d WHERE site IN (SELECT value FROM json_each(?)) AND {DAYS_IN} "
@@ -447,7 +448,7 @@ def search_rows(db, svc, hours, text):
             if (named and site in by_name) or s in services:
                 continue
             if site_matches(text, False, site, named, s, servers.split() if named else (site,)):
-                matched.append((ip, mac, s or site, up, down, conns, last, True))
+                matched.append((ip, mac, s or site, up, down, conns, last, site if s else True))
     wanted_services = json.dumps(sorted(services))
     # per device and service, each first seen where the day-by-day rows would have it (the devices listed with a
     # service are the biggest, in that order when they tie)
@@ -462,8 +463,10 @@ def search_rows(db, svc, hours, text):
     yield from matched
     for day, a, b in live:
         for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in live_sites(db, namer, table, day, a, b):
-            if (s and text in fold(s)) or site_matches(text, False, site, named, s, servers):
-                yield ip, mac, s or site, up, down, conns, last, True
+            if s and text in fold(s):
+                yield ip, mac, s, up, down, conns, last, True
+            elif site_matches(text, False, site, named, s, servers):
+                yield ip, mac, s or site, up, down, conns, last, site if s else True
 
 
 def device_filter(arg):
@@ -624,8 +627,10 @@ def cmd_sites(hours, text="", want=None):
         if not s or (want and nets.of(ip) not in want):
             continue
         r = rows.setdefault(s, {"service": s, "down": 0, "up": 0, "conns": 0, "last": 0, "by": collections.Counter(),
-                                "hit": False})
-        r["hit"] = r["hit"] or hit
+                                "hit": False, "via": collections.Counter()})
+        r["hit"] = r["hit"] or bool(hit)
+        if isinstance(hit, str):                # matched only through this site: say which
+            r["via"][hit] += up + down
         r["down"] += down
         r["up"] += up
         r["conns"] += conns
@@ -633,10 +638,11 @@ def cmd_sites(hours, text="", want=None):
         r["by"][label(info.get(mac) or next((d for d in info.values() if d["ip"] == ip), None), ip)] += up + down
     out = []
     for r in rows.values():
-        by, hit = r.pop("by"), r.pop("hit")
+        by, hit, via = r.pop("by"), r.pop("hit"), r.pop("via")
         if text and not hit:
             continue
-        out.append({**r, "devices": len(by), "names": [n for n, _ in by.most_common(3)]})
+        out.append({**r, "devices": len(by), "names": [n for n, _ in by.most_common(3)],
+                    "sites": len(via), "matched": [n for n, _ in via.most_common(3)]})
     return {"hours": hours, "rows": sorted(out, key=lambda r: -(r["down"] + r["up"]))}
 
 

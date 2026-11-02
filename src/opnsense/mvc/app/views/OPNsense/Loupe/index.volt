@@ -146,8 +146,10 @@ POSSIBILITY OF SUCH DAMAGE.
             ruletype: function (column, row) {
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '') + esc(row.type);
             },
-            housesvc: function (column, row) {
-                return '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>';
+            housesvc: function (column, row) {           /* matched through its sites only: which ones */
+                return '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>'
+                    + ((row.matched || []).length ? ' <span class="text-muted">' + esc(row.matched.join(', '))
+                        + (row.sites > row.matched.length ? ', …' : '') + '</span>' : '');
             },
             housedevices: function (column, row) {
                 return esc(row.devices) + ' <span class="text-muted">' + esc((row.names || []).join(', '))
