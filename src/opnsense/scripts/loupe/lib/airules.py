@@ -256,8 +256,8 @@ def parse(text):
         data = {"rules": _objects(body, "rules"), "unknown": _objects(body, "unknown")}
         kept = len(data["rules"])
         depth = body.count("{") - body.count("}")       # still open at the end: the answer stops partway
-        problem = (f"The answer stops partway, in the middle of a rule: kept the {kept} complete rules. Copy the whole "
-                   "answer, or ask the AI to continue and paste the rest." if depth > 0 else
+        problem = (f"The answer stops partway, in the middle of a rule: kept the {kept} complete rules. Copy it again "
+                   "once the AI has finished writing, or ask it to continue and paste the rest." if depth > 0 else
                    f"The answer isn't valid JSON: kept the {kept} rules that could be read.")
     rules = [r for r in data.get("rules") or [] if isinstance(r, dict)]
     unknown = [u for u in data.get("unknown") or [] if isinstance(u, dict)]
