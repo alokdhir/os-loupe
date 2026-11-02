@@ -301,13 +301,32 @@ def is_private(mac):
         return False
 
 
+# the Bonjour TXT keys that name a model, most specific first: a Sony TV announces its platform as md= ("BRAVIA 4K
+# VH22") and its model as model= ("XR-98X90L"); a Chromecast only md= ("Google Nest Mini"); printers ty= / usb_mdl=
+MODEL_ORDER = ("model", "am", "ty", "usb_mdl", "md")
+# announced values that aren't a model: feature lists (md=0,1,2), Apple board codes (J255AP), hex IDs
+NOT_A_MODEL = re.compile(r"^[\d,.\s]*$|^[A-Z]\d+[a-z]*AP$|^(?i:[0-9a-f]{12,})$")
+
+
 def model(info):
-    """Marketing name of an Apple device from its announced model identifier, if known."""
+    """The device's model: an Apple identifier's marketing name when known (apple_models), else what it announces
+    in Bonjour TXT, by MODEL_ORDER. A key with several different values names other things (a bridge announcing
+    the accessories it serves): no model from it, nor from the keys after it."""
+    announced = (info or {}).get("mdns_models", [])
     names = rules().apple_models
-    for m in (info or {}).get("mdns_models", []):
+    for m in announced:
         hit = names.get(m.split("=", 1)[1] if "=" in m else m)
         if hit:
             return hit
+    values = {}
+    for m in announced:
+        key, _, value = m.partition("=")
+        value = value.strip()
+        if value and not NOT_A_MODEL.match(value):
+            values.setdefault(key, set()).add(value)
+    for key in MODEL_ORDER:
+        if key in values:
+            return next(iter(values[key])) if len(values[key]) == 1 else None
     return None
 
 

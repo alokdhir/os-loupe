@@ -102,11 +102,11 @@ POSSIBILITY OF SUCH DAMAGE.
                 return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>'
                     + editButton(row);
             },
-            devtype: function (column, row) {
-                if (!row.shown_type) return dash;
-                const tip = (row.model && row.type_source !== 'set by you' ? row.type + ' · ' : '') + (row.type_source || '');
+            devtype: function (column, row) {           /* the type, its model (when known) after it */
+                if (!row.type && !row.model) return dash;
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
-                    + '<span title="' + esc(tip) + '">' + esc(row.shown_type) + '</span>';
+                    + '<span title="' + esc(row.type_source || '') + '">' + esc(row.type || '') + '</span>'
+                    + (row.model ? ' <span class="text-muted">' + esc(row.model) + '</span>' : '');
             },
             vendor: function (column, row) {
                 if (!row.vendor_note) return esc(row.vendor);
@@ -626,7 +626,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <tr>
                     <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
                     <th data-column-id="name" data-formatter="device">{{ lang._('Device') }}</th>
-                    <th data-column-id="shown_type" data-formatter="devtype">{{ lang._('Type') }}</th>
+                    <th data-column-id="type" data-formatter="devtype">{{ lang._('Type') }}</th>
                     <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
                     <th data-column-id="networks" data-formatter="networks" data-sortable="false" data-visible="false">{{ lang._('Network') }}</th>
                     <th data-column-id="vendor" data-formatter="vendor">{{ lang._('Vendor') }}</th>

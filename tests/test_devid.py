@@ -380,7 +380,18 @@ class TestVendorWords(unittest.TestCase):
 class TestModelAndName(unittest.TestCase):
     def test_model(self):
         self.assertEqual(devid.model({"mdns_models": ["model=Mac15,13"]}), "MacBook Air 15″ (M3)")
-        self.assertIsNone(devid.model({"mdns_models": ["model=Mac99,1"]}))
+        self.assertEqual(devid.model({"mdns_models": ["model=Mac99,1"]}), "Mac99,1")     # not in the table: as announced
+
+    def test_announced_model(self):
+        model = lambda *m: devid.model({"mdns_models": list(m)})       # noqa: E731
+        self.assertEqual(model("md=Acme 4K VH1", "model=AC-55X1", "md=0,1,2"), "AC-55X1")   # model= before md=
+        self.assertEqual(model("md=Acme Mini"), "Acme Mini")
+        self.assertEqual(model("ty=Acme LaserJet 100", "usb_mdl=Acme LaserJet 100"), "Acme LaserJet 100")
+        self.assertEqual(model("am=AcmeTV1,1", "model=J105aAP"), "AcmeTV1,1")              # a board code isn't one
+        self.assertIsNone(model("md=AB-1", "md=bridge", "md=hub"))                          # a bridge's accessories
+        self.assertIsNone(model("md=0,1,2"))
+        self.assertIsNone(model("model=0a1b2c3d4e5f6a7b"))
+        self.assertIsNone(devid.model({}))
 
     def test_current_announcements_outrank_old_ones(self):
         day = 86400

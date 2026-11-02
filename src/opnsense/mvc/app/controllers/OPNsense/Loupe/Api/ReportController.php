@@ -139,7 +139,7 @@ class ReportController extends ApiControllerBase
 
     /* what each grid's search box matches: the columns it shows, never the explanations behind them */
     private const SEARCH = [
-        'devices' => ['name', 'shown_type', 'ip', 'vendor'],
+        'devices' => ['name', 'type', 'model', 'ip', 'vendor'],
         'device' => ['label', 'search'],                // a service, or any of its sites
         'traffic' => ['device', 'ip', 'name', 'servers'],
     ];
@@ -159,7 +159,6 @@ class ReportController extends ApiControllerBase
         $rows = [];
         foreach ($data['rows'] ?? [] as $r) {
             $r['id'] = $r['mac'] ?: $r['ip'];
-            $r['shown_type'] = ($r['type_source'] ?? '') === 'set by you' ? $r['type'] : ($r['model'] ?: $r['type']);
             $rows[] = $r;
         }
         return $this->grid($rows, 'down', null, self::SEARCH['devices']);
