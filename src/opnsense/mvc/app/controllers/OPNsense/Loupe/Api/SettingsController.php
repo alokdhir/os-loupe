@@ -213,17 +213,12 @@ class SettingsController extends ApiMutableModelControllerBase
     public function aiPreviewAction()
     {
         $reply = (string)$this->request->getPost('reply', null, '');
-        $ids = json_decode((string)$this->request->getPost('ids', null, ''), true);
-        if (trim($reply) === '' || strlen($reply) > 262144 || !is_array($ids)) {
+        if (trim($reply) === '' || strlen($reply) > 262144) {
             return ['error' => gettext('Paste the AI\'s answer first.')];
         }
-        foreach ($ids as $id => $macs) {
-            if (!preg_match('/^D\d{1,3}$/', (string)$id) || !is_array($macs)) {
-                return ['error' => gettext('Ask again: the device list is out of date.')];
-            }
-        }
         $path = '/tmp/loupe-ai-' . bin2hex(random_bytes(8)) . '.json';
-        if (@file_put_contents($path, json_encode(['reply' => $reply, 'ids' => $ids])) === false) {
+        $json = json_encode(['reply' => $reply], JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($json === false || @file_put_contents($path, $json) === false) {
             return ['error' => gettext('Could not keep the answer for checking.')];
         }
         @chmod($path, 0600);

@@ -29,6 +29,7 @@ Nothing here talks to an AI: the user copies the prompt into the chat of their c
 The table carries evidence only - no MACs or addresses, names people gave things stripped of possessives - under
 row ids (D1, D2...) that map back to devices on this router only.
 """
+import hashlib
 import json
 import re
 
@@ -101,18 +102,29 @@ COLUMNS = ("vendor", "current", "model", "hostname", "bonjour_names", "bonjour_h
            "bonjour_services", "categories", "dhcp_vendor", "dhcp_params", "domains")
 
 
+# what a row's id is made of: the evidence, but not the device's current type, which a rule saved between copying
+# the prompt and pasting the answer changes (domains stay in: for a bare Wi-Fi module they are all that tells it apart)
+IDENTITY = tuple(c for c in COLUMNS if c != "current")
+
+
+def row_id(ev):
+    """A row's id: a fingerprint of the device's identity evidence, the same however the list has changed between
+    copying the prompt and pasting the answer (a position would point at another device by then)."""
+    key = [sorted(ev.get(c) or []) if c == "domains" else ev.get(c) for c in IDENTITY]
+    return "D" + hashlib.sha1(json.dumps(key).encode()).hexdigest()[:6].upper()
+
+
 def rows(devices):
-    """Devices with identical evidence share a row: [(id, [macs], evidence)], D1... in the order given; at most
-    MAX_ROWS (the caller can tell from the count)."""
+    """Devices with the same evidence share a row: [(id, [macs], evidence)], in the order given; at most MAX_ROWS
+    (the caller can tell from the count)."""
     out, seen = [], {}
     for mac, ev in devices:
-        key = json.dumps(ev, sort_keys=True)
-        if key in seen:
-            seen[key][1].append(mac)
+        rid = row_id(ev)
+        if rid in seen:
+            seen[rid][1].append(mac)
             continue
-        row = (f"D{len(out) + 1}", [mac], ev)
-        seen[key] = row
-        out.append(row)
+        seen[rid] = (rid, [mac], ev)
+        out.append(seen[rid])
     return out[:MAX_ROWS]
 
 
@@ -121,7 +133,6 @@ def prompt(table_rows, types):
     reuse and the answer format (a made-up example), then the table."""
     cell = lambda v: (", ".join(v) if isinstance(v, list) else str(v)).replace("|", "/") or "-"     # noqa: E731
     lines = [f"| {rid} | {len(macs)} | " + " | ".join(cell(ev[c]) for c in COLUMNS) + " |" for rid, macs, ev in table_rows]
-    last = table_rows[-1][0] if table_rows else "D1"
     return f"""You are helping Loupe, a home-network monitor on an OPNsense router, identify devices it could not identify, or only identified generically (from the maker of their network chip). Each row below is one device, or a group of identical devices ("count"). Use web search where it helps: model numbers, cloud domains, Bonjour service names, MAC vendors.
 
 For each row, work out what the device is: its category (what kind of thing it is, e.g. "Garage door opener", "Smart scale", "Oven"), its brand, and its model if the evidence shows one. Then write RULES that recognise this device and others like it in the future.
@@ -166,7 +177,7 @@ Reply with ONE JSON object in a single ```json code block. No comments inside th
 {{
   "rules": [
     {{
-      "devices": ["D1"],
+      "devices": ["D0A1B2C"],
       "when": {{"vendor": "Espressif", "talks_to": "acme-cloud.example"}},
       "type": "Pool controller",
       "vendor": "Acme",
@@ -175,11 +186,11 @@ Reply with ONE JSON object in a single ```json code block. No comments inside th
       "note": "one sentence: what the evidence shows"
     }}
   ],
-  "unknown": [{{"devices": ["D2"], "note": "what is missing to identify it"}}]
+  "unknown": [{{"devices": ["D3D4E5F"], "note": "what is missing to identify it"}}]
 }}
 ```
 - "model" only if the evidence shows it; otherwise leave it out. "confidence": high, medium or low.
-- Every row D1...{last} appears in a rule's "devices" or in "unknown".
+- "devices" lists row ids exactly as they appear in the table; every row appears in a rule's "devices" or in "unknown".
 - Don't invent evidence that isn't in the table.
 
 ## Devices
@@ -203,9 +214,9 @@ def _escapes(text):
 
 def _loads(text):
     try:
-        return json.loads(text)
+        return json.loads(text, strict=False)       # not strict: a tab or such inside a string is kept
     except ValueError:
-        return json.loads(_escapes(text))       # "\$" in a regex: AIs write it; JSON doesn't allow it
+        return json.loads(_escapes(text), strict=False)     # "\$" in a regex: AIs write it; JSON doesn't allow it
 
 
 def _objects(text, key):
@@ -214,7 +225,7 @@ def _objects(text, key):
     m = re.search(r'"' + key + r'"\s*:\s*\[', fixed)
     if not m:
         return []
-    dec, pos, out = json.JSONDecoder(), m.end(), []
+    dec, pos, out = json.JSONDecoder(strict=False), m.end(), []
     while True:
         while pos < len(fixed) and fixed[pos] in " \t\r\n,":
             pos += 1
@@ -230,7 +241,8 @@ def _objects(text, key):
 def parse(text):
     """(rules, unknown, problem) from whatever was pasted: the JSON in a ```json block, or the outermost {...};
     invalid escapes tolerated; a reply cut off keeps its complete rules. problem is None, or what went wrong."""
-    text = text or ""
+    # control characters other than line breaks and tabs: copied along from some chat pages, never meant
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text or "")
     block = re.search(r"```(?:json)?\s*(\{.*?)```", text, re.S)
     body = block.group(1) if block else text[text.find("{"):] if "{" in text else ""
     if not body:
@@ -288,8 +300,11 @@ def preview(suggested, devices, rows_ids, user_rules, oui):
     `devices`: [(mac, hostname for rules, info, names)] as loupd classifies them; `rows_ids`: {"D1": [macs]} from
     the table; `user_rules`: the user's rules now. Returns one dict per suggested rule: its rows, type, vendor,
     model, confidence, note, the GUI fields to save ("fields", None if it can't be saved), "changes" [[old, new,
-    count]], and flags: "invalid" (why), "spills" (changes devices outside its rows), "nothing" (changes no device),
-    "vaguer" (a specific type to a generic one); "pick" is whether it starts ticked."""
+    count]], and flags: "invalid" (why), "spills" (changes devices outside its rows), "nothing" (changes no device,
+    and why: "duplicate" of a rule the user has, "already" the type its devices have, "unknown_rows" ids no device
+    has, else it matches none), "vaguer" (a specific type to a generic one); "pick" is whether it starts ticked."""
+    def same(a, b):
+        return a.get("type") == b.get("type") and devid._split_lists(a).get("when") == devid._split_lists(b).get("when")
     def run(rules):
         devid.set_user_rules(rules)
         return {mac: devid.classify(mac, hn, info, names, oui)[0] for mac, hn, info, names in devices}
@@ -298,12 +313,14 @@ def preview(suggested, devices, rows_ids, user_rules, oui):
         out = []
         for r in suggested:
             ids = [str(d) for d in (r.get("devices") or []) if isinstance(d, (str, int))]
-            mine = {m for d in ids for m in rows_ids.get(d, [])}
+            mine = {m for d in ids for m in rows_ids.get(d.upper(), [])}
             rule, fields, problem = to_rule(r)
             item = {"devices": ids, "type": (r.get("type") or "").strip(), "vendor": r.get("vendor") or "",
                     "model": r.get("model") or "", "confidence": r.get("confidence") or "",
                     "note": r.get("note") or "", "when": r.get("when") or {}, "fields": fields,
-                    "changes": [], "invalid": problem, "spills": 0, "nothing": False, "vaguer": False}
+                    "changes": [], "invalid": problem, "spills": 0, "nothing": False, "vaguer": False,
+                    "duplicate": False, "already": False,
+                    "unknown_rows": [d for d in ids if d.upper() not in rows_ids]}
             if rule:
                 new = run([rule] + list(user_rules))
                 changed = {mac for mac in new if new[mac] != base[mac]}
@@ -314,6 +331,9 @@ def preview(suggested, devices, rows_ids, user_rules, oui):
                 item["changes"] = [[a, b, n] for (a, b), n in sorted(counts.items(), key=lambda kv: -kv[1])]
                 item["spills"] = len(changed - mine)
                 item["nothing"] = not changed
+                if not changed:
+                    item["duplicate"] = any(isinstance(u, dict) and "when" in u and same(rule, u) for u in user_rules)
+                    item["already"] = bool(mine) and all(base[m] == rule["type"] for m in mine if m in base)
                 item["vaguer"] = any(not needs_help(a) and needs_help(b) for a, b in counts)
             item["pick"] = bool(rule) and not (item["spills"] or item["nothing"] or item["vaguer"])
             out.append(item)

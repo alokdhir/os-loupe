@@ -54,6 +54,12 @@ class TestParse(unittest.TestCase):
         self.assertIn("stops partway", problem)
         self.assertIn("kept the 1 complete rules", problem)
 
+    def test_control_characters(self):
+        """A stray control character copied along from a chat page (inside a note) doesn't lose the rules after it."""
+        text = '{"rules": [' + RULE + ', {"devices": ["D2"], "when": {"hostname": "^acme"}, "type": "Oven", "note": "Cas\t\x0bta"}]}'
+        rules, _, problem = airules.parse(text)
+        self.assertEqual((len(rules), problem), (2, None))
+
     def test_nothing(self):
         self.assertEqual(airules.parse("sorry, I can't help")[2], "no JSON in the reply")
 
@@ -88,12 +94,25 @@ class TestTable(unittest.TestCase):
         self.assertEqual((ev["bonjour_hosts"], ev["bonjour_names"]), ([], []))
 
     def test_rows_group_identical(self):
-        rows = airules.rows([("ac:00:00:00:00:01", {"a": 1}), ("ac:00:00:00:00:02", {"a": 2}), ("ac:00:00:00:00:03", {"a": 1})])
-        self.assertEqual([(r[0], r[1]) for r in rows], [("D1", ["ac:00:00:00:00:01", "ac:00:00:00:00:03"]),
-                                                       ("D2", ["ac:00:00:00:00:02"])])
-        text = airules.prompt(airules.rows([("ac:00:00:00:00:01", airules.evidence({"vendor": "Acme"}))]), {"Oven": {}})
-        self.assertIn("| D1 | 1 | Acme |", text)
+        a = airules.evidence({"vendor": "Acme", "names": ["x.acme.example"]})
+        b = airules.evidence({"vendor": "Acme", "names": ["x.bolt.example"]})        # only its cloud tells it apart
+        c = airules.evidence({"vendor": "Acme", "names": ["x.acme.example"], "type": "Clock", "type_source": "z"})
+        rows = airules.rows([("ac:00:00:00:00:01", a), ("ac:00:00:00:00:02", b), ("ac:00:00:00:00:03", c)])
+        self.assertEqual([r[1] for r in rows], [["ac:00:00:00:00:01", "ac:00:00:00:00:03"], ["ac:00:00:00:00:02"]])
+        text = airules.prompt(rows[:1], {"Oven": {}})
+        self.assertIn(f"| {rows[0][0]} | 2 | Acme |", text)
         self.assertNotIn("ac:00:00:00:00:01", text)                    # no MACs in what leaves the router
+
+    def test_row_ids_are_stable(self):
+        """A row keeps its id when the device's type changes (a rule saved after the prompt was copied); it changes
+        with its evidence."""
+        before = airules.evidence({"vendor": "Acme", "hostname": "box", "type": "IoT device (ESP)", "type_source": "x",
+                                   "names": ["a.example"]})
+        after = airules.evidence({"vendor": "Acme", "hostname": "box", "type": "Pool controller", "type_source": "y",
+                                  "names": ["a.example"]})
+        self.assertEqual(airules.row_id(before), airules.row_id(after))
+        self.assertNotEqual(airules.row_id(before), airules.row_id(airules.evidence({"vendor": "Acme", "hostname": "box2"})))
+        self.assertRegex(airules.row_id(before), r"^D[0-9A-F]{6}$")
 
     def test_needs_help(self):
         self.assertTrue(airules.needs_help(""))
@@ -136,6 +155,18 @@ class TestPreview(unittest.TestCase):
             {"devices": ["D1"], "when": {"dhcp_params": "1,3"}, "type": "X"})
         self.assertEqual((spill["spills"], spill["pick"]), (2, False))
         self.assertEqual((nothing["nothing"], nothing["pick"]), (True, False))
+        self.assertFalse(nothing["already"] or nothing["duplicate"])          # matches none of its devices
+        gone, = self.check({"devices": ["D9"], "when": {"hostname": "^acme-tstat"}, "type": "X"})
+        self.assertEqual(gone["unknown_rows"], ["D9"])
+        mine = [{"when": {"vendor": "Espressif", "talks_to": "acme-garage.example"}, "type": "Garage door opener"}]
+        devid.set_user_rules(mine)
+        try:
+            again, = airules.preview([{"devices": ["D1"], "when": {"talks_to": "acme-garage.example", "vendor": "Espressif"},
+                                       "type": "Garage door opener"}], self.DEVICES,
+                                     {"D1": ["ac:00:00:00:00:01", "ac:00:00:00:00:02"]}, mine, self.oui)
+        finally:
+            devid.set_user_rules([])
+        self.assertEqual((again["nothing"], again["duplicate"], again["already"]), (True, True, True))
         self.assertFalse(vaguer["vaguer"])          # no type before: a generic type isn't vaguer
         self.assertIn("dhcp_params", bad["invalid"])
         self.assertFalse(bad["pick"])

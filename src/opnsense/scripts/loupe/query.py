@@ -857,8 +857,9 @@ def cmd_aitable(arg):
 
 
 def cmd_aipreview(path):
-    """The AI's reply (a file the GUI wrote: {"reply": text, "ids": {"D1": [macs]}}) checked against every device;
-    the file is removed once read."""
+    """The AI's reply (a file the GUI wrote: {"reply": text}) checked against every device; the file is removed
+    once read. Row ids are fingerprints of the devices' evidence (airules.row_id), matched against every device
+    now, so an answer still lands on the right devices when the list changed after the prompt was copied."""
     if not AI_REPLY.match(path or ""):
         raise ValueError("expected a reply file")
     try:
@@ -870,17 +871,23 @@ def cmd_aipreview(path):
         except OSError:
             pass
     suggested, unknown, problem = airules.parse(data.get("reply") or "")
-    ids = {str(k): [m.lower() for m in v] for k, v in (data.get("ids") or {}).items() if isinstance(v, list)}
     try:
         with open(CONF) as f:
             user = json.load(f).get("rules", [])
     except (OSError, ValueError):
         user = []
     db, _, ov = load()
-    devs = [d["for_rules"] for d in ai_devices(db, ov)]
-    checked = airules.preview(suggested, devs, ids, user, devid.load_oui()) if suggested else []
+    devs = ai_devices(db, ov)
+    ids = {}
+    for d in devs:
+        ids.setdefault(airules.row_id(airules.evidence(d)), []).append(d["mac"])
+    names = {rid: [next(d["name"] for d in devs if d["mac"] == m) for m in macs] for rid, macs in ids.items()}
+    checked = airules.preview(suggested, [d["for_rules"] for d in devs], ids, user, devid.load_oui()) if suggested else []
+    for r in checked:       # which devices each rule is for, as the page shows them (a row no device has: '?')
+        r["for"] = [n for rid in r["devices"] for n in names.get(rid.upper(), ["?"])]
     return {"problem": problem, "rules": checked,
-            "unknown": [{"devices": u.get("devices") or [], "note": u.get("note") or ""} for u in unknown]}
+            "unknown": [{"for": [n for rid in u.get("devices") or [] for n in names.get(str(rid).upper(), ["?"])],
+                         "note": u.get("note") or ""} for u in unknown]}
 
 
 def main(argv):

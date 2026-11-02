@@ -587,18 +587,21 @@ POSSIBILITY OF SUCH DAMAGE.
         $(document).on('submit', '.modal form', function (e) { e.preventDefault(); });
 
         /* AI Rule Generator: ask (the table and prompt), paste the answer, review what each rule would change, save */
-        const ai = {ids: {}, names: {}, prompt: '', loaded: false};
+        const ai = {prompt: '', loaded: false};
         const AI_FIELDS = {vendor: '{{ lang._("MAC vendor") }}', hostname: '{{ lang._("Host name") }}',
             mdns_name: '{{ lang._("Bonjour name") }}', mdns_model: '{{ lang._("Bonjour model") }}',
             mdns_service: '{{ lang._("Bonjour service") }}', category: '{{ lang._("Category code") }}',
             dhcp_vendor: '{{ lang._("DHCP vendor class") }}', talks_to: '{{ lang._("Talks to") }}'};
+        /* the AI's confidence in a rule, as a pill: high green, medium orange, low red */
+        const AI_CONFIDENCE = {
+            high: '<span class="label label-success" style="margin-right: 6px">{{ lang._("high") }}</span>',
+            medium: '<span class="label label-warning" style="margin-right: 6px">{{ lang._("medium") }}</span>',
+            low: '<span class="label label-danger" style="margin-right: 6px">{{ lang._("low") }}</span>'};
         function aiLoad() {
             ai.loaded = true;
             ajaxCall('/api/loupe/settings/ai_table', {scope: $('input[name="ai-scope"]:checked').val()}, function (data) {
                 if (!data || data.error) { $('#ai-copy').prop('disabled', true); return; }
                 ai.prompt = data.prompt || '';
-                ai.ids = {}; ai.names = {};
-                (data.rows || []).forEach(r => { ai.ids[r.id] = r.macs; ai.names[r.id] = r.names; });
                 $('#ai-count-unidentified').text(data.unidentified);
                 $('#ai-cut').text(data.asked < data.chosen ? '{{ lang._("The prompt covers the first") }} ' + data.asked
                     + ' {{ lang._("of") }} ' + data.chosen + ' {{ lang._("devices (it would be too long for an AI chat).") }}' : '');
@@ -630,7 +633,7 @@ POSSIBILITY OF SUCH DAMAGE.
         let aiChecked = [];
         $('#ai-check').click(function () {
             $('#ai-saved').text('');
-            ajaxCall('/api/loupe/settings/ai_preview', {reply: $('#ai-reply').val(), ids: JSON.stringify(ai.ids)}, function (data) {
+            ajaxCall('/api/loupe/settings/ai_preview', {reply: $('#ai-reply').val()}, function (data) {
                 $('#ai-review').show();
                 const $body = $('#ai-rules tbody').empty();
                 if (!data || data.error) { $('#ai-problem').text((data || {}).error || '{{ lang._("No answer from Loupe.") }}').show(); return; }
@@ -640,19 +643,23 @@ POSSIBILITY OF SUCH DAMAGE.
                     const flags = [];
                     if (r.invalid) flags.push('<span class="text-danger">' + esc(r.invalid) + '</span>');
                     if (r.spills) flags.push('<span class="text-danger">{{ lang._("also changes") }} ' + r.spills + ' {{ lang._("other devices") }}</span>');
-                    if (r.nothing && !r.invalid) flags.push('<span class="text-warning">{{ lang._("changes nothing") }}</span>');
+                    if (r.nothing && !r.invalid) {          /* changes nothing: say why */
+                        flags.push('<span class="text-warning">' + (r.duplicate ? '{{ lang._("you already have this rule") }}'
+                            : r.already ? '{{ lang._("already") }} ' + esc(r.type)
+                            : (r.unknown_rows || []).length ? '{{ lang._("its device is not in the list (an older prompt?)") }}'
+                            : '{{ lang._("matches none of its devices") }}') + '</span>');
+                    }
                     if (r.vaguer) flags.push('<span class="text-warning">{{ lang._("makes a type vaguer") }}</span>');
                     const changes = (r.changes || []).map(c => c[2] + ' × ' + esc(c[0] || '{{ lang._("no type") }}') + ' → ' + esc(c[1])).join('<br>');
-                    const rows = (r.devices || []).map(d => esc((ai.names[d] || [d]).join(', '))).join('; ');
+                    const rows = esc((r.for || []).join(', '));
                     $body.append('<tr><td><input type="checkbox" data-i="' + i + '"' + (r.pick ? ' checked' : '') + (r.fields ? '' : ' disabled') + '></td>'
                         + '<td>' + esc(r.type) + (r.vendor ? ' <span class="text-muted">' + esc(r.vendor) + '</span>' : '')
                         + (r.model ? ' <span class="text-muted">' + esc(r.model) + '</span>' : '') + '</td>'
                         + '<td>' + esc(aiWhen(r.when)) + '</td><td>' + rows + '</td><td>' + (changes || '—') + '</td>'
-                        + '<td>' + flags.concat(r.confidence ? ['{{ lang._("confidence") }}: ' + esc(r.confidence)] : [])
-                            .concat(r.note ? [esc(r.note)] : []).join('<br>') + '</td></tr>');
+                        + '<td>' + (AI_CONFIDENCE[(r.confidence || '').toLowerCase()] || '')
+                        + flags.concat(r.note ? [esc(r.note)] : []).join('<br>') + '</td></tr>');
                 });
-                const unknown = (data.unknown || []).map(u => esc((u.devices || []).map(d => (ai.names[d] || [d]).join(', ')).join('; '))
-                    + (u.note ? ': ' + esc(u.note) : ''));
+                const unknown = (data.unknown || []).map(u => esc((u.for || []).join(', ')) + (u.note ? ': ' + esc(u.note) : ''));
                 $('#ai-unknown').html(unknown.length ? '<b>{{ lang._("Not identified") }}</b><br>' + unknown.join('<br>') : '');
             });
         });
