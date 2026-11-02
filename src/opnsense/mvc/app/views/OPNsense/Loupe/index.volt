@@ -894,7 +894,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <h4>{{ lang._('2. Paste the answer') }}</h4>
                     <p class="text-muted">{{ lang._('Paste the whole reply; the rules are read from it, even when the reply is cut off.') }}</p>
                     <textarea id="ai-reply" class="form-control" rows="20" style="font-family: monospace; width: 100%; max-width: none; resize: vertical"></textarea>
-                    <button type="button" class="btn btn-default" id="ai-check" style="margin-top: 6px"><i class="fa fa-check fa-fw"></i> {{ lang._('Check rules') }}</button>
+                    <button type="button" class="btn btn-default" id="ai-check" style="margin-top: 6px"><i class="fa fa-wand-magic-sparkles fa-fw"></i> {{ lang._('Generate rules') }}</button>
                 </div>
                 <div class="loupe-ai-step" id="ai-review" style="display: none">
                     <h4>{{ lang._('3. Review') }}</h4>
