@@ -446,6 +446,9 @@ class TestDailySummary(unittest.TestCase):
             self.assertEqual(rows[-1]["mac"], c, "after the devices with traffic")
             self.assertNotIn(d, [r["mac"] for r in rows])
         self.assertIn(d, [r["mac"] for r in self.query.cmd_devices(168)["rows"]])
+        nic = "ac:00:00:00:00:61"                       # another MAC of a busy address (a host's NIC under a bridge)
+        self.store.write({}, {}, {nic: {"ip": "10.9.2.61", "ts": self.now - 60}}, self.now)
+        self.assertNotIn(nic, [r["mac"] for r in self.query.cmd_devices(24)["rows"]])      # its address has traffic
         e = "02:00:00:00:00:65"                         # seen without an address (a private MAC): named by its MAC
         self.store.write({}, {}, {e: {"ip": None, "ts": self.now - 60}}, self.now)
         self.assertEqual(next(r for r in self.query.cmd_devices(1)["rows"] if r["mac"] == e)["name"], e)

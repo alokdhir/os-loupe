@@ -241,9 +241,12 @@ def cmd_devices(hours, want=None):
         tops[key][service or "Other"] += up + down
     # devices seen in the period without traffic in it are listed too, with none: a device that is on the network
     # but silent (stuck, or idle) is worth seeing, and "last seen 2 minutes ago" mustn't hide from the last hour
+    # (not a second MAC of a busy address: a host whose traffic goes out under a bridge's or VM's MAC also shows
+    # its own NIC's MAC on the network)
     start = period(hours)[1]
+    busy = {r["ip"] for r in rows.values()} | set(rows)
     for mac, d in info.items():
-        if mac in rows or d["ip"] in rows or (d.get("last_seen") or 0) < start:
+        if mac in rows or d["ip"] in busy or (d.get("last_seen") or 0) < start:
             continue
         net = nets.of(d["ip"]) if d["ip"] else None
         if want and net not in want:
