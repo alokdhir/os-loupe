@@ -98,7 +98,7 @@
         <id>rule.source</id>
         <label>Source</label>
         <type>dropdown</type>
-        <help>Whether you wrote this rule or an AI suggested it (Settings: Identify with AI).</help>
+        <help>Whether you wrote this rule or the AI Rule Generator suggested it.</help>
     </field>
     <field>
         <id>rule.ai_model</id>
