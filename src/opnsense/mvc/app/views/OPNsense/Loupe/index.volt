@@ -387,10 +387,11 @@ POSSIBILITY OF SUCH DAMAGE.
             }
         });
 
-        /* Apply on the settings tab, but not on the AI Rule Generator: its Save and apply does it */
+        /* Apply on the settings tab, but not where there is nothing to apply: the read-only Built-in lists, and the
+           AI Rule Generator (its Save and apply does it) */
         function applyButton() {
-            const ai = $('#page_rules').is(':visible') && $('#page_rules .loupe-source .btn.active').data('source') === 'ai';
-            $('.loupe-apply').toggle($('#tab_settings').hasClass('active') && !ai);
+            const source = $('.loupe-page:visible .loupe-source .btn.active').data('source');
+            $('.loupe-apply').toggle($('#tab_settings').hasClass('active') && source !== 'builtin' && source !== 'ai');
         }
         function showSettings(page) {
             $('.loupe-pages .btn').removeClass('active').filter('[data-page="' + page + '"]').addClass('active');
