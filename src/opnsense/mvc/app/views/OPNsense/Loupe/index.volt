@@ -599,9 +599,18 @@ POSSIBILITY OF SUCH DAMAGE.
             high: '<span class="label label-success loupe-pill">{{ lang._("high") }}</span>',
             medium: '<span class="label label-warning loupe-pill">{{ lang._("medium") }}</span>',
             low: '<span class="label label-danger loupe-pill">{{ lang._("low") }}</span>'};
+        /* core escapes &, < and > in API answers to the browser (Mvc\Response); this page shows text with esc() and
+           copies the prompt as plain text, so take the strings back to what they are */
+        function aiPlain(v) {
+            if (typeof v === 'string') return v.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+            if (Array.isArray(v)) return v.map(aiPlain);
+            if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, aiPlain(x)]));
+            return v;
+        }
         function aiLoad() {
             ai.loaded = true;
             ajaxCall('/api/loupe/settings/ai_table', {scope: $('input[name="ai-scope"]:checked').val()}, function (data) {
+                data = aiPlain(data);
                 if (!data || data.error) { $('#ai-copy').prop('disabled', true); return; }
                 ai.prompt = data.prompt || '';
                 $('#ai-count-unidentified').text(data.unidentified);
@@ -641,11 +650,18 @@ POSSIBILITY OF SUCH DAMAGE.
         $('#ai-check').click(function () {
             $('#ai-saved').text('');
             ajaxCall('/api/loupe/settings/ai_preview', {reply: $('#ai-reply').val()}, function (data) {
-                $('#ai-review').show();
+                data = aiPlain(data);
                 const $body = $('#ai-rules tbody').empty();
-                if (!data || data.error) { $('#ai-problem').text((data || {}).error || '{{ lang._("No answer from Loupe.") }}').show(); return; }
+                aiChecked = (data && data.rules) || [];
+                if (!aiChecked.length) {        /* nothing to review: say so where the answer goes */
+                    $('#ai-review').hide();
+                    $('#ai-paste-problem').text((data && (data.error || data.problem)) || '{{ lang._("No answer from Loupe.") }}').show();
+                    $('html, body').animate({scrollTop: $('#ai-paste-problem').offset().top - 90}, 400);
+                    return;
+                }
+                $('#ai-paste-problem').hide();
+                $('#ai-review').show();
                 $('#ai-problem').text(data.problem || '').toggle(!!data.problem);
-                aiChecked = data.rules || [];
                 aiChecked.forEach(function (r, i) {
                     const flags = [];
                     if (r.invalid) flags.push('<span class="text-danger">' + esc(r.invalid) + '</span>');
@@ -923,6 +939,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <div class="loupe-ai-step">
                     <h4>{{ lang._('2. Paste the answer') }}</h4>
                     <p class="text-muted">{{ lang._('Paste the whole reply; the rules are read from it, even when the reply is cut off.') }}</p>
+                    <div id="ai-paste-problem" class="alert alert-warning" style="display: none; margin-bottom: 6px"></div>
                     <textarea id="ai-reply" class="form-control" rows="20" style="font-family: monospace; width: 100%; max-width: none; resize: vertical"></textarea>
                     <button type="button" class="btn btn-primary" id="ai-check" style="margin-top: 6px"><i class="fa fa-wand-magic-sparkles fa-fw"></i> {{ lang._('Generate rules') }}</button>
                 </div>
