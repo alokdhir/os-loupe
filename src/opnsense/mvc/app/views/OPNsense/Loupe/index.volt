@@ -741,7 +741,9 @@ POSSIBILITY OF SUCH DAMAGE.
                 aiChecked = (data && data.rules) || [];
                 if (!aiChecked.length) {        /* nothing to review: say so where the answer goes */
                     $('#ai-review').hide();
-                    $('#ai-paste-problem').text((data && (data.error || data.problem)) || '{{ lang._("No answer from Loupe.") }}').show();
+                    const msg = (data && (data.error || data.problem)) || '{{ lang._("No answer from Loupe.") }}';
+                    $('#ai-paste-problem').text(msg).show();
+                    if (/^That's the prompt/.test(msg)) $('#ai-reply').val('');      /* the prompt pasted back: never kept */
                     $('html, body').animate({scrollTop: $('#ai-paste-problem').offset().top - 90}, 400);
                     return;
                 }
@@ -852,7 +854,9 @@ POSSIBILITY OF SUCH DAMAGE.
                 aim.names = (data && data.models) || [];
                 if (!aim.names.length) {
                     $('#aim-review').hide();
-                    $('#aim-problem').text((data && (data.error || data.problem)) || '{{ lang._("No new names in the answer.") }}').show();
+                    const msg = (data && (data.error || data.problem)) || '{{ lang._("No new names in the answer.") }}';
+                    $('#aim-problem').text(msg).show();
+                    if (/^That's the prompt/.test(msg)) $('#aim-reply').val('');     /* the prompt pasted back: never kept */
                     return;
                 }
                 $('#aim-problem').text(data.problem || '').toggle(!!data.problem);
