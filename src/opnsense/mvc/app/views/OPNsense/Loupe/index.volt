@@ -586,7 +586,7 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $(document).on('submit', '.modal form', function (e) { e.preventDefault(); });
 
-        /* AI Rule Generator: ask (the table and question), paste the answer, review what each rule would change, save */
+        /* AI Rule Generator: ask (the table and prompt), paste the answer, review what each rule would change, save */
         const ai = {ids: {}, names: {}, prompt: '', loaded: false};
         const AI_FIELDS = {vendor: '{{ lang._("MAC vendor") }}', hostname: '{{ lang._("Host name") }}',
             mdns_name: '{{ lang._("Bonjour name") }}', mdns_model: '{{ lang._("Bonjour model") }}',
@@ -600,7 +600,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 ai.ids = {}; ai.names = {};
                 (data.rows || []).forEach(r => { ai.ids[r.id] = r.macs; ai.names[r.id] = r.names; });
                 $('#ai-count-unidentified').text(data.unidentified);
-                $('#ai-cut').text(data.asked < data.chosen ? '{{ lang._("The question covers the first") }} ' + data.asked
+                $('#ai-cut').text(data.asked < data.chosen ? '{{ lang._("The prompt covers the first") }} ' + data.asked
                     + ' {{ lang._("of") }} ' + data.chosen + ' {{ lang._("devices (it would be too long for an AI chat).") }}' : '');
                 $('#ai-count-all').text(data.all);
                 $('#ai-copy').prop('disabled', !ai.prompt).find('i').removeClass('fa-check').addClass('fa-copy');
@@ -852,7 +852,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 </div>
                 <p class="loupe-source-help" data-for="mine" style="margin: 8px 0 0">{{ lang._('Set the type of every device that matches, e.g. all devices whose MAC vendor is Tuya are Window shades. Your rules are checked before the built-in ones; an override for one device still wins. Your rules are tried by their strongest clue (MAC prefix, Bonjour model, host name, DHCP vendor class, domain, Bonjour service, MAC vendor), then in the order you added them; the first that matches decides. Apply to use them: devices are reclassified within a minute.') }}</p>
                 <p class="loupe-source-help" data-for="builtin" style="margin: 8px 0 0; display: none">{{ lang._('The rules Loupe ships with, in the order they are tried within each kind of evidence (Bonjour model, host name, DHCP, domains it talks to, MAC vendor). The first one that matches decides the type.') }}</p>
-                <p class="loupe-source-help" data-for="ai" style="margin: 8px 0 0; display: none">{{ lang._('Ask any AI chat (Claude, ChatGPT, Gemini...) what the devices Loupe can only guess at are, and turn its answer into rules. Loupe sends nothing anywhere: you copy the question and paste the answer. The question carries what the devices announce and the domains they use, without MAC or IP addresses.') }}</p>
+                <p class="loupe-source-help" data-for="ai" style="margin: 8px 0 0; display: none">{{ lang._('Ask any AI chat (Claude, ChatGPT, Gemini...) what the devices Loupe can only guess at are, and turn its answer into rules. Loupe sends nothing anywhere: you copy the prompt and paste the answer. The prompt carries what the devices announce and the domains they use, without MAC or IP addresses.') }}</p>
             </div>
             <div data-source-pane="mine">
                 {{ partial('layout_partials/base_bootgrid_table', formGridRules) }}
@@ -878,15 +878,15 @@ POSSIBILITY OF SUCH DAMAGE.
             <div data-source-pane="ai" style="display: none">
                 <div class="loupe-ai-step">
                     <h4>{{ lang._('1. Ask') }}</h4>
-                    <p class="text-muted">{{ lang._('Copy the question into an AI chat, ideally one that can search the web. By default it asks only about the devices Loupe could not identify from their own evidence: those with no type, or only a generic one such as IoT device (ESP).') }}</p>
+                    <p class="text-muted">{{ lang._('Copy the prompt into an AI chat, ideally one that can search the web. By default it asks only about the devices Loupe could not identify from their own evidence: those with no type, or only a generic one such as IoT device (ESP).') }}</p>
                     <div style="margin-bottom: 6px">
                         <label class="radio-inline"><input type="radio" name="ai-scope" value="" checked> <span id="ai-count-unidentified"></span> {{ lang._('unidentified or generic devices') }}</label>
                         <label class="radio-inline"><input type="radio" name="ai-scope" value="all"> {{ lang._('All') }} <span id="ai-count-all"></span> {{ lang._('devices') }}</label>
                     </div>
                     <p id="ai-cut" class="text-warning"></p>
                     <div style="margin-bottom: 6px">
-                        <button type="button" class="btn btn-primary" id="ai-copy"><i class="fa fa-copy fa-fw"></i> {{ lang._('Copy question') }}</button>
-                        <a href="#" id="ai-show">{{ lang._('Show question') }}</a>
+                        <button type="button" class="btn btn-primary" id="ai-copy"><i class="fa fa-copy fa-fw"></i> {{ lang._('Copy prompt') }}</button>
+                        <a href="#" id="ai-show">{{ lang._('Show prompt') }}</a>
                     </div>
                     <pre id="ai-prompt" style="display: none; max-height: 24em; overflow: auto; white-space: pre-wrap"></pre>
                 </div>
