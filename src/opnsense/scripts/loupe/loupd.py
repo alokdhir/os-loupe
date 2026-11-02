@@ -247,9 +247,12 @@ class Loupe:
             info = devid.current_mdns(info)     # what the device announces now outranks older announcements
             name = leases.get(mac) or hosts.get(ip)
             # the name it has here (a lease or static mapping) and the one it sent: rules match either
-            t, src, ven = devid.classify(mac, name or hostname, {**info, "dhcp_hostname": hostname}, seen, self.oui)
+            t, src, ven, rule_model = devid.classify(mac, name or hostname, {**info, "dhcp_hostname": hostname}, seen, self.oui)
             known[mac]["type"] = t
-            rows.append((devid.display_name(name, hostname, devid.mdns_name(info)), ven, t, src, devid.model(info), mac))
+            model = devid.model(info, fallback=rule_model)
+            # a device that only calls itself by an ID or a serial is named after its model
+            shown, by_model = devid.name_with_model(devid.display_name(name, hostname, devid.mdns_name(info)), ven, model)
+            rows.append((shown, "model" if by_model else None, ven, t, src, model, mac))
         self.store.set_device_types(rows)
         # an interface that replaced another (wired and Wi-Fi at different times, a new private address)
         days = functools.lru_cache(maxsize=None)(self.store.active_days)

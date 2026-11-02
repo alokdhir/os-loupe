@@ -499,7 +499,7 @@
   "Robot vacuum": {"icon": "fa-solid fa-broom"},
   "Smoke alarm": {"icon": "fa-solid fa-smog"},
   "Cooktop": {"icon": "fa-solid fa-fire-burner"},
-  "Oven": {"icon": "fa-solid fa-kitchen-set"},
+  "Oven": {"icon": "fa-solid fa-fire-burner"},
   "Microwave": {"icon": "fa-solid fa-kitchen-set"},
   "Range hood": {"icon": "fa-solid fa-wind"},
   "Heat pump": {"icon": "fa-solid fa-fan"},

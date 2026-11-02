@@ -262,7 +262,8 @@ def _match(conds, ev):
 
 
 def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
-    """Return (type, source, vendor). `names` are server names the device looked up or connected to."""
+    """Return (type, source, vendor, model). `names` are server names the device looked up or connected to; `model`
+    is the one a rule of the user's gives the devices it matches (None if it gives none)."""
     info = info or {}
     mac = mac.lower()
     private = is_private(mac)
@@ -283,8 +284,8 @@ def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
                 src = _match(conds, ev)
                 if src is not None:
                     by = "AI rule" if r.get("source") == "ai" else "custom rule"     # the AI flow's, or typed in
-                    return r["type"], (f"{by}: {src}" if mine else src), r.get("vendor", ven)
-    return None, None, ven
+                    return r["type"], (f"{by}: {src}" if mine else src), r.get("vendor", ven), r.get("model") or None
+    return None, None, ven, None
 
 
 def load_oui(path=OUI_CSV):
@@ -333,16 +334,25 @@ def set_model_names(names):
     _model_names = {str(k).strip(): str(v).strip() for k, v in (names or {}).items() if str(k).strip() and str(v).strip()}
 
 
-def model(info, names=None):
+def model(info, names=None, fallback=None):
     """The device's model: the user's name for an identifier it announces, else what it announces in Bonjour TXT,
     by MODEL_ORDER. A key with several different values names other things (a bridge announcing the accessories it
-    serves): no model from it, nor from the keys after it. names={}: what it announces, not the user's name."""
+    serves): no model from it, nor from the keys after it. names={}: what it announces, not the user's name.
+    `fallback`: the model a rule gives the device (a Miele oven announces none), used if it announces none, and
+    named by the user's names like an announced one."""
     announced = (info or {}).get("mdns_models", [])
     names = _model_names if names is None else names
     for m in announced:
         hit = names.get(m.split("=", 1)[1] if "=" in m else m)
         if hit:
             return hit
+    found = _announced_model(announced)
+    if found or not fallback:
+        return found
+    return names.get(fallback.strip()) or fallback.strip()
+
+
+def _announced_model(announced):
     values = {}
     for m in announced:
         key, _, value = m.partition("=")
@@ -409,6 +419,37 @@ def display_name(*candidates):
     names = [c for c in candidates if c]
     return next((n for n in names if n.lower() not in PLACEHOLDERS and not ID_NAME.match(n)),
                 names[0] if names else None)
+
+
+# a maker's name followed by a serial or MAC (Miele-0011223344556677, ESP_A1B2C3D4E5F6): not a name either
+SERIAL_NAME = re.compile(r"(?i)^[a-z][a-z0-9]*[-_ ][0-9a-f]{12,}$")
+# the legal form and other words a maker's registered name ends with ("Miele & Cie. KG", "Sub-Zero Group, Inc.")
+COMPANY_WORDS = {"inc", "corp", "corporation", "co", "ltd", "limited", "llc", "gmbh", "kg", "ag", "sa", "bv", "nv",
+                 "plc", "srl", "spa", "oy", "ab", "as", "group", "holdings", "technologies", "technology",
+                 "electronics", "international", "company"}
+
+
+def short_maker(vendor):
+    """The name a maker goes by, from its registered name: "Miele & Cie. KG" -> "Miele"."""
+    words = re.split(r"\s*[&,(]", vendor or "")[0].split()
+    while len(words) > 1 and words[-1].lower().strip(".") in COMPANY_WORDS:
+        words.pop()
+    return " ".join(words)
+
+
+def is_name(name):
+    """A device name that names it: not missing, a placeholder ("iPhone"), an ID or a maker plus a serial."""
+    return bool(name) and name.lower() not in PLACEHOLDERS and not ID_NAME.match(name) and not SERIAL_NAME.match(name)
+
+
+def name_with_model(name, vendor, model):
+    """(name, named after the model?): a device whose name is only an ID or a maker plus a serial is named after its
+    model ("Miele Combi-Steam Oven XXL"), with the maker in front unless the model starts with it. A placeholder
+    ("iPhone") gives way only to a readable model, not a code (Mac16,1)."""
+    if not model or is_name(name) or (name and name.lower() in PLACEHOLDERS and " " not in model):
+        return name, False
+    maker = short_maker(vendor)
+    return (model if not maker or model.lower().startswith(maker.lower()) else f"{maker} {model}"), True
 
 
 def mdns_name(info):

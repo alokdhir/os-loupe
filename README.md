@@ -90,9 +90,9 @@ OPNsense's own reports, Insight (NetFlow) and Unbound's DNS reporting, name a de
 
 Loupe keys everything on the device's MAC address and works out what it is from what the device says about itself:
 
-- **The model**, from Bonjour/mDNS: devices announce it (*Sonos One*, *Google Nest Mini*, *HP LaserJet Pro M404*); where it's a code (Apple's `Mac15,13`, `AppleTV14,1`), *Settings → Device rules → Model names* gives it a name (a lookup table; an AI chat can suggest the names there, from a prompt that carries only the codes, their maker and device type); printers, speakers and Cast devices announce their services.
+- **The model**, from Bonjour/mDNS: devices announce it (*Sonos One*, *Google Nest Mini*, *HP LaserJet Pro M404*); where it's a code (Apple's `Mac15,13`, `AppleTV14,1`), *Settings → Device rules → Model names* gives it a name (a lookup table; an AI chat can suggest the names there, from a prompt that carries only the codes, their maker and device type); a device that announces no model gets the one a rule gives it (*Model* in a device rule; the AI Rule Generator fills it in), named the same way; printers, speakers and Cast devices announce their services.
 - **The category**, where a device states it: HomeKit's accessory category and Matter's device type (a thermostat, a lock, an oven), whatever the brand.
-- **The name**, from the DHCP lease, the hostname the device sends, or its Bonjour name, preferring a real name over the placeholders phones with private addresses send (*iPhone*, *Mac*).
+- **The name**, from the DHCP lease, the hostname the device sends, or its Bonjour name, preferring a real name over the placeholders phones with private addresses send (*iPhone*, *Mac*). A device that calls itself only by an ID or its maker and a serial (*Miele-0011223344556677*) is named after its model instead (*Miele Combi-Steam Oven XXL*).
 - **The type and maker**, from DHCP fingerprints (vendor class and parameter list), the MAC vendor, and the services it talks to (`playstation.net` → PlayStation, `ring.com` → Ring device).
 - **Your corrections**: a name, type or icon you set follows the device by MAC, and your rules type whole groups at once.
 

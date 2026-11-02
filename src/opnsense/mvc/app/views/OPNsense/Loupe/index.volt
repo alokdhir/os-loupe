@@ -62,6 +62,8 @@ POSSIBILITY OF SUCH DAMAGE.
         const ESC = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
         const esc = s => (s == null ? '' : String(s).includes('&') ? htmlDecode(String(s)) : String(s))
             .replace(/[&<>"']/g, c => ESC[c]);
+        /* a device's model, unless loupd named the device after it ("Miele Combi-Steam Oven XXL") */
+        const modelShown = d => d.model_in_name ? '' : (d.model || '');
         const ago = ts => ts ? moment(ts * 1000).fromNow() : '';
         const dash = '<span class="text-muted">&mdash;</span>';
         /* named from the same device's other traffic to the same server (query.py Labels) */
@@ -107,10 +109,11 @@ POSSIBILITY OF SUCH DAMAGE.
                 return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>' + editButton(row);
             },
             devtype: function (column, row) {           /* the type, its model (when known) after it */
-                if (!row.type && !row.model) return dash + editButton(row);
+                const model = modelShown(row);
+                if (!row.type && !model) return dash + editButton(row);
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
                     + '<span title="' + esc(row.type_source || '') + '">' + esc(row.type || '') + '</span>'
-                    + (row.model ? ' <span class="text-muted">' + esc(row.model) + '</span>' : '') + editButton(row);
+                    + (model ? ' <span class="text-muted">' + esc(model) + '</span>' : '') + editButton(row);
             },
             vendor: function (column, row) {
                 if (!row.vendor_note) return esc(row.vendor);
@@ -306,7 +309,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 deviceColumns($(DEVICE_GRIDS));
                 $('#loupe-detail-title').html((d.icon ? '<i class="' + esc(d.icon) + ' fa-fw text-muted"></i> ' : '')
                     + esc(d.name || d.ip || id) + editButton(d)
-                    + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
+                    + ' <small class="text-muted">' + esc([modelShown(d), d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
                     /* one device seen with several MACs (a bridge and its NIC, wired and Wi-Fi): the others too */
                     + ((d.macs || []).length > 1 ? ' <span title="{{ lang._('Loupe saw these MACs as one device') }}">('
                         + esc('{{ lang._('also') }} ' + d.macs.filter(m => m !== d.mac).join(', ')) + ')</span>' : '')
@@ -800,7 +803,7 @@ POSSIBILITY OF SUCH DAMAGE.
             const picked = $('#ai-rules input:checked').map(function () { return aiChecked[$(this).data('i')]; }).get();
             if (!picked.length) { $('#ai-saved').text('{{ lang._("Tick the rules to save.") }}'); return; }
             const rules = picked.map(r => Object.assign({}, r.fields,
-                {description: [r.vendor, r.model, r.note].filter(Boolean).join(' · '),
+                {description: [r.vendor, r.model, r.note].filter(Boolean).join(' · '), model: r.model || '',
                  icon: $('#ai-rules select.ai-icon[data-i="' + aiChecked.indexOf(r) + '"]').val() || ''}));
             const $btn = $(this).prop('disabled', true);
             ajaxCall('/api/loupe/settings/ai_save', {rules: rules}, function (data) {

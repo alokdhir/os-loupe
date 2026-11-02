@@ -92,6 +92,13 @@
         <grid_view><width>4em</width></grid_view>
     </field>
     <field>
+        <id>rule.model</id>
+        <label>Model</label>
+        <type>text</type>
+        <help>The model of the devices it matches, e.g. DGC 7785, for devices that don't announce one. Model names can give it a name; a device with no name of its own is named after it.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
         <id>rule.description</id>
         <label>Description</label>
         <type>text</type>

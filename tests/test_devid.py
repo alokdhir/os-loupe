@@ -43,7 +43,7 @@ class TestDevid(unittest.TestCase):
 
     def test_mdns_model_wins(self):
         t = devid.classify("dd:ee:ff:00:00:01", "Family-Room", {"mdns_models": ["model=AppleTV14,1"]}, (), OUI)
-        self.assertEqual(t, ("Apple TV", "mdns model AppleTV14,1", "Apple, Inc."))
+        self.assertEqual(t, ("Apple TV", "mdns model AppleTV14,1", "Apple, Inc.", None))
 
     def test_hostname(self):
         self.assertEqual(devid.classify("dd:ee:ff:00:00:02", "Sams-iPhone", {}, (), OUI)[0], "iPhone")
@@ -285,7 +285,7 @@ class TestUserRules(unittest.TestCase):
         before = devid.classify("ac:00:00:00:00:01", names=["a1.tuyaus.com"], oui=oui)
         self.assertEqual(before[0], "Smart home device")                 # built-in: talks to tuyaus.com
         self.assertEqual(devid.set_user_rules([{"when": {"vendor": "Tuya"}, "type": "Window shade"}]), [])
-        t, src, ven = devid.classify("ac:00:00:00:00:01", names=["a1.tuyaus.com"], oui=oui)
+        t, src, ven, _ = devid.classify("ac:00:00:00:00:01", names=["a1.tuyaus.com"], oui=oui)
         self.assertEqual((t, src, ven), ("Window shade", "custom rule: vendor Tuya Smart Inc.", "Tuya Smart Inc."))
         devid.set_user_rules([{"when": {"vendor": "Tuya"}, "type": "Window shade", "source": "ai"}])    # the AI flow's
         self.assertEqual(devid.classify("ac:00:00:00:00:01", oui=oui)[1], "AI rule: vendor Tuya Smart Inc.")
@@ -300,7 +300,7 @@ class TestUserRules(unittest.TestCase):
     def test_compound_rule(self):
         oui = {"AC0000": "Espressif Inc."}
         devid.set_user_rules([{"when": {"vendor": "Espressif", "hostname": "^shelly"}, "type": "Smart relay"}])
-        t, src, _ = devid.classify("ac:00:00:00:00:03", hostname="shelly-1", oui=oui)
+        t, src, _, _ = devid.classify("ac:00:00:00:00:03", hostname="shelly-1", oui=oui)
         self.assertEqual((t, src), ("Smart relay", "custom rule: vendor Espressif Inc. + hostname shelly-1"))
         self.assertNotEqual(devid.classify("ac:00:00:00:00:03", hostname="plug-1", oui=oui)[0], "Smart relay")
         self.assertNotEqual(devid.classify("ac:00:00:00:00:03", hostname="shelly-1")[0], "Smart relay")
@@ -425,6 +425,39 @@ class TestModelAndName(unittest.TestCase):
         devid.set_model_names({"AcmeBook9,1": "AcmeBook Air 15", " ": "x"})
         self.assertEqual(devid.model({"mdns_models": ["model=AcmeBook9,1"]}), "AcmeBook Air 15")
         self.assertEqual(devid.model({"mdns_models": ["model=AcmeBook9,2"]}), "AcmeBook9,2")
+
+    def test_rule_model(self):
+        """A rule's model is used when the device announces none, and named like an announced one."""
+        devid.set_user_rules([{"when": {"mdns_name": "^acme ov1$"}, "type": "Oven", "source": "ai", "model": "OV 100"}])
+        try:
+            info = {"mdns_names": ["acme ov1"]}
+            t, _, _, rule_model = devid.classify("ac:00:00:00:00:31", None, info)
+            self.assertEqual((t, rule_model), ("Oven", "OV 100"))
+            self.assertEqual(devid.model(info, fallback=rule_model), "OV 100")
+            devid.set_model_names({"OV 100": "Steam Oven XL"})
+            self.assertEqual(devid.model(info, fallback=rule_model), "Steam Oven XL")
+            self.assertEqual(devid.model({"mdns_models": ["md=Acme Oven 2"]}, fallback=rule_model), "Acme Oven 2")
+            self.assertIsNone(devid.classify("ac:00:00:00:00:32", None, {})[3])
+        finally:
+            devid.set_user_rules([])
+
+    def test_named_after_model(self):
+        """A device called only by an ID or a maker plus a serial is named after its model, maker first."""
+        named = lambda *a: devid.name_with_model(*a)[0]      # noqa: E731
+        self.assertEqual(devid.name_with_model("Acme-0011223344556677", "Acme", "Box"), ("Acme Box", True))
+        self.assertEqual(devid.name_with_model("kitchen-oven", "Acme", "Box"), ("kitchen-oven", False))
+        self.assertEqual(devid.short_maker("Acme & Cie. KG"), "Acme")
+        self.assertEqual(devid.short_maker("Acme Group, Inc."), "Acme")
+        self.assertEqual(devid.short_maker("Acme Electronics Co.,Ltd"), "Acme")
+        self.assertEqual(devid.short_maker("Texas Acme"), "Texas Acme")
+        self.assertEqual(named("Acme-0011223344556677", "Acme & Cie. KG", "Steam Oven XL"), "Acme Steam Oven XL")
+        self.assertEqual(named("0005CD000001", "Acme Inc.", "AV-100"), "Acme AV-100")
+        self.assertEqual(named(None, "Acme Inc.", "Acme Box"), "Acme Box")            # no maker twice
+        self.assertEqual(named("Acme-0011223344556677", None, "Box"), "Box")
+        self.assertEqual(named("kitchen-oven", "Acme Inc.", "Steam Oven XL"), "kitchen-oven")  # a real name stays
+        self.assertEqual(named("Acme-0011223344556677", "Acme Inc.", None), "Acme-0011223344556677")
+        self.assertEqual(named("iPhone", None, "iPhone 15 Pro"), "iPhone 15 Pro")      # a placeholder: a readable model
+        self.assertEqual(named("Mac", None, "Mac16,1"), "Mac")                           # not a code
 
     def test_announced_model(self):
         model = lambda *m: devid.model({"mdns_models": list(m)})       # noqa: E731

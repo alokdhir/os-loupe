@@ -151,7 +151,7 @@
                         <ai value="ai">AI</ai>
                     </OptionValues>
                 </source>
-                <ai_model type="TextField"/>
+                <model type="TextField"/>
             </rule>
         </rules>
         <models>

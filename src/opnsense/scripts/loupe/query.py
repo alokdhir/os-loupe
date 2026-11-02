@@ -188,6 +188,7 @@ def merge_group(devs):
     named = next((d for d in devs if d["custom"] and d["name"]), None) or next((d for d in devs if d["name"]), main)
     return {**main, "name": named["name"],
             **{k: typed[k] for k in ("type", "type_source", "vendor", "vendor_note", "icon", "icon_set", "model")},
+            "model_in_name": named.get("model_in_name", False) and named["model"] == typed["model"],
             "first_seen": min(d["first_seen"] or 0 for d in devs), "custom": any(d["custom"] for d in devs),
             "macs": [d["mac"] for d in devs]}
 
@@ -203,17 +204,19 @@ def devices_info(db, overrides, macs=None):
     for o in overrides.values():
         if o.get("type") and o.get("icon"):
             picked.setdefault(loose(o["type"]), o["icon"])
-    sql, args = "SELECT mac, ip, name, hostname, vendor, type, type_source, model, first_seen, last_seen FROM devices", ()
+    sql, args = "SELECT mac, ip, name, name_source, hostname, vendor, type, type_source, model, first_seen, last_seen FROM devices", ()
     if macs is not None:
         args = tuple(sorted(macs))
         sql += " WHERE mac IN (%s)" % ",".join("?" * len(args))
-    for mac, ip, name, hostname, vendor, dtype, src, model, first, last in db.execute(sql, args):
+    for mac, ip, name, name_src, hostname, vendor, dtype, src, model, first, last in db.execute(sql, args):
         o = overrides.get(mac, {})
         vendor, vnote = vendor_of(mac, vendor, o.get("type") or dtype)
         out[mac] = {"mac": mac, "ip": ip, "name": o.get("name") or name or hostname or "", "vendor": vendor,
                     "vendor_note": vnote, "icon": icon_for(o, o.get("type") or dtype, picked),
                     "icon_set": o.get("icon") or "",
                     "model": model or "",
+                    # named after its model by loupd (not by you): the Type column needn't repeat the model
+                    "model_in_name": not o.get("name") and name_src == "model",
                     "type": o.get("type") or dtype or "", "type_source": "set by you" if o.get("type") else (src or ""),
                     "first_seen": first, "last_seen": last, "custom": bool(o)}
     for mac, o in overrides.items():   # named before loupe recorded the device
@@ -222,7 +225,8 @@ def devices_info(db, overrides, macs=None):
         out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "vendor_note": "",
                              "icon": icon_for(o, o.get("type"), picked), "icon_set": o.get("icon") or "",
                              "type": o.get("type") or "",
-                             "type_source": "set by you" if o.get("type") else "", "model": "", "first_seen": 0, "last_seen": 0,
+                             "type_source": "set by you" if o.get("type") else "", "model": "", "model_in_name": False,
+                             "first_seen": 0, "last_seen": 0,
                              "custom": True})
     for mac in [m for m in out if m in groups and m == groups[m][0]]:       # each group once
         merged = merge_group([out[m] for m in groups[mac] if m in out])
@@ -280,7 +284,7 @@ def cmd_devices(hours, want=None):
         on[key].add(net)
         r = rows.get(key)
         if r is None:
-            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model")},
+            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model", "model_in_name")},
                              "custom": d.get("custom", False),
                              "mac": d.get("mac") or mac, "ip": ip, "down": 0, "up": 0, "conns": 0, "last": 0}
         r["down"] += down
@@ -303,7 +307,7 @@ def cmd_devices(hours, want=None):
         if want and net not in want:
             continue
         on[mac].add(net)
-        rows[mac] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model")},
+        rows[mac] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model", "model_in_name")},
                      "custom": d.get("custom", False), "mac": mac, "ip": d["ip"], "down": 0, "up": 0, "conns": 0, "last": 0}
     for key, r in rows.items():
         r["top"] = [s for s, _ in tops[key].most_common(3)]     # "Other" too: an unnamed stream can be the biggest
@@ -930,11 +934,17 @@ def span_arg(start, end):
 
 
 def model_codes(db, ov):
-    """The model codes devices announce (what they say, not the user's names): {code: [device dicts]}; codes with a
-    space are a readable name already (Lutron Processor), not a code."""
+    """The model codes devices announce, or a rule of the user's gives them (what they say, not the user's names):
+    {code: [device dicts]}; codes with a space are a readable name already (Lutron Processor), not a code - except
+    a rule's ("DGC 7785": the user or the AI wrote it as the model to name)."""
     codes = collections.defaultdict(list)
+    oui = devid.load_oui()
     for d in ai_devices(db, ov):
-        code = devid.model(d["info"], names={})
+        rule_model = (devid.classify(*d["for_rules"], oui)[3] or "").strip()
+        code = devid.model(d["info"], names={}, fallback=rule_model)
+        if code and code == rule_model:
+            codes[code].append(d)
+            continue
         if code and " " not in code:
             codes[code].append(d)
     return codes

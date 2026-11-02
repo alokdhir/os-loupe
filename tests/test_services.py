@@ -197,8 +197,8 @@ class TestIdentities(unittest.TestCase):
             now = int(time.time())
             s.write({}, {}, {"02:00:00:00:00:60": {"ip": "10.9.1.60", "hostname": "tv", "ts": now},
                              "02:00:00:00:00:61": {"ip": "10.9.1.61", "hostname": "phone", "ts": now}})
-            s.set_device_types([("Den TV", "Example", "Apple TV", "mdns", "", "02:00:00:00:00:60"),
-                                ("Phone", "", "iPhone", "mdns", "", "02:00:00:00:00:61")])
+            s.set_device_types([("Den TV", None, "Example", "Apple TV", "mdns", "", "02:00:00:00:00:60"),
+                                ("Example Phone 2", "model", "", "iPhone", "mdns", "Phone 2", "02:00:00:00:00:61")])
             s.close()
             conf = os.path.join(d, "loupe.json")
             with open(conf, "w") as f:
@@ -214,6 +214,15 @@ class TestIdentities(unittest.TestCase):
             self.assertEqual(out["devices"]["02:00:00:00:00:62"]["name"], "Not seen yet")       # an override only
             phone = self.run_query(path, conf, "02:00:00:00:00:61")["devices"]["02:00:00:00:00:61"]
             self.assertEqual(phone["name"], "My phone")                                        # override wins
+            # named after its model by loupd: the Type column leaves the model out, unless you named it
+            import query
+            db = sqlite3.connect(path)
+            try:
+                self.assertTrue(query.devices_info(db, {})["02:00:00:00:00:61"]["model_in_name"])
+                self.assertFalse(query.devices_info(db, {"02:00:00:00:00:61": {"name": "My phone"}})["02:00:00:00:00:61"]["model_in_name"])
+                self.assertFalse(query.devices_info(db, {})["02:00:00:00:00:60"]["model_in_name"])
+            finally:
+                db.close()
 
     def test_bad_lists(self):
         for arg in ("", "nope", "02:00:00:00:00:6", ",".join(["02:00:00:00:00:01"] * 2) + ",x"):

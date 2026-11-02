@@ -25,7 +25,7 @@
 {%       do when.update({field: rule[field]}) %}
 {%     endfor %}
 {%     if rule.private_mac %}{% do when.update({'private_mac': rule.private_mac == '1'}) %}{% endif %}
-        {"when": {{ when | tojson }}, "type": {{ rule.type | tojson }}, "icon": {{ rule.icon | default('') | tojson }}, "source": {{ rule.source | default('manual') | tojson }}}{{ "," if not loop.last }}
+        {"when": {{ when | tojson }}, "type": {{ rule.type | tojson }}, "icon": {{ rule.icon | default('') | tojson }}, "source": {{ rule.source | default('manual') | tojson }}{% if rule.model %}, "model": {{ rule.model | tojson }}{% endif %}}{{ "," if not loop.last }}
 {%   endfor %}
 {% endif %}
     ],
