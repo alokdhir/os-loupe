@@ -389,9 +389,11 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* Apply on the settings tab, but not where there is nothing to apply: the read-only Built-in lists, and the
            AI Rule Generator (its Save and apply does it) */
+        let currentTab = '';            /* the tab route() showed: the panes' classes lag behind their fade */
         function applyButton() {
-            const source = $('.loupe-page:visible .loupe-source .btn.active').data('source');
-            $('.loupe-apply').toggle($('#tab_settings').hasClass('active') && source !== 'builtin' && source !== 'ai');
+            const page = $('.loupe-page').filter(function () { return this.style.display !== 'none'; }).first();
+            const source = page.find('.loupe-source .btn.active').data('source');
+            $('.loupe-apply').toggle(currentTab === 'settings' && source !== 'builtin' && source !== 'ai');
         }
         function showSettings(page) {
             $('.loupe-pages .btn').removeClass('active').filter('[data-page="' + page + '"]').addClass('active');
@@ -432,8 +434,8 @@ POSSIBILITY OF SUCH DAMAGE.
             rebuildNote();
             const tab = tabOf(hash);
             $('#maintabs a[href="' + TABS[tab] + '"]').tab('show');
-            $('.loupe-apply').toggle(tab === 'settings');
-            setTimeout(applyButton);            /* once the tab and page are shown */
+            currentTab = tab;
+            applyButton();
             if (tab === 'devices') {
                 const m = hash.match(/device=([^&]+)/);
                 if (m) { showDevice(decode(m[1])); } else { showDevices(); }
