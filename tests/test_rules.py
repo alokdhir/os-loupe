@@ -30,11 +30,11 @@ import unittest
 import helpers  # noqa: F401
 from lib import devid, services
 
-FIELDS = {"mac_prefix": str, "mdns_model": str, "hostname": str, "mdns_service": str, "dhcp_vendor": str,
+FIELDS = {"mac_prefix": str, "mdns_model": str, "mdns_name": str, "category": str, "hostname": str, "mdns_service": str, "dhcp_vendor": str,
           "dhcp_params": str, "talks_to": str, "vendor": str, "private_mac": bool}
 RULE_KEYS = {"when", "all", "tier", "type", "vendor", "note", "example"}
 EXAMPLE_KEYS = {"mac", "hostname", "vendor", "info", "names"}
-REGEX_FIELDS = ("mdns_model", "hostname", "dhcp_vendor")
+REGEX_FIELDS = ("mdns_model", "mdns_name", "hostname", "dhcp_vendor")
 
 
 def run_example(ex):
@@ -65,6 +65,8 @@ class TestDeviceRules(unittest.TestCase):
                             self.assertIsInstance(w, FIELDS[field])
                             if field in REGEX_FIELDS:
                                 re.compile(w)
+                            if field == "category":
+                                self.assertEqual(devid.category_code(w), w, "categories are written hap:N / matter:0xNNNN")
                 self.assertIn("example", r, "every rule carries synthetic evidence")
                 self.assertLessEqual(set(r["example"]), EXAMPLE_KEYS)
 

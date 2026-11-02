@@ -25,6 +25,20 @@
         <grid_view><visible>false</visible></grid_view>
     </field>
     <field>
+        <id>rule.mdns_name</id>
+        <label>Bonjour name</label>
+        <type>text</type>
+        <help>The name it announces a service under (lower case), a regular expression, e.g. ^acme x1</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
+        <id>rule.category</id>
+        <label>Category code</label>
+        <type>text</type>
+        <help>A HomeKit category (hap:9) or Matter device type (matter:0x0301) it announces. Separate several with commas.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
         <id>rule.mdns_service</id>
         <label>Bonjour service</label>
         <type>text</type>

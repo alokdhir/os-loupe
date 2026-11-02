@@ -108,8 +108,9 @@ class SettingsController extends ApiMutableModelControllerBase
 
     /* a rule's clues, strongest first (the order loupd tries them in, lib/devid.py TIERS) */
     private const RULE_FIELDS = [
-        'mac_prefix' => 'MAC prefix', 'mdns_model' => 'Bonjour model', 'hostname' => 'Host name',
-        'dhcp_vendor' => 'DHCP vendor class', 'talks_to' => 'Talks to', 'mdns_service' => 'Bonjour service',
+        'mac_prefix' => 'MAC prefix', 'mdns_model' => 'Bonjour model', 'mdns_name' => 'Bonjour name',
+        'hostname' => 'Host name', 'category' => 'Category code', 'dhcp_vendor' => 'DHCP vendor class',
+        'talks_to' => 'Talks to', 'mdns_service' => 'Bonjour service',
         'vendor' => 'MAC vendor', 'private_mac' => 'Private MAC',
     ];
 
@@ -155,7 +156,13 @@ class SettingsController extends ApiMutableModelControllerBase
                 return $this->ruleError('rule.mac_prefix', $message);
             }
         }
-        foreach (['hostname', 'mdns_model', 'dhcp_vendor'] as $field) {
+        foreach ($clue('category') === '' ? [] : explode(',', $clue('category')) as $code) {
+            if (!preg_match('/^(hap:\d+|matter:(0x[0-9a-f]+|\d+))$/i', trim($code))) {
+                $message = gettext('Enter codes like hap:9 or matter:0x0301, separated by commas.');
+                return $this->ruleError('rule.category', $message);
+            }
+        }
+        foreach (['hostname', 'mdns_model', 'mdns_name', 'dhcp_vendor'] as $field) {
             $pattern = $clue($field);
             if ($pattern !== '' && @preg_match('/' . str_replace('/', '\\/', $pattern) . '/u', '') === false) {
                 return $this->ruleError("rule.{$field}", gettext('This is not a valid regular expression.'));

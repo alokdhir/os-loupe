@@ -22,10 +22,11 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import struct
 import unittest
 
 import helpers  # noqa: F401
-from lib import devid
+from lib import devid, mdns
 
 OUI = {"AABBCC": "Sony Interactive Entertainment Inc.", "DDEEFF": "Apple, Inc.", "112233": "Tuya Smart Inc."}
 
@@ -121,6 +122,83 @@ class TestDevid(unittest.TestCase):
         self.assertEqual(devid.display_name("Mac", "Mac", "studio"), "studio")
         self.assertEqual(devid.display_name("", "iPhone", None), "iPhone")          # nothing better
         self.assertEqual(devid.display_name("office-pc", "x", "y"), "office-pc")
+
+
+def mdns_response(*records):
+    """A synthetic mDNS response; records are (name, type, rdata bytes)."""
+    def name(n):
+        return b"".join(bytes([len(p)]) + p.encode() for p in n.split(".")) + b"\0"
+    out = struct.pack("!6H", 0, 0x8400, 0, len(records), 0, 0)
+    for n, rtype, rd in records:
+        out += name(n) + struct.pack("!HHIH", rtype, 0x8001, 120, len(rd)) + rd
+    return out
+
+
+def txt(**kv):
+    return b"".join(bytes([len(e)]) + e for e in (f"{k}={v}".encode() for k, v in kv.items()))
+
+
+class TestCategories(unittest.TestCase):
+    def tearDown(self):
+        devid.set_user_rules([])
+
+    def test_codes(self):
+        self.assertEqual(devid.category_code("HAP:09"), "hap:9")
+        self.assertEqual(devid.category_code("matter:769"), "matter:0x0301")
+        self.assertEqual(devid.category_code("matter:0x301"), "matter:0x0301")
+        self.assertIsNone(devid.category_code("zigbee:1"))
+        self.assertIsNone(devid.category_code("hap:x"))
+
+    def test_homekit_category(self):
+        t = devid.classify("ac:00:00:00:00:01", None, {"mdns_categories": ["hap:9"], "mdns_services": ["_hap._tcp"]})
+        self.assertEqual(t[:2], ("Thermostat", "HomeKit category 9"))
+
+    def test_matter_subtype(self):
+        info = {"mdns_services": ["_matterc._udp", "_t123._sub._matterc._udp"]}
+        self.assertEqual(devid.classify("ac:00:00:00:00:01", None, info)[:2], ("Oven", "Matter device type 0x007b"))
+
+    def test_bridge_categories_ignored(self):
+        """A bridge announcing what it bridges (several HomeKit categories) is none of them."""
+        info = {"mdns_categories": ["hap:9", "hap:5"], "mdns_services": ["_hap._tcp"]}
+        self.assertEqual(devid.classify("ac:00:00:00:00:01", None, info)[0], "HomeKit accessory")
+
+    def test_specific_service_beats_category(self):
+        info = {"mdns_categories": ["hap:26"], "mdns_services": ["_sonos._tcp", "_hap._tcp"]}
+        self.assertEqual(devid.classify("ac:00:00:00:00:01", None, info)[0], "Sonos speaker")
+
+    def test_user_rule(self):
+        self.assertEqual(devid.set_user_rules([{"when": {"category": "matter:0x0075, hap:20"}, "type": "Kitchen"}]), [])
+        info = {"mdns_categories": ["matter:117"]}
+        self.assertEqual(devid.classify("ac:00:00:00:00:01", None, info)[:2], ("Kitchen", "custom rule: Matter device type 0x0075"))
+        bad = devid.set_user_rules([{"when": {"category": "oven"}, "type": "X"}])
+        self.assertEqual(bad[0][1], "not a category code: oven")
+
+    def test_parse(self):
+        msg = mdns_response(("_hap._tcp.local", 12, b""),
+                            ("Hall Thermostat._hap._tcp.local", 16, txt(ci=9, md="T1", sf=0)),
+                            ("ABCD._matterc._udp.local", 16, txt(DT=123, VP="65521+32769")),
+                            ("Other._http._tcp.local", 16, txt(ci=5)),
+                            ("Door Lock._hap._udp.local", 16, txt(ci=6)))     # relayed from Thread: not this device
+        m = mdns.parse(msg)
+        self.assertEqual(m["categories"], {"hap:9", "matter:123"})
+        self.assertEqual(devid.categories({"mdns_categories": sorted(m["categories"])}), {"hap:9", "matter:0x007b"})
+
+
+class TestMdnsName(unittest.TestCase):
+    def tearDown(self):
+        devid.set_user_rules([])
+
+    def test_rule_on_instance_name(self):
+        devid.set_user_rules([{"when": {"mdns_name": "(?i)^acme x1"}, "type": "Oven"}])
+        info = {"mdns_names": ["acme x100", "0a1b2c3d4e5f60718293"], "mdns_services": ["_acme._tcp"]}
+        self.assertEqual(devid.classify("ac:00:00:00:00:01", None, info)[:2], ("Oven", "custom rule: mdns name acme x100"))
+
+    def test_ids_are_not_names(self):
+        devid.set_user_rules([{"when": {"mdns_name": "^[0-9a-f]+$"}, "type": "Oven"}])
+        self.assertIsNone(devid.classify("ac:00:00:00:00:01", None, {"mdns_names": ["0a1b2c3d4e5f60718293"]})[0])
+
+    def test_bad_regex_refused(self):
+        self.assertIn("bad regular expression", devid.set_user_rules([{"when": {"mdns_name": "("}, "type": "X"}])[0][1])
 
 
 class TestUserRules(unittest.TestCase):

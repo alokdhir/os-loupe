@@ -157,7 +157,8 @@ class Capture:
                 self.stats["mdns"] += 1
                 self.emit({"ev": "mdns", "ts": p.ts, "client": p.src, "mac": p.src_mac,
                            "hosts": m["hosts"], "services": sorted(m["services"]),
-                           "models": sorted(m["models"]), "names": sorted(m["names"])})
+                           "models": sorted(m["models"]), "names": sorted(m["names"]),
+                           "categories": sorted(m["categories"])})
 
 
 def main():

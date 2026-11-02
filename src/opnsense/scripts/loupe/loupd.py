@@ -120,7 +120,8 @@ class Loupe:
             seen = info.setdefault("seen", {})          # when each item was last announced (devid.current_mdns)
             hosts = [h for h in ev.get("hosts", {}) if h.endswith(".local")]
             for k, items in (("models", ev.get("models")), ("names", ev.get("names")),
-                             ("services", ev.get("services")), ("hosts", hosts)):
+                             ("services", ev.get("services")), ("hosts", hosts),
+                             ("categories", ev.get("categories"))):
                 if items:
                     info[f"mdns_{k}"] = sorted(set(info.get(f"mdns_{k}", [])) | set(items))
                     for item in items:

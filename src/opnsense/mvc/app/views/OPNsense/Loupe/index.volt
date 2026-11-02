@@ -504,8 +504,8 @@ POSSIBILITY OF SUCH DAMAGE.
         $('#' + dialog).on('shown.bs.modal', function () { $('#device\\.name').focus().select(); })
             .on('hidden.bs.modal', function () { $('#device\\.mac').prop('readonly', false); });
         /* a rule shows only the clues it uses; "Match on" adds one, the × beside a clue removes it */
-        const CLUES = ['vendor', 'hostname', 'mdns_model', 'mdns_service', 'dhcp_vendor', 'talks_to', 'mac_prefix',
-            'private_mac'];
+        const CLUES = ['vendor', 'hostname', 'mdns_model', 'mdns_name', 'category', 'mdns_service', 'dhcp_vendor',
+            'talks_to', 'mac_prefix', 'private_mac'];
         const $ruleDlg = $('#{{ formGridRules['edit_dialog_id'] }}');
         const clueRow = (c) => $ruleDlg.find('#row_rule\\.' + c);
         const used = (c) => clueRow(c).css('display') !== 'none';      /* also while the dialog itself is hidden */

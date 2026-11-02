@@ -40,12 +40,13 @@ RULES_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "devices.json
 # strongest evidence first; a rule's tier is its "tier", else the field of its first condition
 # (the DHCP fingerprint beats talks_to: a phone running a smart-home app talks to the same cloud as the device;
 # "fallback" holds fingerprints too generic to beat specific evidence, like BusyBox's udhcp - but still better
-# than guessing from a private MAC)
-TIERS = ("mac_prefix", "mdns_model", "hostname", "role", "strong_service", "dhcp_vendor", "dhcp_params", "talks_to",
-         "mdns_service", "vendor", "fallback", "private_mac")
+# than guessing from a private MAC; a HomeKit or Matter category is exact but generic, so it comes after the
+# specific Bonjour services: a Fire TV stays a Fire TV rather than a "TV streamer")
+TIERS = ("mac_prefix", "mdns_model", "mdns_name", "hostname", "role", "strong_service", "category", "dhcp_vendor",
+         "dhcp_params", "talks_to", "mdns_service", "vendor", "fallback", "private_mac")
 
 
-REGEX_FIELDS = ("hostname", "mdns_model", "dhcp_vendor")
+REGEX_FIELDS = ("hostname", "mdns_model", "mdns_name", "dhcp_vendor")
 
 
 def _tiers(rules):
@@ -72,6 +73,8 @@ def check_rule(r):
                 for w in (want if isinstance(want, list) else [want]):
                     if field in REGEX_FIELDS:
                         re.compile(w)
+                    elif field == "category" and not category_code(w):
+                        return f"not a category code: {w}"
     except (KeyError, TypeError, StopIteration, AttributeError):
         return "malformed"
     except re.error as e:
@@ -117,7 +120,7 @@ def rules():
     return _rules
 
 
-LISTABLE = ("mac_prefix", "vendor", "mdns_service", "talks_to")     # a comma can't be part of these
+LISTABLE = ("mac_prefix", "vendor", "mdns_service", "talks_to", "category")     # a comma can't be part of these
 
 
 def _split_lists(r):
@@ -165,6 +168,14 @@ def _check(field, want, ev):
             if re.search(want, val) or re.search(want, m):
                 return f"mdns model {val}"
         return None
+    if field == "mdns_name":
+        for n in ev["instances"]:
+            if re.search(want, n):
+                return f"mdns name {n}"
+        return None
+    if field == "category":
+        want = category_code(want)
+        return f"{CATEGORY_KINDS[want.split(':')[0]]} {want.split(':')[1]}" if want and want in ev["categories"] else None
     if field == "hostname":
         for h in ev["hosts"]:
             if h and re.search(want, h.removesuffix(".local")):
@@ -187,6 +198,39 @@ def _check(field, want, ev):
     if field == "private_mac":
         return ("private MAC" if want else "") if ev["private"] == want else None
     raise ValueError(f"unknown rule field {field}")
+
+
+# standard category codes devices announce: HomeKit's accessory category (TXT ci= on _hap), Matter's device type
+# (TXT DT= on _matterc/_matterd, or their _T<n> subtypes); kept as "hap:9", "matter:0x0301"
+CATEGORY_KINDS = {"hap": "HomeKit category", "matter": "Matter device type"}
+MATTER_SUBTYPE = re.compile(r"^_t(\d+)\._sub\._matter[cd]\._udp$")
+
+
+def category_code(text):
+    """"hap:9", "HAP:09" -> "hap:9"; "matter:769", "matter:0x301" -> "matter:0x0301"; None if not a code."""
+    kind, _, num = str(text).strip().lower().partition(":")
+    try:
+        n = int(num, 0) if num.startswith("0x") else int(num)
+    except ValueError:
+        return None
+    if kind == "hap":
+        return f"hap:{n}"
+    if kind == "matter":
+        return f"matter:0x{n:04x}"
+    return None
+
+
+def categories(info):
+    """The category codes a device announces. A device announcing several HomeKit categories is a bridge
+    showing other things' categories (e.g. Home Assistant's HomeKit Bridge in accessory mode): none of them count."""
+    found = {category_code(c) for c in info.get("mdns_categories", [])}
+    for s in info.get("mdns_services", []):
+        m = MATTER_SUBTYPE.match(s)
+        if m:
+            found.add(category_code(f"matter:{m.group(1)}"))
+    found.discard(None)
+    hap = {c for c in found if c.startswith("hap:")}
+    return found - hap if len(hap) > 1 else found
 
 
 def _match(conds, ev):
@@ -213,6 +257,7 @@ def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
     ven = vendor(mac, oui or {}) if not private else None
     ev = {"mac": mac, "private": private, "vendor": ven or "", "names": list(names),
           "models": info.get("mdns_models", []), "services": info.get("mdns_services", []),
+          "instances": [n for n in info.get("mdns_names", []) if not _id_item("names", n)], "categories": categories(info),
           "vc": info.get("dhcp_vendor_class") or "", "params": _params(info),
           "hosts": [hostname or "", info.get("dhcp_hostname") or ""] + list(info.get("mdns_hosts", []))}
     t = table or rules()
@@ -268,7 +313,7 @@ def model(info):
 
 # Bonjour evidence ages: per kind, only what was announced within RECENT of the newest item counts, so a
 # device's current announcements outrank stale ones (e.g. another device's model it once relayed)
-MDNS_KINDS = ("models", "names", "services", "hosts")
+MDNS_KINDS = ("models", "names", "services", "hosts", "categories")
 RECENT = 86400
 
 

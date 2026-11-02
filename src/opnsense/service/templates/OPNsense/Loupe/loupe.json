@@ -21,7 +21,7 @@
 {% if helpers.exists('OPNsense.Loupe.rules.rule') %}
 {%   for rule in helpers.toList('OPNsense.Loupe.rules.rule') %}
 {%     set when = {} %}
-{%     for field in ['mac_prefix', 'mdns_model', 'hostname', 'dhcp_vendor', 'talks_to', 'mdns_service', 'vendor'] if rule[field] %}
+{%     for field in ['mac_prefix', 'mdns_model', 'mdns_name', 'hostname', 'category', 'dhcp_vendor', 'talks_to', 'mdns_service', 'vendor'] if rule[field] %}
 {%       do when.update({field: rule[field]}) %}
 {%     endfor %}
 {%     if rule.private_mac %}{% do when.update({'private_mac': rule.private_mac == '1'}) %}{% endif %}

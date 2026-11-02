@@ -27,17 +27,23 @@ from . import dns
 
 # TXT keys that carry a device model: AirPlay/RAOP "model"/"am", Chromecast "md", device-info "model"
 MODEL_KEYS = ("model", "am", "md", "usb_mdl", "ty")
+# TXT keys that carry a standard category, by the service they come with: HomeKit's accessory category, Matter's
+# device type (commissionable and commissioner announcements). Not _hap._udp: that is HomeKit over Thread, which
+# reaches the network through a border router (Apple TV, HomePod, eero...) announcing it from its own address
+CATEGORY_KEYS = {"_hap._tcp": ("ci", "hap"),
+                 "_matterc._udp": ("dt", "matter"), "_matterd._udp": ("dt", "matter")}
 
 
 def parse(payload):
-    """Return {'hosts': {name.local: [ips]}, 'services': set(), 'models': set(), 'names': set()} or None."""
+    """Return {'hosts': {name.local: [ips]}, 'services': set(), 'models': set(), 'names': set(),
+    'categories': set()} or None. Categories are "hap:<ci>" and "matter:<DT>", as announced (decimal)."""
     try:
         is_resp, _qs, recs = dns.parse(payload)
     except (ValueError, IndexError):
         return None
     if not is_resp or not recs:
         return None
-    out = {"hosts": {}, "services": set(), "models": set(), "names": set()}
+    out = {"hosts": {}, "services": set(), "models": set(), "names": set(), "categories": set()}
     for _section, name, rtype, _ttl, value in recs:
         if rtype in (dns.T_A, dns.T_AAAA):
             out["hosts"].setdefault(name, []).append(value)
@@ -53,6 +59,10 @@ def parse(payload):
                     out["models"].add(f"{k}={value[k]}")
             if value.get("fn"):  # Chromecast friendly name
                 out["names"].add(value["fn"])
-    if not (out["hosts"] or out["services"] or out["models"]):
+            service = ".".join(name.removesuffix(".local").split(".")[-2:])
+            key, kind = CATEGORY_KEYS.get(service, (None, None))
+            if key and value.get(key, "").isdigit():
+                out["categories"].add(f"{kind}:{int(value[key])}")
+    if not (out["hosts"] or out["services"] or out["models"] or out["categories"]):
         return None
     return out

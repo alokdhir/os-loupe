@@ -122,6 +122,8 @@ A rule matches when all of its conditions do (`when`, or several in `all`) — a
 |---|---|
 | `mac_prefix` | start of the MAC address |
 | `mdns_model` | a model the device announces over Bonjour (`model=`, `am=`, `md=`…), regex |
+| `mdns_name` | a name it announces a Bonjour service under, lower case (`acme x100`), regex |
+| `category` | a standard category it announces: HomeKit `hap:9` (thermostat) or Matter `matter:0x0301`, exact |
 | `hostname` | its DHCP or Bonjour host name, regex |
 | `mdns_service` | a Bonjour service it offers, exact (`_googlecast._tcp`) |
 | `dhcp_vendor` | DHCP vendor class (option 60), regex |
@@ -130,7 +132,7 @@ A rule matches when all of its conditions do (`when`, or several in `all`) — a
 | `vendor` | a whole word in the maker's name for the MAC prefix |
 | `private_mac` | `true` for a randomized (private) MAC |
 
-Evidence is trusted in a fixed order — Bonjour model, host name, hosting role, strong Bonjour services, DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching rule wins (file order within a tier). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
+Evidence is trusted in a fixed order — Bonjour model, Bonjour name, host name, hosting role, strong Bonjour services, standard category (exact, but generic: a Fire TV stays a Fire TV), DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching rule wins (file order within a tier). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
 
 **For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones; fill in one clue or several for a compound rule; your rules are tried by their strongest clue, then in the order you added them, and the first that matches decides), and *Settings → Service names* takes your own names.
 

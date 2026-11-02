@@ -65,6 +65,8 @@
                 <vendor type="TextField"/>
                 <hostname type="TextField"/>
                 <mdns_model type="TextField"/>
+                <mdns_name type="TextField"/>
+                <category type="TextField"/>
                 <mdns_service type="TextField"/>
                 <dhcp_vendor type="TextField"/>
                 <talks_to type="TextField"/>
