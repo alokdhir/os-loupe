@@ -310,7 +310,14 @@ class ReportController extends ApiControllerBase
         if (!preg_match(self::TEXT, $text)) {
             return $this->searchRecordsetBase([]);
         }
-        $data = $this->cached(['service', $text, $this->postHours(), $this->postNetworks()]);
+        /* a zoomed chart's time range (epoch seconds), as one argument: configd passes five */
+        $start = (int)$this->request->getPost('start', null, 0);
+        $end = (int)$this->request->getPost('end', null, 0);
+        $args = ['service', $text, $this->postHours(), $this->postNetworks()];
+        if ($start > 0 && $end > $start) {
+            $args[] = "{$start}-{$end}";
+        }
+        $data = $this->cached($args);
         return $this->grid($data['traffic'] ?? [], 'down', null, self::SEARCH['traffic']);
     }
 

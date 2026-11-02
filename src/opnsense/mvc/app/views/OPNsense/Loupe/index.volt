@@ -191,15 +191,18 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* a chart of a device's or a service's traffic: Mbps down and up, each point the average over its bucket */
         const charts = {};
-        /* the device page's table follows its chart's zoom: the traffic in the time shown, or the whole period */
-        let devRange = null;
-        function devSpan(from, to) {
-            const was = JSON.stringify(devRange);
-            devRange = from == null ? null : {start: Math.floor(from / 1000), end: Math.ceil(to / 1000)};
+        /* a chart's table follows its zoom: the traffic in the time shown, or the whole period */
+        const ZOOMED = {'loupe-chart': {grid: 'grid-devtraffic', note: '#devspan-note', range: null},
+                        'loupe-service-chart': {grid: 'grid-traffic', note: '#svcspan-note', range: null}};
+        function chartSpan(canvas, from, to) {
+            const z = ZOOMED[canvas];
+            if (!z) return;
+            const was = JSON.stringify(z.range);
+            z.range = from == null ? null : {start: Math.floor(from / 1000), end: Math.ceil(to / 1000)};
             const fmt = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
-            $('#devspan-note').text(devRange ? '{{ lang._("Traffic from") }} ' + fmt(devRange.start) + ' {{ lang._("to") }} '
-                + fmt(devRange.end) + ' ({{ lang._("the zoomed chart") }})' : '').toggle(!!devRange);
-            if (JSON.stringify(devRange) !== was && grids['grid-devtraffic']) $('#grid-devtraffic').bootgrid('reload');
+            $(z.note).text(z.range ? '{{ lang._("Traffic from") }} ' + fmt(z.range.start) + ' {{ lang._("to") }} '
+                + fmt(z.range.end) + ' ({{ lang._("the zoomed chart") }})' : '').toggle(!!z.range);
+            if (JSON.stringify(z.range) !== was && grids[z.grid]) $('#' + z.grid).bootgrid('reload');
         }
         /* drag across a chart to zoom into that time (the points it has; a smooth line between them), × to go back */
         function zoomReset(canvas) {
@@ -210,7 +213,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 $('#' + canvas).parent().css('position', 'relative').append($b);
                 $b.on('click', function () {
                     if (charts[canvas]) charts[canvas].resetZoom();
-                    if (canvas === 'loupe-chart') devSpan(null);
+                    chartSpan(canvas, null);
                     $b.hide();
                 });
             }
@@ -256,7 +259,7 @@ POSSIBILITY OF SUCH DAMAGE.
                                                      borderColor: 'rgba(54,162,235,0.6)', borderWidth: 1},
                                    onZoomComplete: ({chart}) => {
                                        zoomReset(canvas).show();
-                                       if (canvas === 'loupe-chart') devSpan(chart.scales.x.min, chart.scales.x.max);
+                                       chartSpan(canvas, chart.scales.x.min, chart.scales.x.max);
                                    }},
                             limits: {x: {minRange: 2 * step * 1000}}       /* at least two of its points */
                         }
@@ -292,8 +295,8 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-detail').show();
             /* the header runs the report and configd keeps it: the lists ask once it has, and get that copy */
             ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
-                devSpan(null);
-                grid('grid-devtraffic', '/api/loupe/report/search_device_traffic', () => Object.assign({device: current}, devRange || {}), TREE);
+                chartSpan('loupe-chart', null);
+                grid('grid-devtraffic', '/api/loupe/report/search_device_traffic', () => Object.assign({device: current}, ZOOMED['loupe-chart'].range || {}), TREE);
                 if (!data || data.error) { $('#loupe-detail-title').text((data || {}).error || ''); return; }
                 const d = data.device || {};
                 deviceNetworks = (data.networks || []).length;
@@ -320,7 +323,8 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-overview').hide();
             $('#loupe-results').show();
             $('#loupe-service-title').text(q);
-            grid('grid-traffic', '/api/loupe/report/search_service_traffic', () => ({q: q}));
+            chartSpan('loupe-service-chart', null);
+            grid('grid-traffic', '/api/loupe/report/search_service_traffic', () => Object.assign({q: q}, ZOOMED['loupe-service-chart'].range || {}));
             /* only the answer to the latest request is drawn; until it comes, and if it fails, no chart (not the last one) */
             const asked = q + '|' + hours + '|' + netFilter();
             clearChart('loupe-service-chart');
@@ -938,6 +942,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <h2 id="loupe-service-title" class="loupe-detail-title"></h2>
             </div>
             <div style="height: 220px; padding: 0 15px 10px"><canvas id="loupe-service-chart"></canvas></div>
+            <p id="svcspan-note" class="text-muted" style="display: none; margin: 4px 0 0"></p>
             <table id="grid-traffic" class="table table-condensed table-hover table-striped table-responsive">
                 <thead><tr>
                     <th data-column-id="device" data-formatter="servicedevice">{{ lang._('Device') }}</th>

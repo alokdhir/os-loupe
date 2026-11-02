@@ -406,12 +406,17 @@ def site_matches(text, exact, site, named, s, servers):
     return (named and text in fold(site)) or text in fold(s) or text in servers
 
 
-def matching_sites(db, svc, hours, text, exact):
+def matching_sites(db, svc, hours, text, exact, span=None):
     """The period's traffic per device, site and service that matches `text` (site_matches()): from loupd's site
-    summary where it has it, the rest named here a day at a time."""
+    summary where it has it, the rest named here a day at a time. With `span` (start, end), only that time (a
+    zoomed chart), named here from the finest detail that covers it."""
     table, start = period(hours)
     namer = Namer(db, svc)
-    stored, live = split_period(namer, table, start, int(time.time()) + 1)
+    if span:
+        table = span_table(db, span[0])
+        stored, live = [], list(pieces(span[0] - span[0] % bucket_size(table), span[1]))
+    else:
+        stored, live = split_period(namer, table, start, int(time.time()) + 1)
     rows = stored_sites(db, stored, text, exact)
     for day, a, b in live:
         rows += live_sites(db, namer, table, day, a, b)
@@ -693,7 +698,7 @@ def chart_timeline(db, svc, table, spans, start, step):
     return timeline
 
 
-def cmd_service(text, hours, want=None, chart=False):
+def cmd_service(text, hours, want=None, chart=False, span=None):
     """One row of the services list: the traffic of its service, or for nameless traffic its site name or address.
 
     chart: its chart instead (a separate request, so the list doesn't wait for it): up to a week from the flows,
@@ -706,7 +711,7 @@ def cmd_service(text, hours, want=None, chart=False):
     rows = collections.defaultdict(lambda: {"down": 0, "up": 0, "conns": 0, "first": None, "last": 0, "servers": set()})
     spans = {}      # the chart's traffic: (ip, site name or "", server or None) -> ([times], service)
     daily = collections.defaultdict(lambda: [0, 0])
-    for ip, mac, site, named, s, inferred, up, down, conns, first, last, servers in matching_sites(db, svc, hours, text, True):
+    for ip, mac, site, named, s, inferred, up, down, conns, first, last, servers in matching_sites(db, svc, hours, text, True, span):
         if want and nets.of(ip) not in want:
             continue
         if chart:
@@ -913,6 +918,16 @@ def cmd_aipreview(path):
                          "note": u.get("note") or ""} for u in unknown]}
 
 
+def span_arg(start, end):
+    """A zoomed chart's time range, (start, end) in epoch seconds, or None."""
+    if not (start and end):
+        return None
+    span = (int(start), int(end))
+    if not 0 < span[0] < span[1] <= time.time() + 3600:
+        raise ValueError("bad time range")
+    return span
+
+
 def main(argv):
     try:
         cmd = argv[1] if len(argv) > 1 else ""
@@ -920,14 +935,11 @@ def main(argv):
         if cmd == "devices":
             out = cmd_devices(hours_arg(argv[2]), wanted(arg(3)))
         elif cmd == "device":
-            span = (int(arg(4)), int(arg(5))) if arg(4) and arg(5) else None
-            if span and not 0 < span[0] < span[1] <= time.time() + 3600:
-                raise ValueError("bad time range")
-            out = cmd_device(argv[2], hours_arg(argv[3]), span)
+            out = cmd_device(argv[2], hours_arg(argv[3]), span_arg(arg(4), arg(5)))
         elif cmd == "sites":
             out = cmd_sites(hours_arg(argv[2]), fold(arg(3).strip()), wanted(arg(4)))
-        elif cmd == "service":
-            out = cmd_service(argv[2], hours_arg(argv[3]), wanted(arg(4)))
+        elif cmd == "service":       # a zoomed chart's range comes as one argument, START-END (configd passes five)
+            out = cmd_service(argv[2], hours_arg(argv[3]), wanted(arg(4)), span=span_arg(*(arg(5).split("-") + [""])[:2]))
         elif cmd == "servicechart":     # one row of the services list, charted
             out = cmd_service(argv[2], hours_arg(argv[3]), wanted(arg(4)), chart=True)
         elif cmd == "networks":
