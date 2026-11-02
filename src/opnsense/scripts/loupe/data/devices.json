@@ -23,8 +23,7 @@
    {"when": {"talks_to": ["tesla.services", "tesla.com"]}, "example": {"names": ["x.tesla.services"]}}
   ]},
   {"type": "Miele appliance", "any": [
-   {"when": {"vendor": "Miele"}, "tier": "mac_prefix", "note": "Miele's own MAC block, on the Wi-Fi modules (XKM) in its ovens, washers, dishwashers and coffee machines", "example": {"vendor": "Miele & Cie. KG"}},
-   {"when": {"mdns_service": "_mieleathome._tcp"}, "vendor": "Miele", "note": "Miele@home, announced by the appliance's Wi-Fi module", "example": {"info": {"mdns_services": ["_mieleathome._tcp"]}}, "tier": "strong_service"}
+   {"when": {"vendor": "Miele"}, "tier": "mac_prefix", "note": "Miele's own MAC block, on the Wi-Fi modules (XKM) in its ovens, washers, dishwashers and coffee machines", "example": {"vendor": "Miele & Cie. KG"}}
   ]},
   {"type": "Apple TV", "any": [
    {"when": {"mdns_model": "^AppleTV"}, "example": {"info": {"mdns_models": ["model=AppleTV14,1"]}}},
@@ -82,7 +81,7 @@
    {"when": {"hostname": "(?i)^pikvm\\b"}, "example": {"hostname": "pikvm"}}
   ]},
   {"type": "Watch", "any": [
-   {"when": {"hostname": "(?i)watch"}, "example": {"hostname": "Apple-Watch"}}
+   {"when": {"hostname": "(?i)(^|-)watch$"}, "example": {"hostname": "Apple-Watch"}}
   ]},
   {"type": "PlayStation", "any": [
    {"when": {"hostname": "(?i)^(ps[345]|playstation)"}, "example": {"hostname": "ps5-0a1b2c"}},
@@ -94,7 +93,7 @@
    {"when": {"talks_to": ["xboxlive.com", "xbox.com"]}, "example": {"names": ["x.xboxlive.com"]}}
   ]},
   {"type": "Nintendo Switch", "any": [
-   {"when": {"hostname": "(?i)nintendo|switch"}, "example": {"hostname": "Nintendo-Switch"}},
+   {"when": {"hostname": "(?i)nintendo"}, "example": {"hostname": "Nintendo-Switch"}},
    {"when": {"talks_to": ["nintendo.net", "nintendo.com"]}, "example": {"names": ["x.nintendo.net"]}},
    {"when": {"vendor": "Nintendo"}, "example": {"vendor": "Nintendo Corp."}}
   ]},
@@ -102,10 +101,10 @@
    {"all": [{"vendor": "Amazon Technologies"}, {"hostname": "(?i)^android-"}], "tier": "hostname", "note": "Fire OS sends android-N as its DHCP name", "example": {"vendor": "Amazon Technologies Inc.", "hostname": "android-2"}}
   ]},
   {"type": "Android phone", "any": [
-   {"when": {"hostname": "(?i)galaxy|pixel|android|oneplus|moto"}, "example": {"hostname": "Galaxy-S23"}}
+   {"when": {"hostname": "(?i)^(galaxy|pixel|oneplus|moto)|^android[-_]"}, "example": {"hostname": "Galaxy-S23"}}
   ]},
   {"type": "Windows PC", "any": [
-   {"when": {"hostname": "(?i)desktop-|laptop-|^win"}, "example": {"hostname": "DESKTOP-AB12CD"}},
+   {"when": {"hostname": "(?i)^desktop-|^laptop-|^win-"}, "example": {"hostname": "DESKTOP-AB12CD"}},
    {"when": {"dhcp_vendor": "^MSFT"}, "example": {"info": {"dhcp_vendor_class": "MSFT-1.0"}}}
   ]},
   {"type": "Amazon device", "any": [
@@ -113,12 +112,12 @@
    {"when": {"vendor": "Amazon Technologies"}, "example": {"vendor": "Amazon Technologies Corp."}}
   ]},
   {"type": "Echo speaker", "any": [
-   {"when": {"hostname": "(?i)echo"}, "example": {"hostname": "Echo-Dot"}},
+   {"when": {"hostname": "(?i)^echo([-_ ]|$)"}, "example": {"hostname": "Echo-Dot"}},
    {"when": {"talks_to": ["amazon-dss.com", "alexa.amazon.com"]}, "example": {"names": ["x.amazon-dss.com"]}}
   ]},
   {"type": "TV", "any": [
    {"when": {"mdns_model": "(?i)bravia|smart ?tv|^(LG|Samsung|Vizio|TCL|Hisense)"}, "example": {"info": {"mdns_models": ["model=BRAVIA 4K VH22"]}}},
-   {"when": {"hostname": "(?i)tv$|-tv-|bravia|lgwebos|samsung"}, "example": {"hostname": "Bedroom-TV"}},
+   {"when": {"hostname": "(?i)tv$|-tv-|bravia|lgwebos"}, "example": {"hostname": "Bedroom-TV"}},
    {"when": {"category": ["hap:31", "matter:0x0028"]}, "example": {"info": {"mdns_categories": ["hap:31"]}}}
   ]},
   {"type": "Thermostat", "any": [
@@ -131,7 +130,7 @@
    {"when": {"hostname": "(?i)^nvr"}, "note": "Reolink NVRs call themselves NVR; nothing else sets them apart from their cameras", "example": {"hostname": "NVR"}}
   ]},
   {"type": "Camera", "any": [
-   {"when": {"hostname": "(?i)^(cam|camera)|reolink|ring-|wyze|arlo"}, "example": {"hostname": "cam-garage"}},
+   {"when": {"hostname": "(?i)^(cam|camera)|reolink|^ring-|wyze|^arlo"}, "example": {"hostname": "cam-garage"}},
    {"when": {"category": ["hap:17", "matter:0x0142", "matter:0x0144", "matter:0x0145"]}, "example": {"info": {"mdns_categories": ["hap:17"]}}},
    {"when": {"talks_to": ["wyzecam.com", "reolink.com"]}, "example": {"names": ["x.wyzecam.com"]}},
    {"when": {"vendor": ["Reolink", "Wyze"]}, "example": {"vendor": "Reolink Corp."}}
@@ -142,7 +141,7 @@
    {"when": {"vendor": "Raspberry Pi"}, "example": {"vendor": "Raspberry Pi Corp."}}
   ]},
   {"type": "AV receiver", "any": [
-   {"when": {"hostname": "(?i)denon|marantz|onkyo|yamaha-?(rx|av)|avr"}, "example": {"hostname": "denon-avr-x1700h"}},
+   {"when": {"hostname": "(?i)denon|marantz|onkyo|yamaha-?(rx|av)|^avr|-avr"}, "example": {"hostname": "denon-avr-x1700h"}},
    {"when": {"category": "hap:34"}, "example": {"info": {"mdns_categories": ["hap:34"]}}},
    {"when": {"vendor": "D&M Holdings"}, "example": {"vendor": "D&M Holdings Corp."}}
   ]},
