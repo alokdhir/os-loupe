@@ -19,6 +19,7 @@ Devices are identified automatically, not left as IP addresses. A layered, evide
 - **Networks (VLANs)**: when Loupe watches more than one network, the device and service lists show each device's network and can be filtered to one or more. A device on several networks shows them all, and its page shows which network each service and site was used from. Network colours match *Reporting → Traffic*.
 - **Sensible service names**: traffic named only for its CDN (Fastly, Akamai, CloudFront…), or with no name at all, takes the service the same device was using on the same server, marked *(same server)*. Streaming services that share another company's servers are told apart (Hulu on Disney's servers).
 - **Your own names, types and icons**: rename a device, correct its type or pick its icon from any report page. Overrides follow the device by MAC address, and an icon picked for one device applies to every device of that type. Rules type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*; a compound rule combines clues (MAC vendor Espressif *and* a host name starting `shelly`).
+- **AI Rule Generator**: for the devices Loupe can only guess at, *Settings → Device rules → AI Rule Generator* builds a prompt to paste into any AI chat (Claude, ChatGPT, Gemini…), reads the rules out of its answer, shows what each would change on your network (flagging rules that reach other devices, change nothing or make a type vaguer), and saves the ones you tick. Loupe itself sends nothing anywhere.
 - **Your own service names**: add domains (including patterns like `cdn-*.example.com`), addresses, ports or VPN app domains. *Settings → Service names / Device rules → Built-in* shows what Loupe ships with.
 - **Dashboard widget**: the last 24 hours at a glance, with totals, an hourly chart and the top devices.
 
@@ -89,12 +90,15 @@ OPNsense's own reports, Insight (NetFlow) and Unbound's DNS reporting, name a de
 
 Loupe keys everything on the device's MAC address and works out what it is from what the device says about itself:
 
-- **The model**, from Bonjour/mDNS: Apple devices announce an identifier (`Mac15,13`, `AppleTV14,1`) that Loupe turns into *MacBook Air 15″ (M3)* or *Apple TV 4K (3rd gen)*; printers, speakers and Cast devices announce their services.
+- **The model**, from Bonjour/mDNS: devices announce it (*Sonos One*, *Google Nest Mini*, *HP LaserJet Pro M404*), and Apple's identifiers (`Mac15,13`, `AppleTV14,1`) become *MacBook Air 15″ (M3)* or *Apple TV 4K (3rd gen)*; printers, speakers and Cast devices announce their services.
+- **The category**, where a device states it: HomeKit's accessory category and Matter's device type (a thermostat, a lock, an oven), whatever the brand.
 - **The name**, from the DHCP lease, the hostname the device sends, or its Bonjour name, preferring a real name over the placeholders phones with private addresses send (*iPhone*, *Mac*).
 - **The type and maker**, from DHCP fingerprints (vendor class and parameter list), the MAC vendor, and the services it talks to (`playstation.net` → PlayStation, `ring.com` → Ring device).
 - **Your corrections**: a name, type or icon you set follows the device by MAC, and your rules type whole groups at once.
 
 Each identification records the evidence it rests on, shown as a tooltip on the type.
+
+**One device, several MACs.** A host whose traffic goes out under a bridge's MAC, an Apple TV moved from Wi-Fi to Ethernet, a laptop's dock and its Wi-Fi, a phone's new private address: Loupe links such MACs (the same address at the same time, the same Bonjour host name at the same time, or the same name used by related MACs at different times) and shows them as one device, with all their traffic.
 
 ### Why not just NetFlow / Insight?
 
@@ -137,7 +141,9 @@ A device is the type when any alternative matches. An alternative matches when a
 
 Evidence is trusted in a fixed order — Bonjour model, Bonjour name, host name, hosting role, strong Bonjour services, standard category (exact, but generic: a Fire TV stays a Fire TV), DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching alternative wins (file order within a tier: specific makers come before general categories). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
 
-**For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones; fill in one clue or several for a compound rule; your rules are tried by their strongest clue, then in the order you added them, and the first that matches decides), and *Settings → Service names* takes your own names.
+**For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones; fill in one clue or several for a compound rule; your rules are tried by their strongest clue, then in the order you added them, and the first that matches decides), and *Settings → Service names* takes your own names. As elsewhere in OPNsense, changes to these lists are saved at once and used after *Apply*. The pencil beside a device's name or type sets that one device's name, type or icon, and takes effect immediately.
+
+**AI Rule Generator.** *Device rules → AI Rule Generator* asks about the devices with no type or only a generic one (or all of them): copy the prompt into an AI chat, ideally one that can search the web, and paste its answer back. Loupe reads the rules out of the answer (around prose, through a reply cut off), shows for each what it would change on your network, and saves the ones you tick as your rules, marked *AI* (the custom rules list filters by it). A rule that would also change devices outside its own row, changes nothing (and why: you have it already, its devices already have that type…) or makes a type vaguer starts unticked. A rule the AI suggests on a domain alone doesn't type phones, computers or devices with private MACs that use that domain, as for the shipped rules.
 
 **Adding a rule to the shipped file:** add it with an `example` — made-up evidence that should come out as your type (no real MACs or names) — then run the tests. They fail if the example lands on another type, or if your rule takes over another rule's example. `tools/fmtjson.py` keeps the files one entry per line.
 
@@ -168,6 +174,8 @@ On a gigabit home link, on an Intel N150, Loupe uses about 0.5% of one CPU core 
 ## Privacy
 
 Loupe records which device talked to which site name and how much — not page contents, URLs or anything inside encrypted connections. Encrypted Client Hello (ECH), VPNs and relays (iCloud Private Relay) hide the real site; Loupe shows those as what they are. It's a tool for the network's owner; use it with the people on your network in mind.
+
+The AI Rule Generator's prompt carries, for each device it asks about, what the device announces (MAC vendor, host name, Bonjour names and services, DHCP request) and the domains it used, never MAC or IP addresses, with possessive names (*Sam's iPhone*) blanked out. Loupe doesn't send it: you copy it into the AI chat you choose, so read it first (*Show prompt*) if your devices' names say more than you'd like.
 
 In a workplace, tell people that their devices' traffic is recorded this way. Per-person browsing records are regulated in many places (for example the GDPR in the EU, and notice requirements in some US states); check what applies to you before turning it on.
 
