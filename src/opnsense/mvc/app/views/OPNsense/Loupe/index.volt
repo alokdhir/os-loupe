@@ -137,7 +137,11 @@ POSSIBILITY OF SUCH DAMAGE.
                 return ago(row[column.id]);
             },
             servicedevice: function (column, row) {
-                if (!row.device) return copyable(row.name || (row.servers || []).join(', ')) + inferred(row);   /* a site, under its device */
+                if (!row.device) {          /* a site, under its device: as a device's page lists them (searches it; addresses on hover) */
+                    const site = row.name || (row.servers || []).join(', ');
+                    return '<a href="#q=' + encodeURIComponent(site) + '" title="' + esc((row.servers || []).join(', ')) + '">'
+                        + esc(site) + '</a>' + inferred(row);
+                }
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
                     + '<a href="#device=' + esc(row.mac || row.ip) + '">' + esc(row.device) + '</a>'
                     + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '')
