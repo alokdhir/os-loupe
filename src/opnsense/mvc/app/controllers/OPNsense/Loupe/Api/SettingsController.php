@@ -117,7 +117,10 @@ class SettingsController extends ApiMutableModelControllerBase
     public function searchRuleAction()
     {
         $fields = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description', 'source', 'ai_model']);
-        $result = $this->searchBase('rules.rule', $fields, 'type');
+        /* the grid's Source filter: manual or AI rules only */
+        $source = (string)$this->request->getPost('source', null, '');
+        $only = in_array($source, ['manual', 'ai'], true) ? fn($rule) => (string)$rule->source === $source : null;
+        $result = $this->searchBase('rules.rule', $fields, 'type', $only);
         foreach ($result['rows'] as &$row) {
             $parts = [];
             foreach (self::RULE_FIELDS as $field => $label) {

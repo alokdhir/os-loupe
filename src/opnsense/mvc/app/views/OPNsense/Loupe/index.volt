@@ -330,13 +330,18 @@ POSSIBILITY OF SUCH DAMAGE.
                 });
             },
             rules: function () {
-                $('#{{ formGridRules['table_id'] }}').UIBootgrid({
+                const id = '{{ formGridRules['table_id'] }}';
+                $('#' + id).UIBootgrid({
                     search: '/api/loupe/settings/search_rule',
                     get: '/api/loupe/settings/get_rule/',
                     set: '/api/loupe/settings/set_rule/',
                     add: '/api/loupe/settings/add_rule/',
-                    del: '/api/loupe/settings/del_rule/'
+                    del: '/api/loupe/settings/del_rule/',
+                    options: {requestHandler: (request) => Object.assign(request, {source: $('#rule-source-filter').val()})}
                 });
+                /* the Source filter sits after the grid's search box, as core's dnsmasq page places its tag filter */
+                $('#rule-source-container').detach().insertAfter($('#' + id + '-header .actionBar .search')).show();
+                $('#rule-source-filter').selectpicker().on('changed.bs.select', () => $('#' + id).bootgrid('reload'));
             },
             overrides: function () {
                 $('#{{ formGridOverrides['table_id'] }}').UIBootgrid({
@@ -761,6 +766,13 @@ POSSIBILITY OF SUCH DAMAGE.
             </div>
             <div data-source-pane="mine">
                 {{ partial('layout_partials/base_bootgrid_table', formGridRules) }}
+                <div id="rule-source-container" class="btn-group" style="display: none">
+                    <select id="rule-source-filter" data-width="140px" title="{{ lang._('Which rules to list') }}">
+                        <option value="">{{ lang._('All rules') }}</option>
+                        <option value="manual">{{ lang._('Manual') }}</option>
+                        <option value="ai">{{ lang._('AI') }}</option>
+                    </select>
+                </div>
             </div>
             <div data-source-pane="builtin" style="display: none">
                 <table id="grid-builtin-rules" class="table table-condensed table-hover table-striped table-responsive">
