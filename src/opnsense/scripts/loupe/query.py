@@ -501,11 +501,25 @@ def traffic_tree(services, sites):
     return sorted(rows, key=lambda r: -(r["down"] + r["up"]))
 
 
-def cmd_device(arg, hours):
+def span_table(db, start):
+    """The finest detail table that still covers `start` (a zoomed chart's range): minutes, 5 minutes, hours."""
+    for table in ("flows_1m", "flows_5m"):
+        oldest = db.execute(f"SELECT min(bucket) FROM {table}").fetchone()[0]
+        if oldest is not None and oldest <= start:
+            return table
+    return "flows_1h"
+
+
+def cmd_device(arg, hours, span=None):
+    """A device's report for the period; with `span` (start, end), its traffic in that time only (a zoomed chart),
+    read from the finest detail that covers it and named with each day's evidence."""
     db, svc, ov = load()
     col, val = device_filter(arg)
     table, start, step = window(hours)
     start = period(hours)[1]        # past 2 days whole local days, as the list row the page was opened from
+    if span:
+        table = span_table(db, span[0])
+        start = span[0] - span[0] % bucket_size(table)
     slot = local_day if step >= 86400 else (lambda b: b - b % step)     # a year's chart: local days, as the lists
     info = devices_info(db, ov)
     namer = Namer(db, svc)
@@ -554,7 +568,10 @@ def cmd_device(arg, hours):
     # past two days the days loupd has summarized come from its site summary (named already); the rest - days not
     # built yet, and today since its last build - is named here from the device's own rows, a day at a time
     stored, live = [], []
-    for day, a, b in pieces(start, int(time.time()) + 1):
+    for day, a, b in pieces(start, span[1] if span else int(time.time()) + 1):
+        if span:                    # a zoomed range: named here from the detail rows, never the whole-day summary
+            live.append((day, a, b))
+            continue
         cut = min(b, namer.sites_until(day)) if table == "flows_1h" and a == day else a
         if cut > a:
             stored.append((day, cut))
@@ -903,7 +920,10 @@ def main(argv):
         if cmd == "devices":
             out = cmd_devices(hours_arg(argv[2]), wanted(arg(3)))
         elif cmd == "device":
-            out = cmd_device(argv[2], hours_arg(argv[3]))
+            span = (int(arg(4)), int(arg(5))) if arg(4) and arg(5) else None
+            if span and not 0 < span[0] < span[1] <= time.time() + 3600:
+                raise ValueError("bad time range")
+            out = cmd_device(argv[2], hours_arg(argv[3]), span)
         elif cmd == "sites":
             out = cmd_sites(hours_arg(argv[2]), fold(arg(3).strip()), wanted(arg(4)))
         elif cmd == "service":

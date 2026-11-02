@@ -171,7 +171,11 @@ class ReportController extends ApiControllerBase
         if ($id === null) {
             return $this->searchRecordsetBase([]);
         }
-        $data = $this->cached(['device', $id, $this->postHours()]);
+        /* a zoomed chart's time range (epoch seconds): the traffic in it only */
+        $start = (int)$this->request->getPost('start', null, 0);
+        $end = (int)$this->request->getPost('end', null, 0);
+        $span = ($start > 0 && $end > $start) ? [(string)$start, (string)$end] : [];
+        $data = $this->cached(array_merge(['device', $id, $this->postHours()], $span));
         $rows = $data['traffic'] ?? [];
         $words = preg_split('/\s+/', trim((string)$this->request->getPost('searchPhrase', null, '')), -1, PREG_SPLIT_NO_EMPTY);
         if (empty($words)) {

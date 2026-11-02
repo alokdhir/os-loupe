@@ -191,6 +191,16 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* a chart of a device's or a service's traffic: Mbps down and up, each point the average over its bucket */
         const charts = {};
+        /* the device page's table follows its chart's zoom: the traffic in the time shown, or the whole period */
+        let devRange = null;
+        function devSpan(from, to) {
+            const was = JSON.stringify(devRange);
+            devRange = from == null ? null : {start: Math.floor(from / 1000), end: Math.ceil(to / 1000)};
+            const fmt = (t) => new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+            $('#devspan-note').text(devRange ? '{{ lang._("Traffic from") }} ' + fmt(devRange.start) + ' {{ lang._("to") }} '
+                + fmt(devRange.end) + ' ({{ lang._("the zoomed chart") }})' : '').toggle(!!devRange);
+            if (JSON.stringify(devRange) !== was && grids['grid-devtraffic']) $('#grid-devtraffic').bootgrid('reload');
+        }
         /* drag across a chart to zoom into that time (the points it has; a smooth line between them), × to go back */
         function zoomReset(canvas) {
             let $b = $('#' + canvas + '-reset');
@@ -200,6 +210,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 $('#' + canvas).parent().css('position', 'relative').append($b);
                 $b.on('click', function () {
                     if (charts[canvas]) charts[canvas].resetZoom();
+                    if (canvas === 'loupe-chart') devSpan(null);
                     $b.hide();
                 });
             }
@@ -243,7 +254,10 @@ POSSIBILITY OF SUCH DAMAGE.
                         zoom: {
                             zoom: {mode: 'x', drag: {enabled: true, backgroundColor: 'rgba(54,162,235,0.15)',
                                                      borderColor: 'rgba(54,162,235,0.6)', borderWidth: 1},
-                                   onZoomComplete: () => zoomReset(canvas).show()},
+                                   onZoomComplete: ({chart}) => {
+                                       zoomReset(canvas).show();
+                                       if (canvas === 'loupe-chart') devSpan(chart.scales.x.min, chart.scales.x.max);
+                                   }},
                             limits: {x: {minRange: 2 * step * 1000}}       /* at least two of its points */
                         }
                     }
@@ -278,7 +292,8 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-detail').show();
             /* the header runs the report and configd keeps it: the lists ask once it has, and get that copy */
             ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
-                grid('grid-devtraffic', '/api/loupe/report/search_device_traffic', () => ({device: current}), TREE);
+                devSpan(null);
+                grid('grid-devtraffic', '/api/loupe/report/search_device_traffic', () => Object.assign({device: current}, devRange || {}), TREE);
                 if (!data || data.error) { $('#loupe-detail-title').text((data || {}).error || ''); return; }
                 const d = data.device || {};
                 deviceNetworks = (data.networks || []).length;
@@ -873,6 +888,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <h2 id="loupe-detail-title" class="loupe-detail-title"></h2>
             </div>
             <div style="height: 220px; padding: 0 15px 10px"><canvas id="loupe-chart"></canvas></div>
+            <p id="devspan-note" class="text-muted" style="display: none; margin: 4px 0 0"></p>
             <table id="grid-devtraffic" class="table table-condensed table-hover table-striped table-responsive">
                 <thead><tr>
                     <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
