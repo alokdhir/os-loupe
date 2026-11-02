@@ -376,6 +376,7 @@ POSSIBILITY OF SUCH DAMAGE.
             $(this).addClass('active');
             $page.find('[data-source-pane]').hide().filter('[data-source-pane="' + which + '"]').show();
             $page.find('.loupe-source-help').hide().filter('[data-for="' + which + '"]').show();
+            applyButton();
             const $grid = $page.find('[data-source-pane="' + which + '"] table[id^="grid-builtin-"]');
             if ($grid.length && !grids[$grid.attr('id')]) {
                 const id = $grid.attr('id');
@@ -386,9 +387,15 @@ POSSIBILITY OF SUCH DAMAGE.
             }
         });
 
+        /* Apply on the settings tab, but not on the AI Rule Generator: its Save and apply does it */
+        function applyButton() {
+            const ai = $('#page_rules').is(':visible') && $('#page_rules .loupe-source .btn.active').data('source') === 'ai';
+            $('.loupe-apply').toggle($('#tab_settings').hasClass('active') && !ai);
+        }
         function showSettings(page) {
             $('.loupe-pages .btn').removeClass('active').filter('[data-page="' + page + '"]').addClass('active');
             $('.loupe-page').hide().filter('#page_' + page).show();
+            applyButton();
             if (!started[page]) {
                 started[page] = true;
                 startPage[page]();
@@ -425,6 +432,7 @@ POSSIBILITY OF SUCH DAMAGE.
             const tab = tabOf(hash);
             $('#maintabs a[href="' + TABS[tab] + '"]').tab('show');
             $('.loupe-apply').toggle(tab === 'settings');
+            setTimeout(applyButton);            /* once the tab and page are shown */
             if (tab === 'devices') {
                 const m = hash.match(/device=([^&]+)/);
                 if (m) { showDevice(decode(m[1])); } else { showDevices(); }
