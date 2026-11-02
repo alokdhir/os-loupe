@@ -36,6 +36,7 @@ POSSIBILITY OF SUCH DAMAGE.
     .tabulator-row:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
     @media (hover: none) { .loupe-edit { visibility: visible; } }
     .loupe-edit:hover { color: #337ab7; }
+    .btn.loupe-edit { visibility: visible; padding-left: 5px; color: inherit; }      /* the list's command column */
     .loupe-copy { display: block; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
     .loupe-copied { color: #3c763d; transition: color 0.2s; }
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
@@ -68,10 +69,13 @@ POSSIBILITY OF SUCH DAMAGE.
         const inferred = r => r.inferred ? ' <span class="text-muted" title="{{ lang._("Named from other traffic between this device and the same server") }}">({{ lang._("same server") }})</span>' : '';
         const dialog = '{{ formGridOverrides['edit_dialog_id'] }}';
 
-        function editButton(r) {
+        function editButton(r, button) {
             if (!r.mac) return '';
-            return '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Name this device") }}" data-mac="' + esc(r.mac)
-                + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '') + '"></i>';
+            const data = ' title="{{ lang._("Edit name, type and icon") }}" data-mac="' + esc(r.mac)
+                + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '') + '"';
+            return button       /* the device list's command column, as OPNsense's grids have it */
+                ? '<button type="button" class="btn btn-xs btn-default loupe-edit"' + data + '><span class="fa fa-pencil fa-fw"></span></button>'
+                : '<i class="fa fa-pencil loupe-edit"' + data + '></i>';
         }
 
         /* click a cell to copy its value (the cursor says so); it flashes green when copied */
@@ -101,8 +105,10 @@ POSSIBILITY OF SUCH DAMAGE.
                 return (row.networks || []).map(pill).join('');
             },
             device: function (column, row) {
-                return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>'
-                    + editButton(row);
+                return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>';
+            },
+            devedit: function (column, row) {
+                return editButton(row, true);
             },
             devtype: function (column, row) {           /* the type, its model (when known) after it */
                 if (!row.type && !row.model) return dash;
@@ -390,11 +396,13 @@ POSSIBILITY OF SUCH DAMAGE.
         /* Apply on the settings tab, but not where there is nothing to apply: the read-only Built-in lists, and the
            AI Rule Generator (its Save and apply does it) */
         let currentTab = '';            /* the tab route() showed: the panes' classes lag behind their fade */
+        let pending = false;            /* a list edit saved but not applied yet (core's grids say "settings-changed") */
         function applyButton() {
             const page = $('.loupe-page').filter(function () { return this.style.display !== 'none'; }).first();
             const source = page.find('.loupe-source .btn.active').data('source');
-            $('.loupe-apply').toggle(currentTab === 'settings' && source !== 'builtin' && source !== 'ai');
+            $('.loupe-apply').toggle(currentTab === 'settings' && (pending || (source !== 'builtin' && source !== 'ai')));
         }
+        $(document).on('settings-changed', function () { pending = true; applyButton(); });
         function showSettings(page) {
             $('.loupe-pages .btn').removeClass('active').filter('[data-page="' + page + '"]').addClass('active');
             $('.loupe-page').hide().filter('#page_' + page).show();
@@ -751,6 +759,8 @@ POSSIBILITY OF SUCH DAMAGE.
                 return dfObj;
             },
             onAction: function () {
+                pending = false;
+                applyButton();
                 updateServiceControlUI('loupe');
                 loadNetworks();         /* the interfaces may have changed */
             }
@@ -802,6 +812,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <th data-column-id="conns" data-visible="false" data-width="6em">{{ lang._('Conns') }}</th>
                     <th data-column-id="top" data-formatter="services" data-sortable="false">{{ lang._('Top services') }}</th>
                     <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
+                    <th data-column-id="edit" data-formatter="devedit" data-sortable="false" data-width="4em"></th>
                 </tr>
                 </thead>
                 <tbody></tbody>
@@ -993,7 +1004,7 @@ POSSIBILITY OF SUCH DAMAGE.
 </div>
 
 <div class="loupe-apply" style="display: none">
-    {{ partial('layout_partials/base_apply_button', {'data_endpoint': '/api/loupe/service/reconfigure', 'data_service_widget': 'loupe', 'data_error_title': 'Error applying Loupe settings'}) }}
+    {{ partial('layout_partials/base_apply_button', {'data_endpoint': '/api/loupe/service/reconfigure', 'data_service_widget': 'loupe', 'data_error_title': 'Error applying Loupe settings', 'data_change_message_content': 'Changes saved but not in use yet: Apply to use them.'}) }}
 </div>
 
 {{ partial("layout_partials/base_dialog", ['fields': formDialogService, 'id': formGridServices['edit_dialog_id'], 'label': lang._('Service name')]) }}
