@@ -91,6 +91,7 @@ class TestLateHello(unittest.TestCase):
         import loupd
         self.lp = object.__new__(loupd.Loupe)
         self.lp.names, self.lp.flows, self.lp.held, self.lp.ip_mac, self.lp.stopping = names.Names(), {}, [], {}, False
+        self.lp.own_macs = {"02:00:00:00:00:99"}
         self.lp.names.dns_answer({"ts": 100, "client": "10.9.1.21", "name": "guess.example", "addrs": ["203.0.113.10"],
                                   "ttl": 60})
 
@@ -121,6 +122,27 @@ class TestLateHello(unittest.TestCase):
         with mock.patch.object(loupd.neighbours, "table", return_value={"10.9.1.20": "02:00:00:00:00:02"}):
             self.lp.refresh_macs()
         self.assertEqual(self.lp.ip_mac, {"10.9.1.20": "02:00:00:00:00:02"})
+
+    def test_own_macs_are_not_devices(self):
+        """The router's own MACs: its mDNS repeater sends other subnets' announcements from them; never a device."""
+        import collections
+        import loupd
+        from unittest import mock
+        own = "02:00:00:00:00:99"
+        self.lp.devices = collections.defaultdict(dict)
+        self.lp.emit({"ev": "mdns", "ts": 5, "client": "10.9.4.2", "mac": own, "hosts": {"box.local": ["10.9.4.2"]},
+                      "services": ["_ssh._tcp"], "models": [], "names": [], "categories": []})
+        self.lp.emit({"ev": "dhcp", "ts": 5, "mac": own, "hostname": "box"})
+        self.assertEqual(dict(self.lp.devices), {})
+        with mock.patch.object(loupd.neighbours, "table", return_value={"10.9.1.1": own, "10.9.1.20": "02:00:00:00:00:02"}):
+            self.lp.refresh_macs()
+        self.assertEqual(self.lp.ip_mac, {"10.9.1.20": "02:00:00:00:00:02"})
+        with tempfile.TemporaryDirectory() as d:
+            s = store.Store(os.path.join(d, "loupe.db"))
+            self.addCleanup(s.close)
+            s.write({}, {}, {own: {"ip": "10.9.4.2", "ts": 5}, "02:00:00:00:00:02": {"ip": "10.9.1.20", "ts": 5}})
+            s.forget_devices({own})
+            self.assertEqual([m for m, in s.db.execute("SELECT mac FROM devices")], ["02:00:00:00:00:02"])
 
     def test_no_hello(self):
         self.lp.count(110, [pfstate.Delta(state(), 10, 20, 1, 1, True)])

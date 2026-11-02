@@ -81,3 +81,32 @@ def addresses(ifaces):
     finally:
         _libc.freeifaddrs(head)
     return out
+
+
+AF_LINK = 18        # FreeBSD and macOS
+
+
+def link_macs():
+    """The MAC addresses of all of this machine's interfaces (getifaddrs AF_LINK entries, sockaddr_dl: the
+    interface name, then the link-layer address), lower case with colons."""
+    global _libc
+    if _libc is None:
+        addresses(())                   # loads libc and its prototypes
+    head = ctypes.POINTER(_Ifaddrs)()
+    if _libc.getifaddrs(ctypes.byref(head)) != 0:
+        raise OSError(ctypes.get_errno(), "getifaddrs")
+    out = set()
+    try:
+        p = head
+        while p:
+            ifa = p.contents
+            if ifa.addr and ctypes.string_at(ifa.addr, 2)[1] == AF_LINK:
+                sdl = ctypes.string_at(ifa.addr, ctypes.string_at(ifa.addr, 1)[0])
+                nlen, alen = sdl[5], sdl[6]
+                mac = sdl[8 + nlen:8 + nlen + alen]
+                if alen == 6 and any(mac):
+                    out.add(":".join(f"{b:02x}" for b in mac))
+            p = ifa.next
+    finally:
+        _libc.freeifaddrs(head)
+    return out

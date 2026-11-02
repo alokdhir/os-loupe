@@ -310,6 +310,11 @@ class Store:
         return [(mac, ip, hn, json.loads(info), sorted(by_mac.get(mac, set()) | by_ip.get(ip, set())))
                 for mac, ip, hn, info in self.db.execute("SELECT mac, ip, hostname, info FROM devices")]
 
+    def forget_devices(self, macs):
+        """Remove devices (the router's own MACs, recorded before loupd skipped them)."""
+        if macs:
+            self.db.execute("DELETE FROM devices WHERE mac IN (%s)" % ",".join("?" * len(macs)), sorted(macs))
+
     def set_device_types(self, rows):
         """rows: [(name, vendor, type, type_source, model, mac)]"""
         self.db.execute("BEGIN")

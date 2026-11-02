@@ -39,7 +39,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, names, neighbours, pfstate, report, services, store, unbound  # noqa: E402
+from lib import devid, names, neighbours, netif, pfstate, report, services, store, unbound  # noqa: E402
 from lib.report import local_day  # noqa: E402
 
 
@@ -65,6 +65,9 @@ class Loupe:
         self.stopping = False
         self.oui = devid.load_oui()
         self.ip_mac = {}
+        self.own_macs = set()
+        self.refresh_own_macs()
+        self.store.forget_devices(self.own_macs)       # recorded before loupd knew to skip them
         self.flows = {}
         self.held = []
         self.sites_seen = {}
@@ -95,13 +98,16 @@ class Loupe:
             if not self.is_local(ev["client"]) or self.is_local(ev["server"]):
                 return  # LAN<->LAN TLS (AirPlay, lockdownd, ...) carries no site
             self.names.tls(ev, "sni" if kind == "tls" else "quic")
-            self.ip_mac[ev["client"]] = ev["mac"]       # the frame's own source: who has the address now
+            if ev["mac"] not in self.own_macs:
+                self.ip_mac[ev["client"]] = ev["mac"]   # the frame's own source: who has the address now
             if ev.get("sni"):
                 self.saw_site(ev["ts"], ev["client"], ev["sni"], kind if kind == "quic" else "sni")
         elif kind == "dns":
             if self.is_local(ev["client"]):
                 self.names.dns_answer(ev)
                 self.saw_site(ev["ts"], ev["client"], ev["name"], "dns")
+        elif kind in ("dhcp", "mdns") and ev["mac"] in self.own_macs:
+            return      # the router's own (its mDNS repeater sends other subnets' announcements from its MAC)
         elif kind == "dhcp":
             d = self.devices[ev["mac"]]
             d["ts"] = ev["ts"]
@@ -222,7 +228,14 @@ class Loupe:
     def refresh_macs(self):
         """The kernel's neighbour tables as they are now (not added to: rotating IPv6 privacy addresses would grow
         it for good, and an address handed to another device would keep the old MAC)."""
-        self.ip_mac = neighbours.table()
+        self.ip_mac = {ip: mac for ip, mac in neighbours.table().items() if mac not in self.own_macs}
+
+    def refresh_own_macs(self):
+        """The router's own MACs (interfaces come and go: VLANs, tunnels), never recorded as devices."""
+        try:
+            self.own_macs = netif.link_macs()
+        except OSError as e:
+            syslog.syslog(syslog.LOG_WARNING, f"loupe: can't read this router's MAC addresses: {e}")
 
     def poll(self, now):
         states = pfstate.snapshot(self.is_local, self.ifaces)
@@ -252,10 +265,11 @@ class Loupe:
     def flush(self, now):
         if self.stopping:
             self.count(now, [])                 # connections still waiting for a name
+        self.refresh_own_macs()
         self.guarded("neighbour table", self.refresh_macs)     # best effort: rows get their MAC next time
         for (_b, ip, *_rest), v in self.flows.items():
             v[0] = self.ip_mac.get(ip) or v[0]      # who has the address now, if the tables know (else as counted)
-            if v[0]:
+            if v[0] and v[0] not in self.own_macs:
                 d = self.devices[v[0]]
                 if ":" not in ip:
                     d.setdefault("ip", ip)      # IPv4 only: static mappings and fallbacks match IPv4
