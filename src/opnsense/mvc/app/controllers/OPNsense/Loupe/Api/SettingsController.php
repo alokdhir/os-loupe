@@ -116,7 +116,7 @@ class SettingsController extends ApiMutableModelControllerBase
 
     public function searchRuleAction()
     {
-        $fields = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description']);
+        $fields = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description', 'source', 'ai_model']);
         $result = $this->searchBase('rules.rule', $fields, 'type');
         foreach ($result['rows'] as &$row) {
             $parts = [];

@@ -143,6 +143,15 @@
                     </OptionValues>
                 </icon>
                 <description type="TextField"/>
+                <source type="OptionField">
+                    <Required>Y</Required>
+                    <Default>manual</Default>
+                    <OptionValues>
+                        <manual value="manual">Manual</manual>
+                        <ai value="ai">AI</ai>
+                    </OptionValues>
+                </source>
+                <ai_model type="TextField"/>
             </rule>
         </rules>
         <devices>

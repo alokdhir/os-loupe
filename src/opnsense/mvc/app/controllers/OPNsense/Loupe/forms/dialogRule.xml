@@ -94,4 +94,17 @@
         <label>Description</label>
         <type>text</type>
     </field>
+    <field>
+        <id>rule.source</id>
+        <label>Source</label>
+        <type>dropdown</type>
+        <help>Whether you wrote this rule or an AI suggested it (Settings: Identify with AI).</help>
+    </field>
+    <field>
+        <id>rule.ai_model</id>
+        <label>AI model</label>
+        <type>text</type>
+        <help>The model that suggested it, e.g. Gemini or Claude Opus 5.5.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
 </form>
