@@ -707,11 +707,25 @@ POSSIBILITY OF SUCH DAMAGE.
             if (!picked.length) { $('#ai-saved').text('{{ lang._("Tick the rules to save.") }}'); return; }
             const rules = picked.map(r => Object.assign({}, r.fields,
                 {description: [r.vendor, r.model, r.note].filter(Boolean).join(' · ')}));
+            const $btn = $(this).prop('disabled', true);
             ajaxCall('/api/loupe/settings/ai_save', {rules: rules}, function (data) {
-                if (!data || data.result !== 'saved') { $('#ai-saved').addClass('text-danger').text((data || {}).error || '{{ lang._("Not saved.") }}'); return; }
-                $('#ai-saved').removeClass('text-danger').text(data.saved + ' {{ lang._("rules saved under Custom, source AI. Apply to use them.") }}');
+                data = aiPlain(data);
+                if (!data || data.result !== 'saved') {
+                    $btn.prop('disabled', false);
+                    $('#ai-saved').addClass('text-danger').text((data || {}).error || '{{ lang._("Not saved.") }}');
+                    return;
+                }
                 $('#ai-rules input:checked').prop('checked', false).prop('disabled', true);
                 $('#{{ formGridRules['table_id'] }}').bootgrid('reload');
+                $('#ai-saved').removeClass('text-danger').text(data.saved + ' {{ lang._("rules saved; applying...") }}');
+                /* apply as the page's Apply button does: loupd reloads the rules and reclassifies */
+                ajaxCall('/api/loupe/service/reconfigure', {}, function (applied) {
+                    $btn.prop('disabled', false);
+                    const ok = applied && applied.status === 'ok';
+                    $('#ai-saved').toggleClass('text-danger', !ok).text(data.saved + ' ' + (ok
+                        ? '{{ lang._("rules saved and applied (Custom, source AI): devices are reclassified within a minute.") }}'
+                        : '{{ lang._("rules saved, but applying failed: use Apply below.") }}'));
+                });
             });
         });
         $('.loupe-source .btn[data-source="ai"]').click(function () { if (!ai.loaded) aiLoad(); });
@@ -955,7 +969,7 @@ POSSIBILITY OF SUCH DAMAGE.
                         <tbody></tbody>
                     </table>
                     <p id="ai-unknown" class="text-muted"></p>
-                    <button type="button" class="btn btn-primary" id="ai-save"><i class="fa fa-save fa-fw"></i> {{ lang._('Save selected as rules') }}</button>
+                    <button type="button" class="btn btn-primary" id="ai-save"><i class="fa fa-save fa-fw"></i> {{ lang._('Save and apply') }}</button>
                     <span id="ai-saved" style="margin-left: 10px"></span>
                 </div>
             </div>
