@@ -883,8 +883,10 @@ def cmd_aipreview(path):
         ids.setdefault(airules.row_id(airules.evidence(d)), []).append(d["mac"])
     names = {rid: [next(d["name"] for d in devs if d["mac"] == m) for m in macs] for rid, macs in ids.items()}
     checked = airules.preview(suggested, [d["for_rules"] for d in devs], ids, user, devid.load_oui()) if suggested else []
+    by_mac = {d["mac"]: d["name"] for d in devs}
     for r in checked:       # which devices each rule is for, as the page shows them (a row no device has: '?')
         r["for"] = [n for rid in r["devices"] for n in names.get(rid.upper(), ["?"])]
+        r["others"] = [by_mac.get(m, m) for m in r["others"]]      # the devices it would change besides its own
     return {"problem": problem, "rules": checked,
             "unknown": [{"for": [n for rid in u.get("devices") or [] for n in names.get(str(rid).upper(), ["?"])],
                          "note": u.get("note") or ""} for u in unknown]}

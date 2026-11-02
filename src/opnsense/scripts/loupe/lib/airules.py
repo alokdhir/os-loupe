@@ -319,7 +319,7 @@ def preview(suggested, devices, rows_ids, user_rules, oui):
                     "model": r.get("model") or "", "confidence": r.get("confidence") or "",
                     "note": r.get("note") or "", "when": r.get("when") or {}, "fields": fields,
                     "changes": [], "invalid": problem, "spills": 0, "nothing": False, "vaguer": False,
-                    "duplicate": False, "already": False,
+                    "duplicate": False, "already": False, "others": [],
                     "unknown_rows": [d for d in ids if d.upper() not in rows_ids]}
             if rule:
                 new = run([rule] + list(user_rules))
@@ -330,6 +330,7 @@ def preview(suggested, devices, rows_ids, user_rules, oui):
                     counts[k] = counts.get(k, 0) + 1
                 item["changes"] = [[a, b, n] for (a, b), n in sorted(counts.items(), key=lambda kv: -kv[1])]
                 item["spills"] = len(changed - mine)
+                item["others"] = sorted(changed - mine)      # their MACs; query.py names them
                 item["nothing"] = not changed
                 if not changed:
                     item["duplicate"] = any(isinstance(u, dict) and "when" in u and same(rule, u) for u in user_rules)

@@ -642,7 +642,12 @@ POSSIBILITY OF SUCH DAMAGE.
                 aiChecked.forEach(function (r, i) {
                     const flags = [];
                     if (r.invalid) flags.push('<span class="text-danger">' + esc(r.invalid) + '</span>');
-                    if (r.spills) flags.push('<span class="text-danger">{{ lang._("also changes") }} ' + r.spills + ' {{ lang._("other devices") }}</span>');
+                    if (r.spills) {         /* the devices it would change besides its own, by name */
+                        const others = r.others || [];
+                        flags.push('<span class="text-danger" title="' + esc(others.join(', ')) + '">{{ lang._("also changes") }} ' + r.spills + ' '
+                            + (r.spills === 1 ? '{{ lang._("other device") }}' : '{{ lang._("other devices") }}') + ': '
+                            + esc(others.slice(0, 3).join(', ')) + (others.length > 3 ? ', …' : '') + '</span>');
+                    }
                     if (r.nothing && !r.invalid) {          /* changes nothing: say why */
                         flags.push('<span class="text-warning">' + (r.duplicate ? '{{ lang._("you already have this rule") }}'
                             : r.already ? '{{ lang._("already") }} ' + esc(r.type)
