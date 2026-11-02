@@ -50,6 +50,12 @@ class IndexController extends \OPNsense\Base\IndexController
             'column-id' => 'match', 'label' => gettext('Matches'), 'visible' => 'true', 'sortable' => 'false',
             'identifier' => 'false', 'type' => 'string',
         ]]);
+        foreach ($grid['fields'] as &$field) {      // the icon it shows, also when Automatic (search_rule's icon_class)
+            if (($field['column-id'] ?? '') === 'icon') {
+                $field['formatter'] = 'ruleicon';
+            }
+        }
+        unset($field);
         $this->view->formGridRules = $grid;
         $this->view->pick('OPNsense/Loupe/index');
     }

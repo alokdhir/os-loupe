@@ -337,7 +337,11 @@ POSSIBILITY OF SUCH DAMAGE.
                     set: '/api/loupe/settings/set_rule/',
                     add: '/api/loupe/settings/add_rule/',
                     del: '/api/loupe/settings/del_rule/',
-                    options: {requestHandler: (request) => Object.assign(request, {source: $('#rule-source-filter').val()})}
+                    options: {
+                        requestHandler: (request) => Object.assign(request, {source: $('#rule-source-filter').val()}),
+                        formatters: {ruleicon: (column, row) => row.icon_class
+                            ? '<i class="' + esc(row.icon_class) + ' fa-fw text-muted"></i>' : ''}
+                    }
                 });
                 /* the Source filter sits after the grid's search box, as core's dnsmasq page places its tag filter */
                 $('#rule-source-container').detach().insertAfter($('#' + id + '-header .actionBar .search')).show();

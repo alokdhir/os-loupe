@@ -133,6 +133,22 @@ class SettingsController extends ApiMutableModelControllerBase
             }
             $row['match'] = implode(' ' . gettext('and') . ' ', $parts);
         }
+        /* the icon shown: the one picked, else (Automatic) the built-in type's of the same name, as loupd uses */
+        $loose = fn($t) => preg_replace('/[^a-z0-9]/', '', strtolower($t));
+        $data = json_decode((string)@file_get_contents('/usr/local/opnsense/scripts/loupe/data/devices.json'), true);
+        $builtin = [];
+        foreach (($data['types'] ?? []) as $type => $props) {
+            if (!empty($props['icon'])) {
+                $builtin[$loose($type)] = $props['icon'];
+            }
+        }
+        $picked = [];
+        foreach ($this->getModel()->rules->rule->iterateItems() as $uuid => $rule) {
+            $picked[$uuid] = (string)$rule->icon;
+        }
+        foreach ($result['rows'] as &$row) {
+            $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: ($builtin[$loose(html_entity_decode($row['type']))] ?? '');
+        }
         return $result;
     }
 
