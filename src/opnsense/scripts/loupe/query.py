@@ -418,10 +418,11 @@ def matching_sites(db, svc, hours, text, exact):
 
 
 def search_rows(db, svc, hours, text):
-    """The services search's traffic: (ip, mac, listed as, up, down, conns, last, matched). A service is listed with
-    all its traffic when its name or one of its sites matches; traffic without a service only when its site matches,
-    listed as the site. Where loupd's summaries have it: the services' traffic from the daily summary (from the site
-    summary for today's summarized hours), the matching sites from the site summary, added up there."""
+    """The services search's traffic: (ip, mac, listed as, up, down, conns, last, matched). A service whose name
+    matches is listed with all its traffic; otherwise only the traffic of its sites that match (a 70-byte CDN host
+    whose name happens to contain the text doesn't list the whole CDN), and traffic without a service as its site.
+    Where loupd's summaries have it: services from the daily summary (from the site summary for today's summarized
+    hours), sites from the site summary."""
     table, start = period(hours)
     namer = Namer(db, svc)
     stored, live = split_period(namer, table, start, int(time.time()) + 1)
@@ -431,26 +432,22 @@ def search_rows(db, svc, hours, text):
     if stored:
         by_name, by_address, services = site_candidates(db, min(stored), text)
         in_days, names = json.dumps(stored), json.dumps(sorted(by_name))
-        # a site whose name matches: all its traffic. With a service, it only marks the service as matched (its
-        # traffic is the service's rows below); without one, it is listed as the site.
-        for ip, mac, s in db.execute("SELECT DISTINCT ip, mac, service FROM sites_1d WHERE named = 1 AND service != '' "
-                                     f"AND site IN (SELECT value FROM json_each(?)) AND {DAYS_IN}", (names, in_days)):
-            matched.append((ip, mac, s, 0, 0, 0, 0, True))
-            services.add(s)
-        matched += [(*r, True) for r in db.execute(
-            "SELECT ip, mac, site, sum(up), sum(down), sum(conns), max(last) FROM sites_1d WHERE named = 1 AND service = '' "
-            f"AND site IN (SELECT value FROM json_each(?)) AND {DAYS_IN} GROUP BY ip, mac, site "
-            "ORDER BY min(day), ip, mac, site", (names, in_days))]
+        # a site whose name matches: its traffic, under its service (the site itself without one) - unless the
+        # service matched by name, whose traffic is all listed below
+        for ip, mac, site, s, up, down, conns, last in db.execute(
+                "SELECT ip, mac, site, service, sum(up), sum(down), sum(conns), max(last) FROM sites_1d WHERE named = 1 "
+                f"AND site IN (SELECT value FROM json_each(?)) AND {DAYS_IN} GROUP BY ip, mac, site, service "
+                "ORDER BY min(day), ip, mac, site", (names, in_days)):
+            if s not in services:
+                matched.append((ip, mac, s or site, up, down, conns, last, True))
         # a site on the address: the days it was there
         for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in db.execute(
                 f"SELECT {SITE_COLS} FROM sites_1d WHERE site IN (SELECT value FROM json_each(?)) AND {DAYS_IN} "
                 "ORDER BY day, rowid", (json.dumps(sorted(by_address)), in_days)):
-            if named and site in by_name:
+            if (named and site in by_name) or s in services:
                 continue
             if site_matches(text, False, site, named, s, servers.split() if named else (site,)):
-                matched.append((ip, mac, s, 0, 0, 0, 0, True) if s else (ip, mac, site, up, down, conns, last, True))
-                if s:
-                    services.add(s)
+                matched.append((ip, mac, s or site, up, down, conns, last, True))
     wanted_services = json.dumps(sorted(services))
     # per device and service, each first seen where the day-by-day rows would have it (the devices listed with a
     # service are the biggest, in that order when they tie)
@@ -461,13 +458,12 @@ def search_rows(db, svc, hours, text):
                        f"(SELECT value FROM json_each(?)) AND {DAYS_IN} GROUP BY ip, mac, service", part)):
         if days and services:
             for ip, mac, s, up, down, conns, last in db.execute(sql, (wanted_services, json.dumps(days))):
-                yield ip, mac, s, up, down, conns, last, text in fold(s)
+                yield ip, mac, s, up, down, conns, last, True
     yield from matched
     for day, a, b in live:
         for ip, mac, site, named, s, _inf, up, down, conns, _first, last, servers in live_sites(db, namer, table, day, a, b):
-            hit = site_matches(text, False, site, named, s, servers)
-            if s or hit:
-                yield ip, mac, s or site, up, down, conns, last, hit
+            if (s and text in fold(s)) or site_matches(text, False, site, named, s, servers):
+                yield ip, mac, s or site, up, down, conns, last, True
 
 
 def device_filter(arg):

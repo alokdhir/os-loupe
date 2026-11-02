@@ -434,6 +434,22 @@ class TestDailySummary(unittest.TestCase):
         self.assertIn(self.today, [d for d, in db.execute("SELECT day FROM summary_days")])
         self.assertEqual(db.execute("SELECT count(*) FROM flows_1h WHERE bucket < ?", (self.today,)).fetchone(), (0,))
 
+    def test_search_by_site_lists_only_that_site(self):
+        """A service matched only through one of its sites is listed with that site's traffic, not all of it; a
+        service matched by its name with all of it. The same before and after loupd summarizes."""
+        a = "02:00:00:00:00:61"
+        t = max(self.today, self.now - 600) // 60 * 60
+        self.store.write({(t, "10.9.2.61", "192.0.2.30", 443, "tcp", "oca7.nflxvideo.net"): [a, "sni", 0, 1, 7, 1, 1]},
+                         {}, {}, self.now)
+        for summarized in (False, True):
+            if summarized:
+                self.summarize()
+            by_site = {r["service"]: r for r in self.query.cmd_sites(72, "oca7")["rows"]}
+            self.assertEqual((by_site["Netflix"]["down"], by_site["Netflix"]["up"]), (7, 1), summarized)
+            everything = {r["service"]: r for r in self.query.cmd_sites(72)["rows"]}["Netflix"]
+            by_name = {r["service"]: r for r in self.query.cmd_sites(72, "netflix")["rows"]}["Netflix"]
+            self.assertEqual(by_name["down"], everything["down"], summarized)
+
     def test_linked_macs_are_one_device(self):
         """MACs loupd linked (a bridge and its NIC, wired and Wi-Fi) are one device in every report."""
         a, b = "02:00:00:00:00:61", "02:00:00:00:00:62"
