@@ -137,14 +137,11 @@ POSSIBILITY OF SUCH DAMAGE.
                 return ago(row[column.id]);
             },
             servicedevice: function (column, row) {
-                if (!row.device) return '';             /* a site row under its device */
+                if (!row.device) return copyable(row.name || (row.servers || []).join(', ')) + inferred(row);   /* a site, under its device */
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
                     + '<a href="#device=' + esc(row.mac || row.ip) + '">' + esc(row.device) + '</a>'
-                    + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '');
-            },
-            servicesite: function (column, row) {
-                if (row._children) return '<span class="text-muted">' + row.sites + ' {{ lang._("sites") }}</span>';
-                return copyable(row.name || (row.servers || []).join(', ')) + inferred(row);
+                    + (row.type ? ' <span class="text-muted">· ' + esc(row.type) + '</span>' : '')
+                    + (row._children ? ' <span class="text-muted">(' + row.sites + ' {{ lang._("sites") }})</span>' : '');
             },
             copy: function (column, row) {
                 return copyable(row[column.id]);
@@ -949,9 +946,8 @@ POSSIBILITY OF SUCH DAMAGE.
             <table id="grid-traffic" class="table table-condensed table-hover table-striped table-responsive">
                 <thead><tr>
                     <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
-                    <th data-column-id="device" data-formatter="servicedevice">{{ lang._('Device') }}</th>
+                    <th data-column-id="device" data-formatter="servicedevice">{{ lang._('Device / Site') }}</th>
                     <th data-column-id="ip" data-width="10em" data-formatter="copy">{{ lang._('Address') }}</th>
-                    <th data-column-id="name" data-formatter="servicesite">{{ lang._('Site') }}</th>
                     <th data-column-id="pct" data-formatter="pct" data-width="10em">{{ lang._('% of total') }}</th>
                     <th data-column-id="down" data-formatter="bytes" data-width="8em">{{ lang._('Down') }}</th>
                     <th data-column-id="up" data-formatter="bytes" data-width="8em">{{ lang._('Up') }}</th>
