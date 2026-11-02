@@ -428,7 +428,8 @@ POSSIBILITY OF SUCH DAMAGE.
         function applyButton() {
             const page = $('.loupe-page').filter(function () { return this.style.display !== 'none'; }).first();
             const source = page.find('.loupe-source .btn.active').data('source');
-            $('.loupe-apply').toggle(currentTab === 'settings' && (pending || (source !== 'builtin' && source !== 'ai')));
+            /* Model names: its AI section saves and applies by itself; Apply appears once the list was edited */
+            $('.loupe-apply').toggle(currentTab === 'settings' && (pending || !['builtin', 'ai', 'models'].includes(source)));
         }
         $(document).on('settings-changed', function () { pending = true; applyButton(); });
         function showSettings(page) {
@@ -855,12 +856,27 @@ POSSIBILITY OF SUCH DAMAGE.
                     return;
                 }
                 $('#aim-problem').text(data.problem || '').toggle(!!data.problem);
-                $('#aim-list').html(aim.names.map((m, i) => '<div class="checkbox" style="margin: 2px 0"><label><input type="checkbox" data-i="' + i + '" checked> '
-                    + '<code>' + esc(m.identifier) + '</code> → ' + esc(m.name) + ' '
-                    + (AI_CONFIDENCE[(m.confidence || '').toLowerCase()] || '')
-                    + ' <span class="text-muted">' + esc((m.for || []).join(', ')) + (m.now ? ' · {{ lang._("now") }}: ' + esc(m.now) : '') + '</span></label></div>').join(''));
+                const devices = (names) => {        /* "EP25 ×5" rather than the name five times */
+                    const n = {};
+                    names.forEach(x => n[x] = (n[x] || 0) + 1);
+                    return Object.entries(n).map(([x, c]) => esc(x) + (c > 1 ? ' ×' + c : '')).join(', ');
+                };
+                $('#aim-list tbody').html(aim.names.map((m, i) => '<tr><td><input type="checkbox" data-i="' + i + '" checked></td>'
+                    + '<td><code>' + esc(m.identifier) + '</code></td><td>' + esc(m.name) + '</td>'
+                    + '<td>' + (AI_CONFIDENCE[(m.confidence || '').toLowerCase()] || '') + '</td>'
+                    + '<td class="text-muted">' + devices(m.for || []) + '</td>'
+                    + '<td class="text-muted">' + esc(m.now || '') + '</td></tr>').join(''));
                 $('#aim-review').show();
+                /* the answer box folds down so the review is in view (it opens up again when clicked), as for rules */
+                const $reply = $('#aim-reply');
+                $reply.data('tall', $reply.data('tall') || $reply.outerHeight());
+                $reply.stop().animate({height: '7em'}, 300, function () {
+                    $('html, body').animate({scrollTop: $('#aim-review').offset().top - 70}, 400);
+                });
             });
+        });
+        $('#aim-reply').on('focus', function () {
+            if ($(this).data('tall')) $(this).stop().animate({height: $(this).data('tall')}, 300);
         });
         $('#aim-save').click(function () {
             const names = $('#aim-list input:checked').map(function () {
@@ -1118,14 +1134,20 @@ POSSIBILITY OF SUCH DAMAGE.
                     <p class="text-muted">{{ lang._('The prompt lists the model codes your devices announce that have no name yet, each with only its maker and device type: nothing else about your devices.') }} <span id="aim-count"></span></p>
                     <div style="margin-bottom: 6px">
                         <button type="button" class="btn btn-primary" id="aim-copy"><i class="fa fa-copy fa-fw"></i> {{ lang._('Copy prompt') }}</button>
-                        <a href="#" id="aim-show">{{ lang._('Show prompt') }}</a>
+                        <a href="#" id="aim-show" style="margin-left: 12px">{{ lang._('Show prompt') }}</a>
                     </div>
                     <pre id="aim-prompt" style="display: none; max-height: 24em; overflow: auto; white-space: pre-wrap"></pre>
                     <div id="aim-problem" class="alert alert-warning" style="display: none; margin-bottom: 6px"></div>
                     <textarea id="aim-reply" class="form-control" rows="8" style="font-family: monospace; width: 100%; max-width: none; resize: vertical" placeholder="{{ lang._('Paste the AI\'s answer here') }}"></textarea>
                     <button type="button" class="btn btn-primary" id="aim-check" style="margin-top: 6px"><i class="fa fa-wand-magic-sparkles fa-fw"></i> {{ lang._('Generate names') }}</button>
-                    <div id="aim-review" style="display: none; margin-top: 10px">
-                        <div id="aim-list"></div>
+                    <div id="aim-review" style="display: none; margin-top: 14px">
+                        <table class="table table-condensed table-striped" id="aim-list">
+                            <thead><tr>
+                                <th style="width: 2em"></th><th>{{ lang._('Code') }}</th><th>{{ lang._('Name') }}</th>
+                                <th>{{ lang._('Confidence') }}</th><th>{{ lang._('Devices') }}</th><th>{{ lang._('Name now') }}</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
                         <button type="button" class="btn btn-primary" id="aim-save" style="margin-top: 6px"><i class="fa fa-save fa-fw"></i> {{ lang._('Save and apply') }}</button>
                         <span id="aim-saved" style="margin-left: 10px"></span>
                     </div>
@@ -1142,7 +1164,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <p id="ai-cut" class="text-warning"></p>
                     <div style="margin-bottom: 6px">
                         <button type="button" class="btn btn-primary" id="ai-copy"><i class="fa fa-copy fa-fw"></i> {{ lang._('Copy prompt') }}</button>
-                        <a href="#" id="ai-show">{{ lang._('Show prompt') }}</a>
+                        <a href="#" id="ai-show" style="margin-left: 12px">{{ lang._('Show prompt') }}</a>
                     </div>
                     <pre id="ai-prompt" style="display: none; max-height: 24em; overflow: auto; white-space: pre-wrap"></pre>
                 </div>
