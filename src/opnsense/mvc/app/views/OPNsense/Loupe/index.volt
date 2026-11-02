@@ -342,6 +342,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     add: '/api/loupe/settings/add_rule/',
                     del: '/api/loupe/settings/del_rule/',
                     options: {
+                        initialSearchPhrase: rulesSearch,       /* opened from a device's "edit the rule" link */
                         requestHandler: (request) => Object.assign(request, {source: $('#rule-source-filter').val()}),
                         formatters: {ruleicon: (column, row) => row.icon_class
                             ? '<i class="' + esc(row.icon_class) + ' fa-fw text-muted"></i>' : ''}
@@ -391,6 +392,14 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* Apply on the settings tab, but not where there is nothing to apply: the read-only Built-in lists, and the
            AI Rule Generator (its Save and apply does it) */
+        let rulesSearch = '';           /* the type a device's "edit the rule" link looks for in Custom rules */
+        function showRulesFor(type) {
+            rulesSearch = type;
+            const id = '{{ formGridRules['table_id'] }}';
+            $('#page_rules .loupe-source .btn[data-source="mine"]').click();
+            if (started.rules) $('#' + id + '-search-field').val(type).trigger('keyup');
+            window.location.hash = '#rules';
+        }
         let currentTab = '';            /* the tab route() showed: the panes' classes lag behind their fade */
         let pending = false;            /* a list edit saved but not applied yet (core's grids say "settings-changed") */
         function applyButton() {
@@ -532,10 +541,20 @@ POSSIBILITY OF SUCH DAMAGE.
                 let $why = $('#device-type-source');
                 if (!$why.length) $why = $('<div id="device-type-source" class="text-muted" style="margin-top: 4px"></div>').insertAfter('#device\\.type');
                 const rule = src.match(/^(AI rule|custom rule): (.*)$/);
-                $why.text(!src ? '' : src === 'set by you' ? '{{ lang._("Set by you for this device.") }}'
-                    : rule ? (rule[1] === 'AI rule' ? '{{ lang._("From your AI rule:") }} ' : '{{ lang._("From your rule:") }} ') + rule[2]
-                        + '. {{ lang._("Changing it here sets it for this device only; edit the rule to change every device it matches.") }}'
-                    : '{{ lang._("Detected from:") }} ' + src);
+                $why.empty();
+                if (rule) {         /* a link to the rule: Custom rules, searched for this type */
+                    const $link = $('<a href="#"></a>').text('{{ lang._("edit the rule") }}').click(function (e) {
+                        e.preventDefault();
+                        $('#' + dialog).modal('hide');
+                        showRulesFor(shown.type);
+                    });
+                    $why.append(document.createTextNode((rule[1] === 'AI rule' ? '{{ lang._("From your AI rule:") }} '
+                        : '{{ lang._("From your rule:") }} ') + rule[2] + '. {{ lang._("Changing it here sets it for this device only;") }} '),
+                        $link, document.createTextNode(' {{ lang._("to change every device it matches.") }}'));
+                } else {
+                    $why.text(!src ? '' : src === 'set by you' ? '{{ lang._("Set by you for this device.") }}'
+                        : '{{ lang._("Detected from:") }} ' + src);
+                }
                 $('#' + dialog).modal('show');
             });
             $('#btn_' + dialog + '_save').unbind('click').click(function () {
