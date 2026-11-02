@@ -33,10 +33,9 @@ POSSIBILITY OF SUCH DAMAGE.
     /* the AI Rule Generator's confidence pills: small, beside their label */
     .loupe-pill { font-size: 75%; font-weight: 600; padding: 1px 6px; border-radius: 8px; vertical-align: 1px; }
     .loupe-edit { color: #999; cursor: pointer; visibility: hidden; padding-left: 8px; }
-    .tabulator-row:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
+    .tabulator-cell:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
     @media (hover: none) { .loupe-edit { visibility: visible; } }
     .loupe-edit:hover { color: #337ab7; }
-    .btn.loupe-edit { visibility: visible; padding-left: 5px; color: inherit; }      /* the list's command column */
     .loupe-copy { display: block; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
     .loupe-copied { color: #3c763d; transition: color 0.2s; }
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
@@ -69,13 +68,10 @@ POSSIBILITY OF SUCH DAMAGE.
         const inferred = r => r.inferred ? ' <span class="text-muted" title="{{ lang._("Named from other traffic between this device and the same server") }}">({{ lang._("same server") }})</span>' : '';
         const dialog = '{{ formGridOverrides['edit_dialog_id'] }}';
 
-        function editButton(r, button) {
+        function editButton(r) {        /* on hover, beside a device's name and its type */
             if (!r.mac) return '';
-            const data = ' title="{{ lang._("Edit name, type and icon") }}" data-mac="' + esc(r.mac)
-                + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '') + '"';
-            return button       /* the device list's command column, as OPNsense's grids have it */
-                ? '<button type="button" class="btn btn-xs btn-default loupe-edit"' + data + '><span class="fa fa-pencil fa-fw"></span></button>'
-                : '<i class="fa fa-pencil loupe-edit"' + data + '></i>';
+            return '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Edit name, type and icon") }}" data-mac="' + esc(r.mac)
+                + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '') + '"></i>';
         }
 
         /* click a cell to copy its value (the cursor says so); it flashes green when copied */
@@ -105,16 +101,13 @@ POSSIBILITY OF SUCH DAMAGE.
                 return (row.networks || []).map(pill).join('');
             },
             device: function (column, row) {
-                return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>';
-            },
-            devedit: function (column, row) {
-                return editButton(row, true);
+                return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>' + editButton(row);
             },
             devtype: function (column, row) {           /* the type, its model (when known) after it */
-                if (!row.type && !row.model) return dash;
+                if (!row.type && !row.model) return dash + editButton(row);
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
                     + '<span title="' + esc(row.type_source || '') + '">' + esc(row.type || '') + '</span>'
-                    + (row.model ? ' <span class="text-muted">' + esc(row.model) + '</span>' : '');
+                    + (row.model ? ' <span class="text-muted">' + esc(row.model) + '</span>' : '') + editButton(row);
             },
             vendor: function (column, row) {
                 if (!row.vendor_note) return esc(row.vendor);
@@ -666,9 +659,16 @@ POSSIBILITY OF SUCH DAMAGE.
                 .join(' {{ lang._("and") }} ');
         }
         let aiChecked = [];
+        let aiIcons = null;             /* the rule dialog's icon choices, for new types in the review */
+        function aiIconChoices() {
+            if (aiIcons) return $.Deferred().resolve(aiIcons);
+            return ajaxGet('/api/loupe/settings/get_rule', {}, function (data) {
+                aiIcons = Object.entries(((data || {}).rule || {}).icon || {}).map(([v, o]) => [v, aiPlain(o.value)]);
+            }).then(() => aiIcons);
+        }
         $('#ai-check').click(function () {
             $('#ai-saved').text('');
-            ajaxCall('/api/loupe/settings/ai_preview', {reply: $('#ai-reply').val()}, function (data) {
+            aiIconChoices().always(() => ajaxCall('/api/loupe/settings/ai_preview', {reply: $('#ai-reply').val()}, function (data) {
                 data = aiPlain(data);
                 const $body = $('#ai-rules tbody').empty();
                 aiChecked = (data && data.rules) || [];
@@ -699,9 +699,15 @@ POSSIBILITY OF SUCH DAMAGE.
                     if (r.vaguer) flags.push('<span class="text-warning">{{ lang._("makes a type vaguer") }}</span>');
                     const changes = (r.changes || []).map(c => c[2] + ' × ' + esc(c[0] || '{{ lang._("no type") }}') + ' → ' + esc(c[1])).join('<br>');
                     const rows = (r.for || []).map(n => n === '?' ? '<span class="text-muted">{{ lang._("not in the list") }}</span>' : esc(n)).join(', ');
+                    const icon = r.icon ? '<i class="' + esc(r.icon) + ' fa-fw text-muted"></i> '
+                        : '';
+                    const pickIcon = (!r.icon && r.fields) ? '<br><select class="form-control input-sm ai-icon" data-i="' + i
+                        + '" style="width: auto; display: inline-block; margin-top: 4px"><option value="">{{ lang._("Icon...") }}</option>'
+                        + (aiIcons || []).filter(([v]) => v).map(([v, label]) => '<option value="' + esc(v) + '">' + esc(label) + '</option>').join('')
+                        + '</select>' : '';
                     $body.append('<tr><td><input type="checkbox" data-i="' + i + '"' + (r.pick ? ' checked' : '') + (r.fields ? '' : ' disabled') + '></td>'
-                        + '<td>' + esc(r.type) + (r.vendor ? ' <span class="text-muted">' + esc(r.vendor) + '</span>' : '')
-                        + (r.model ? ' <span class="text-muted">' + esc(r.model) + '</span>' : '') + '</td>'
+                        + '<td>' + icon + esc(r.type) + (r.vendor ? ' <span class="text-muted">' + esc(r.vendor) + '</span>' : '')
+                        + (r.model ? ' <span class="text-muted">' + esc(r.model) + '</span>' : '') + pickIcon + '</td>'
                         + '<td>' + esc(aiWhen(r.when)) + '</td><td>' + rows + '</td><td>' + (changes || '—') + '</td>'
                         + '<td>' + [AI_CONFIDENCE[(r.confidence || '').toLowerCase()]
                             ? '{{ lang._("Confidence") }} ' + AI_CONFIDENCE[r.confidence.toLowerCase()] : '']
@@ -716,7 +722,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 $reply.stop().animate({height: '7em'}, 300, function () {
                     $('html, body').animate({scrollTop: $('#ai-review').offset().top - 70}, 400);
                 });
-            });
+            }));
         });
         $('#ai-reply').on('focus', function () {
             if ($(this).data('tall')) $(this).stop().animate({height: $(this).data('tall')}, 300);
@@ -725,7 +731,8 @@ POSSIBILITY OF SUCH DAMAGE.
             const picked = $('#ai-rules input:checked').map(function () { return aiChecked[$(this).data('i')]; }).get();
             if (!picked.length) { $('#ai-saved').text('{{ lang._("Tick the rules to save.") }}'); return; }
             const rules = picked.map(r => Object.assign({}, r.fields,
-                {description: [r.vendor, r.model, r.note].filter(Boolean).join(' · ')}));
+                {description: [r.vendor, r.model, r.note].filter(Boolean).join(' · '),
+                 icon: $('#ai-rules select.ai-icon[data-i="' + aiChecked.indexOf(r) + '"]').val() || ''}));
             const $btn = $(this).prop('disabled', true);
             ajaxCall('/api/loupe/settings/ai_save', {rules: rules}, function (data) {
                 data = aiPlain(data);
@@ -812,7 +819,6 @@ POSSIBILITY OF SUCH DAMAGE.
                     <th data-column-id="conns" data-visible="false" data-width="6em">{{ lang._('Conns') }}</th>
                     <th data-column-id="top" data-formatter="services" data-sortable="false">{{ lang._('Top services') }}</th>
                     <th data-column-id="last" data-formatter="ago" data-width="9em">{{ lang._('Last seen') }}</th>
-                    <th data-column-id="edit" data-formatter="devedit" data-sortable="false" data-width="4em"></th>
                 </tr>
                 </thead>
                 <tbody></tbody>

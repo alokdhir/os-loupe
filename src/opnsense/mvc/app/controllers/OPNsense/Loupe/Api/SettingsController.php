@@ -234,7 +234,7 @@ class SettingsController extends ApiMutableModelControllerBase
         if (!$this->request->isPost() || !is_array($rules) || empty($rules)) {
             return ['result' => 'failed', 'error' => gettext('Nothing to save.')];
         }
-        $allowed = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description']);
+        $allowed = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description', 'icon']);
         Config::getInstance()->lock();
         $mdl = $this->getModel();
         $saved = 0;

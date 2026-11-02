@@ -890,6 +890,7 @@ def cmd_aipreview(path):
     for r in checked:       # which devices each rule is for, as the page shows them (a row no device has: '?')
         r["for"] = [n for rid in r["devices"] for n in names.get(rid.upper(), ["?"])]
         r["others"] = [by_mac.get(m, m) for m in r["others"]]      # the devices it would change besides its own
+        r["icon"] = rules().icon(r["type"])         # the type's icon now ('': a new type, the page offers a choice)
     return {"problem": problem, "rules": checked,
             "unknown": [{"for": [n for rid in u.get("devices") or [] for n in names.get(str(rid).upper(), ["?"])],
                          "note": u.get("note") or ""} for u in unknown]}
