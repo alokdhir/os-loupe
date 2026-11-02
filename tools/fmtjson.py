@@ -39,7 +39,16 @@ def dump(data):
         comma = "," if i < len(keys) - 1 else ""
         if isinstance(v, list) and v and not all(isinstance(x, str) for x in v) or k == "_comment":
             out.append(f" {json.dumps(k)}: [")
-            out += [f"  {json.dumps(x, ensure_ascii=False)}" + ("," if j < len(v) - 1 else "") for j, x in enumerate(v)]
+            for j, x in enumerate(v):
+                end = "," if j < len(v) - 1 else ""
+                if isinstance(x, dict) and isinstance(x.get("any"), list):      # a device type: one alternative a line
+                    head = json.dumps({a: b for a, b in x.items() if a != "any"}, ensure_ascii=False)[:-1]
+                    out.append(f"  {head}, \"any\": [")
+                    out += [f"   {json.dumps(a, ensure_ascii=False)}" + ("," if i < len(x["any"]) - 1 else "")
+                            for i, a in enumerate(x["any"])]
+                    out.append("  ]}" + end)
+                else:
+                    out.append(f"  {json.dumps(x, ensure_ascii=False)}" + end)
             out.append(" ]" + comma)
         elif isinstance(v, dict):
             out.append(f" {json.dumps(k)}: {{")

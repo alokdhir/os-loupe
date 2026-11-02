@@ -277,14 +277,23 @@ class ReportController extends ApiControllerBase
     {
         $data = $this->dataFile('devices.json');
         $rows = [];
-        foreach ($data['rules'] ?? [] as $i => $rule) {
-            $conds = isset($rule['all']) ? $rule['all'] : [$rule['when'] ?? []];
+        /* one row per device type: any of its alternatives identifies it */
+        foreach ($data['rules'] ?? [] as $i => $entry) {
+            $alternatives = [];
+            $notes = [];
+            foreach ($entry['any'] ?? [$entry] as $alt) {
+                $conds = isset($alt['all']) ? $alt['all'] : [$alt['when'] ?? []];
+                $alternatives[] = implode(' and ', array_map([$this, 'describeCondition'], $conds));
+                if (!empty($alt['note'])) {
+                    $notes[] = $alt['note'];
+                }
+            }
             $rows[] = [
                 'order' => $i + 1,
-                'match' => implode(' and ', array_map([$this, 'describeCondition'], $conds)),
-                'type' => $rule['type'] ?? '',
-                'icon' => $data['types'][$rule['type'] ?? '']['icon'] ?? '',
-                'note' => $rule['note'] ?? '',
+                'match' => implode('; or ', $alternatives),
+                'type' => $entry['type'] ?? '',
+                'icon' => $data['types'][$entry['type'] ?? '']['icon'] ?? '',
+                'note' => implode(' ', $notes),
             ];
         }
         return $this->searchRecordsetBase($rows, ['match', 'type', 'note'], 'order', null, SORT_NUMERIC);

@@ -32,7 +32,8 @@ from lib import devid, services
 
 FIELDS = {"mac_prefix": str, "mdns_model": str, "mdns_name": str, "category": str, "hostname": str, "mdns_service": str, "dhcp_vendor": str,
           "dhcp_params": str, "talks_to": str, "vendor": str, "private_mac": bool}
-RULE_KEYS = {"when", "all", "tier", "type", "vendor", "note", "example"}
+ENTRY_KEYS = {"type", "vendor", "any"}
+RULE_KEYS = {"when", "all", "tier", "vendor", "note", "example"}
 EXAMPLE_KEYS = {"mac", "hostname", "vendor", "info", "names"}
 REGEX_FIELDS = ("mdns_model", "mdns_name", "hostname", "dhcp_vendor")
 
@@ -48,10 +49,22 @@ class TestDeviceRules(unittest.TestCase):
         with open(devid.RULES_JSON, encoding="utf-8") as f:
             self.data = json.load(f)
 
+    def alternatives(self):
+        for e in self.data["rules"]:
+            for alt in e["any"]:
+                yield e, {**{k: v for k, v in e.items() if k != "any"}, **alt}
+
+    def test_one_entry_per_type(self):
+        types = [e["type"] for e in self.data["rules"]]
+        self.assertEqual(len(types), len(set(types)), "a type is defined once, with all its alternatives")
+        for e in self.data["rules"]:
+            self.assertLessEqual(set(e), ENTRY_KEYS)
+            self.assertTrue(e["any"])
+
     def test_well_formed(self):
-        for r in self.data["rules"]:
+        for e, r in self.alternatives():
             with self.subTest(rule=r):
-                self.assertLessEqual(set(r), RULE_KEYS)
+                self.assertLessEqual(set(r) - {"type", "any"}, RULE_KEYS)
                 self.assertTrue(("when" in r) != ("all" in r), "exactly one of when/all")
                 self.assertIsInstance(r["type"], str)
                 self.assertIn(r["type"], self.data["types"], "every type needs an entry in 'types' (icon)")
@@ -78,7 +91,7 @@ class TestDeviceRules(unittest.TestCase):
 
     def test_examples(self):
         """Each example lands on its own rule's type: catches typos and rules that steal others' devices."""
-        for r in self.data["rules"]:
+        for e, r in self.alternatives():
             with self.subTest(rule=r):
                 self.assertEqual(run_example(r["example"])[0], r["type"])
 

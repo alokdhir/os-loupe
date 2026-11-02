@@ -110,13 +110,16 @@ Those are broader tools — deep packet inspection, alerts, policies, live flows
 
 ## Device rules
 
-How Loupe recognises devices is data, not code: [`data/devices.json`](src/opnsense/scripts/loupe/data/devices.json) (device rules, the icon and maker for each type, Apple model names) and [`data/services.json`](src/opnsense/scripts/loupe/data/services.json) (site and service names, address ranges, ports, VPN providers). One entry per line:
+How Loupe recognises devices is data, not code: [`data/devices.json`](src/opnsense/scripts/loupe/data/devices.json) (device rules, the icon and maker for each type, Apple model names) and [`data/services.json`](src/opnsense/scripts/loupe/data/services.json) (site and service names, address ranges, ports, VPN providers). Each device type is one entry, with the alternatives that identify it, one per line:
 
 ```json
-{"when": {"hostname": "(?i)^kvm-[0-9a-f]{4}$"}, "type": "NanoKVM", "example": {"hostname": "kvm-0a1b"}}
+{"type": "Printer", "any": [
+ {"when": {"hostname": "(?i)printer|^brw|^epson"}, "example": {"hostname": "BRW0A1B2C"}},
+ {"when": {"mdns_service": ["_ipp._tcp", "_ipps._tcp", "_printer._tcp"]}, "example": {"info": {"mdns_services": ["_ipp._tcp"]}}}
+]}
 ```
 
-A rule matches when all of its conditions do (`when`, or several in `all`) — a *compound* rule; a list value means *any of*. Fields:
+A device is the type when any alternative matches. An alternative matches when all of its conditions do (`when`, or several in `all`) — a *compound* rule; a list value means *any of*. Your own rules (Settings) are single alternatives. Fields:
 
 | Field | Matches |
 |---|---|
@@ -132,7 +135,7 @@ A rule matches when all of its conditions do (`when`, or several in `all`) — a
 | `vendor` | a whole word in the maker's name for the MAC prefix |
 | `private_mac` | `true` for a randomized (private) MAC |
 
-Evidence is trusted in a fixed order — Bonjour model, Bonjour name, host name, hosting role, strong Bonjour services, standard category (exact, but generic: a Fire TV stays a Fire TV), DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching rule wins (file order within a tier). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
+Evidence is trusted in a fixed order — Bonjour model, Bonjour name, host name, hosting role, strong Bonjour services, standard category (exact, but generic: a Fire TV stays a Fire TV), DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching alternative wins (file order within a tier: specific makers come before general categories). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
 
 **For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones; fill in one clue or several for a compound rule; your rules are tried by their strongest clue, then in the order you added them, and the first that matches decides), and *Settings → Service names* takes your own names.
 

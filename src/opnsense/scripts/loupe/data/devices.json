@@ -1,206 +1,401 @@
 {
  "_comment": [
   "Device identification rules for Loupe. See README 'Device rules'.",
-  "A rule matches when every condition in 'when' (or every entry of 'all') matches; a list value means any of.",
+  "One entry per type: a device is that type when any of its alternatives ('any') matches. An alternative matches when every condition in 'when' (or every entry of 'all') matches; a list value means any of.",
   "Fields: mac_prefix, mdns_model (regex), mdns_name (Bonjour instance name, regex), hostname (regex), mdns_service (exact),",
   "category (HomeKit category hap:N or Matter device type matter:0xNNNN, exact), dhcp_vendor (regex),",
   "dhcp_params (prefix of the request list), talks_to (domain suffix), vendor (whole word), private_mac (bool).",
   "Category codes: HomeKit accessory categories (HAP spec; as in HAP-NodeJS Categories) and Matter device types",
   "(connectedhomeip data_model/1.7/device_types/device_type_ids.json); generic ones (bridge, root node, other) have no rule.",
-  "Tiers run in a fixed order (strongest evidence first, see TIERS in lib/devid.py); a rule's tier defaults to its first field.",
+  "Tiers run in a fixed order (strongest evidence first, see TIERS in lib/devid.py); an alternative's tier defaults to its first field.",
   "A type marked generic names a platform or a maker, not what the device is: the AI Rule Generator offers those devices.",
-  "'example' is synthetic evidence that must classify as this rule's type (checked by the tests).",
+  "each alternative's 'example' is synthetic evidence that must classify as the entry's type (checked by the tests).",
   "Distro rules (Ubuntu, Debian...) match the update servers a machine checks; containers can blur them.",
   "Shipped talks_to rules skip private MACs and computer_vendors: a phone or laptop opening a vendor's website is not",
   "that vendor's device (devices themselves don't randomize their MAC and aren't built on these makers' network chips)."
  ],
  "rules": [
-  {"when": {"mac_prefix": "52:54:00"}, "type": "Virtual machine", "vendor": "QEMU/KVM", "example": {"mac": "52:54:00:00:00:01"}},
-  {"when": {"vendor": "Tesla"}, "tier": "mac_prefix", "type": "Tesla", "note": "Tesla's own MAC block, only on Tesla hardware; the car's DHCP client says MSFT 5.0", "example": {"vendor": "Tesla,Inc.", "info": {"dhcp_vendor_class": "MSFT 5.0"}}},
-  {"when": {"vendor": "Miele"}, "tier": "mac_prefix", "type": "Miele appliance", "note": "Miele's own MAC block, on the Wi-Fi modules (XKM) in its ovens, washers, dishwashers and coffee machines", "example": {"vendor": "Miele & Cie. KG"}},
-  {"when": {"mdns_model": "^AppleTV"}, "type": "Apple TV", "example": {"info": {"mdns_models": ["model=AppleTV14,1"]}}},
-  {"when": {"mdns_model": "^AudioAccessory"}, "type": "HomePod", "example": {"info": {"mdns_models": ["model=AudioAccessory5,1"]}}},
-  {"when": {"mdns_model": "^(MacBook|Macmini|MacPro|iMac|Mac\\d|MacStudio)"}, "type": "Mac", "example": {"info": {"mdns_models": ["model=Mac14,14"]}}},
-  {"when": {"mdns_model": "^iPhone"}, "type": "iPhone", "example": {"info": {"mdns_models": ["model=iPhone15,2"]}}},
-  {"when": {"mdns_model": "^iPad"}, "type": "iPad", "example": {"info": {"mdns_models": ["model=iPad13,1"]}}},
-  {"when": {"mdns_model": "^Watch"}, "type": "Apple Watch", "example": {"info": {"mdns_models": ["model=Watch6,1"]}}},
-  {"when": {"mdns_model": "Chromecast|Google TV|Google Nest|Nest (Hub|Mini|Audio)|Google Home"}, "type": "Google Cast device", "example": {"info": {"mdns_models": ["model=Chromecast Ultra"]}}},
-  {"when": {"mdns_model": "(?i)sonos"}, "type": "Sonos speaker", "example": {"info": {"mdns_models": ["model=Sonos One"]}}},
-  {"when": {"mdns_model": "(?i)bravia|smart ?tv|^(LG|Samsung|Vizio|TCL|Hisense)"}, "type": "TV", "example": {"info": {"mdns_models": ["model=BRAVIA 4K VH22"]}}},
-  {"when": {"mdns_model": "(?i)roku"}, "type": "Roku", "example": {"info": {"mdns_models": ["model=Roku Ultra"]}}},
-  {"when": {"mdns_model": "(?i)^(usb_mdl|ty)=|laserjet|officejet|deskjet|envy|pixma|ecotank|brother|epson"}, "type": "Printer", "example": {"info": {"mdns_models": ["model=HP Color LaserJet MFP M476dw"]}}},
-  {"when": {"hostname": "(?i)^kvm-[0-9a-f]{4}$"}, "type": "NanoKVM", "example": {"hostname": "kvm-0a1b"}},
-  {"when": {"hostname": "(?i)^pikvm\\b"}, "type": "PiKVM", "example": {"hostname": "pikvm"}},
-  {"when": {"hostname": "(?i)iphone"}, "type": "iPhone", "example": {"hostname": "Kids-iPhone"}},
-  {"when": {"hostname": "(?i)ipad"}, "type": "iPad", "example": {"hostname": "iPad"}},
-  {"when": {"hostname": "(?i)macbook|imac|mac-?mini|mac-?studio|mac-?pro"}, "type": "Mac", "example": {"hostname": "Someones-MacBook-Pro"}},
-  {"when": {"hostname": "(?i)apple-?tv"}, "type": "Apple TV", "example": {"hostname": "Den-Apple-TV"}},
-  {"when": {"hostname": "(?i)homepod"}, "type": "HomePod", "example": {"hostname": "HomePod"}},
-  {"when": {"hostname": "(?i)watch"}, "type": "Watch", "example": {"hostname": "Apple-Watch"}},
-  {"when": {"hostname": "(?i)^(ps[345]|playstation)"}, "type": "PlayStation", "example": {"hostname": "ps5-0a1b2c"}},
-  {"when": {"hostname": "(?i)xbox"}, "type": "Xbox", "example": {"hostname": "XBOX"}},
-  {"when": {"hostname": "(?i)nintendo|switch"}, "type": "Nintendo Switch", "example": {"hostname": "Nintendo-Switch"}},
-  {"all": [{"vendor": "Amazon Technologies"}, {"hostname": "(?i)^android-"}], "tier": "hostname", "type": "Fire TV", "note": "Fire OS sends android-N as its DHCP name", "example": {"vendor": "Amazon Technologies Inc.", "hostname": "android-2"}},
-  {"when": {"hostname": "(?i)galaxy|pixel|android|oneplus|moto"}, "type": "Android phone", "example": {"hostname": "Galaxy-S23"}},
-  {"when": {"hostname": "(?i)desktop-|laptop-|^win"}, "type": "Windows PC", "example": {"hostname": "DESKTOP-AB12CD"}},
-  {"when": {"hostname": "(?i)roku"}, "type": "Roku", "example": {"hostname": "Roku-Ultra"}},
-  {"when": {"hostname": "(?i)fire-?tv|amazon-"}, "type": "Amazon device", "example": {"hostname": "Fire-TV-Stick"}},
-  {"when": {"hostname": "(?i)echo"}, "type": "Echo speaker", "example": {"hostname": "Echo-Dot"}},
-  {"when": {"hostname": "(?i)chromecast|google-?(home|nest|tv)"}, "type": "Google Cast device", "example": {"hostname": "Chromecast"}},
-  {"when": {"hostname": "(?i)ecobee|thermostat|nest-?(learning|thermostat)"}, "type": "Thermostat", "example": {"hostname": "ecobee-thermostat"}},
-  {"when": {"hostname": "(?i)printer|^hp[0-9a-f]{6}|^brw|^epson|^canon"}, "type": "Printer", "example": {"hostname": "HP0A1B2C"}},
-  {"when": {"hostname": "(?i)^nvr"}, "type": "NVR", "note": "Reolink NVRs call themselves NVR; nothing else sets them apart from their cameras", "example": {"hostname": "NVR"}},
-  {"when": {"hostname": "(?i)^(cam|camera)|reolink|ring-|wyze|arlo"}, "type": "Camera", "example": {"hostname": "cam-garage"}},
-  {"when": {"hostname": "(?i)tv$|-tv-|bravia|lgwebos|samsung"}, "type": "TV", "example": {"hostname": "Bedroom-TV"}},
-  {"when": {"hostname": "(?i)raspberrypi|^rpi"}, "type": "Raspberry Pi", "example": {"hostname": "raspberrypi"}},
-  {"when": {"hostname": "(?i)denon|marantz|onkyo|yamaha-?(rx|av)|avr"}, "type": "AV receiver", "example": {"hostname": "denon-avr-x1700h"}},
-  {"when": {"hostname": "(?i)^(EP|HS|KP|KS|P1)\\d\\d|kasa|smart-?plug"}, "type": "Smart plug", "example": {"hostname": "HS105"}},
-  {"when": {"hostname": "(?i)^GEModule|^GE[-_]"}, "type": "Appliance (GE / Haier module)", "example": {"hostname": "GEModule1234"}, "note": "GE Appliances' Wi-Fi module, also used in Fisher & Paykel and other Haier brands"},
-  {"when": {"hostname": "(?i)^schlage"}, "type": "Smart lock", "note": "Schlage Encode (Wi-Fi) uses its brand as its DHCP name", "example": {"hostname": "Schlage", "info": {"dhcp_params": "1,3,6"}}},
-  {"when": {"hostname": "(?i)^HDHR-[0-9a-f]{8}$"}, "type": "TV tuner", "note": "SiliconDust HDHomeRun: HDHR- plus its device ID", "example": {"hostname": "HDHR-1A2B3C4D"}},
-  {"when": {"hostname": "(?i)tuya|^wlan0$|^esp[-_]"}, "type": "Smart home device", "example": {"hostname": "esp_0a1b2c"}},
-  {"when": {"mdns_model": "(?i)^(homebridge|scrypted)$"}, "tier": "role", "type": "Server", "note": "hosts HomeKit bridges", "example": {"info": {"mdns_services": ["_hap._tcp"], "mdns_models": ["md=homebridge"]}}},
-  {"all": [{"mdns_service": "_hap._tcp"}, {"mdns_service": ["_smb._tcp", "_channels_dvr._tcp", "_plexmediasvr._tcp"]}], "tier": "role", "type": "Server", "note": "serves files or media next to HomeKit", "example": {"info": {"mdns_services": ["_hap._tcp", "_channels_dvr._tcp"]}}},
-  {"when": {"mdns_service": "_googlecast._tcp"}, "type": "Google Cast device", "example": {"info": {"mdns_services": ["_googlecast._tcp"]}}, "tier": "strong_service"},
-  {"when": {"mdns_service": "_sonos._tcp"}, "type": "Sonos speaker", "example": {"info": {"mdns_services": ["_sonos._tcp"]}}, "tier": "strong_service"},
-  {"when": {"mdns_service": "_mieleathome._tcp"}, "type": "Miele appliance", "vendor": "Miele", "note": "Miele@home, announced by the appliance's Wi-Fi module", "example": {"info": {"mdns_services": ["_mieleathome._tcp"]}}, "tier": "strong_service"},
-  {"when": {"mdns_service": "_ipp._tcp"}, "type": "Printer", "example": {"info": {"mdns_services": ["_ipp._tcp"]}}, "tier": "strong_service"},
-  {"when": {"mdns_service": "_ipps._tcp"}, "type": "Printer", "example": {"info": {"mdns_services": ["_ipps._tcp"]}}, "tier": "strong_service"},
-  {"when": {"mdns_service": "_printer._tcp"}, "type": "Printer", "example": {"info": {"mdns_services": ["_printer._tcp"]}}, "tier": "strong_service"},
-  {"when": {"mdns_service": "_pdl-datastream._tcp"}, "type": "Printer", "example": {"info": {"mdns_services": ["_pdl-datastream._tcp"]}}, "tier": "strong_service"},
-  {"when": {"category": ["hap:9", "matter:0x0301"]}, "type": "Thermostat", "example": {"info": {"mdns_categories": ["hap:9"]}}},
-  {"when": {"category": ["hap:6", "matter:0x000a"]}, "type": "Smart lock", "example": {"info": {"mdns_categories": ["hap:6"]}}},
-  {"when": {"category": ["hap:7", "matter:0x010a", "matter:0x010b"]}, "type": "Smart plug", "example": {"info": {"mdns_categories": ["hap:7"]}}},
-  {"when": {"category": ["hap:14", "matter:0x0202"]}, "type": "Window shade", "example": {"info": {"mdns_categories": ["hap:14"]}}},
-  {"when": {"category": ["hap:17", "matter:0x0142", "matter:0x0144", "matter:0x0145"]}, "type": "Camera", "example": {"info": {"mdns_categories": ["hap:17"]}}},
-  {"when": {"category": ["hap:31", "matter:0x0028"]}, "type": "TV", "example": {"info": {"mdns_categories": ["hap:31"]}}},
-  {"when": {"category": ["hap:26", "matter:0x0020", "matter:0x0021", "matter:0x0022"]}, "type": "Speaker / streamer", "example": {"info": {"mdns_categories": ["hap:26"]}}},
-  {"when": {"category": "hap:34"}, "type": "AV receiver", "example": {"info": {"mdns_categories": ["hap:34"]}}},
-  {"when": {"category": "hap:24"}, "type": "Apple TV", "example": {"info": {"mdns_categories": ["hap:24"]}}},
-  {"when": {"category": "hap:25"}, "type": "HomePod", "example": {"info": {"mdns_categories": ["hap:25"]}}},
-  {"when": {"category": "hap:27"}, "type": "Wi-Fi access point", "example": {"info": {"mdns_categories": ["hap:27"]}}},
-  {"when": {"category": ["hap:33", "matter:0x0090"]}, "type": "Network gear", "example": {"info": {"mdns_categories": ["hap:33"]}}},
-  {"when": {"category": ["hap:35", "hap:36", "matter:0x0023"]}, "type": "TV streamer", "example": {"info": {"mdns_categories": ["hap:35"]}}},
-  {"when": {"category": ["hap:3", "matter:0x002b"]}, "type": "Fan", "example": {"info": {"mdns_categories": ["hap:3"]}}},
-  {"when": {"category": "hap:4"}, "type": "Garage door opener", "example": {"info": {"mdns_categories": ["hap:4"]}}},
-  {"when": {"category": ["hap:5", "matter:0x0100", "matter:0x0101", "matter:0x010c", "matter:0x010d"]}, "type": "Light", "example": {"info": {"mdns_categories": ["hap:5"]}}},
-  {"when": {"category": ["hap:8", "hap:15", "matter:0x000f", "matter:0x0103", "matter:0x0104", "matter:0x0105", "matter:0x010f", "matter:0x0110"]}, "type": "Switch", "example": {"info": {"mdns_categories": ["hap:8"]}}},
-  {"when": {"category": ["hap:10", "matter:0x0015", "matter:0x002c", "matter:0x0041", "matter:0x0043", "matter:0x0044", "matter:0x0045", "matter:0x0106", "matter:0x0107", "matter:0x0302", "matter:0x0305", "matter:0x0306", "matter:0x0307", "matter:0x0850"]}, "type": "Sensor", "example": {"info": {"mdns_categories": ["hap:10"]}}},
-  {"when": {"category": "hap:11"}, "type": "Security system", "example": {"info": {"mdns_categories": ["hap:11"]}}},
-  {"when": {"category": "hap:12"}, "type": "Door", "example": {"info": {"mdns_categories": ["hap:12"]}}},
-  {"when": {"category": "hap:13"}, "type": "Window", "example": {"info": {"mdns_categories": ["hap:13"]}}},
-  {"when": {"category": ["hap:18", "matter:0x0143"]}, "type": "Video doorbell", "example": {"info": {"mdns_categories": ["hap:18"]}}},
-  {"when": {"category": ["matter:0x0141", "matter:0x0148"]}, "type": "Doorbell", "example": {"info": {"mdns_categories": ["matter:0x0141"]}}},
-  {"when": {"category": ["hap:19", "matter:0x002d"]}, "type": "Air purifier", "example": {"info": {"mdns_categories": ["hap:19"]}}},
-  {"when": {"category": "hap:20"}, "type": "Heater", "example": {"info": {"mdns_categories": ["hap:20"]}}},
-  {"when": {"category": ["hap:21", "matter:0x0072"]}, "type": "Air conditioner", "example": {"info": {"mdns_categories": ["hap:21"]}}},
-  {"when": {"category": ["hap:22", "matter:0x007d"]}, "type": "Humidifier", "example": {"info": {"mdns_categories": ["hap:22"]}}},
-  {"when": {"category": "hap:23"}, "type": "Dehumidifier", "example": {"info": {"mdns_categories": ["hap:23"]}}},
-  {"when": {"category": ["hap:28", "matter:0x0040"]}, "type": "Sprinkler", "example": {"info": {"mdns_categories": ["hap:28"]}}},
-  {"when": {"category": "hap:29"}, "type": "Faucet", "example": {"info": {"mdns_categories": ["hap:29"]}}},
-  {"when": {"category": "hap:30"}, "type": "Shower", "example": {"info": {"mdns_categories": ["hap:30"]}}},
-  {"when": {"category": "matter:0x0042"}, "type": "Water valve", "example": {"info": {"mdns_categories": ["matter:0x0042"]}}},
-  {"when": {"category": "matter:0x0070"}, "type": "Refrigerator", "example": {"info": {"mdns_categories": ["matter:0x0070"]}}},
-  {"when": {"category": "matter:0x0073"}, "type": "Washing machine", "example": {"info": {"mdns_categories": ["matter:0x0073"]}}},
-  {"when": {"category": "matter:0x007c"}, "type": "Clothes dryer", "example": {"info": {"mdns_categories": ["matter:0x007c"]}}},
-  {"when": {"category": "matter:0x0075"}, "type": "Dishwasher", "example": {"info": {"mdns_categories": ["matter:0x0075"]}}},
-  {"when": {"category": "matter:0x0074"}, "type": "Robot vacuum", "example": {"info": {"mdns_categories": ["matter:0x0074"]}}},
-  {"when": {"category": "matter:0x0076"}, "type": "Smoke alarm", "example": {"info": {"mdns_categories": ["matter:0x0076"]}}},
-  {"when": {"category": "matter:0x0078"}, "type": "Cooktop", "example": {"info": {"mdns_categories": ["matter:0x0078"]}}},
-  {"when": {"category": "matter:0x007b"}, "type": "Oven", "example": {"info": {"mdns_categories": ["matter:0x007b"]}}},
-  {"when": {"category": "matter:0x0079"}, "type": "Microwave", "example": {"info": {"mdns_categories": ["matter:0x0079"]}}},
-  {"when": {"category": "matter:0x007a"}, "type": "Range hood", "example": {"info": {"mdns_categories": ["matter:0x007a"]}}},
-  {"when": {"category": "matter:0x0309"}, "type": "Heat pump", "example": {"info": {"mdns_categories": ["matter:0x0309"]}}},
-  {"when": {"category": "matter:0x050f"}, "type": "Water heater", "example": {"info": {"mdns_categories": ["matter:0x050f"]}}},
-  {"when": {"category": "matter:0x050c"}, "type": "EV charger", "example": {"info": {"mdns_categories": ["matter:0x050c"]}}},
-  {"when": {"category": "matter:0x0017"}, "type": "Solar inverter", "example": {"info": {"mdns_categories": ["matter:0x0017"]}}},
-  {"when": {"category": "matter:0x0018"}, "type": "Home battery", "example": {"info": {"mdns_categories": ["matter:0x0018"]}}},
-  {"when": {"category": ["matter:0x0510", "matter:0x0511"]}, "type": "Energy meter", "example": {"info": {"mdns_categories": ["matter:0x0510"]}}},
-  {"when": {"mdns_service": "_hap._tcp"}, "type": "HomeKit accessory", "example": {"info": {"mdns_services": ["_hap._tcp"]}}},
-  {"when": {"mdns_service": "_hap._udp"}, "type": "HomeKit accessory", "example": {"info": {"mdns_services": ["_hap._udp"]}}},
-  {"when": {"mdns_service": "_matter._tcp"}, "type": "Matter device", "example": {"info": {"mdns_services": ["_matter._tcp"]}}},
-  {"when": {"mdns_service": "_airplay._tcp"}, "type": "AirPlay device", "example": {"info": {"mdns_services": ["_airplay._tcp"]}}},
-  {"when": {"mdns_service": "_raop._tcp"}, "type": "AirPlay device", "example": {"info": {"mdns_services": ["_raop._tcp"]}}},
-  {"when": {"mdns_service": "_channels_dvr._tcp"}, "type": "Media server", "example": {"info": {"mdns_services": ["_channels_dvr._tcp"]}}},
-  {"when": {"mdns_service": "_plexmediasvr._tcp"}, "type": "Media server", "example": {"info": {"mdns_services": ["_plexmediasvr._tcp"]}}},
-  {"when": {"mdns_service": "_spotify-connect._tcp"}, "type": "Speaker / streamer", "example": {"info": {"mdns_services": ["_spotify-connect._tcp"]}}},
-  {"when": {"mdns_service": "_smb._tcp"}, "type": "Computer", "example": {"info": {"mdns_services": ["_smb._tcp"]}}},
-  {"when": {"mdns_service": "_ssh._tcp"}, "type": "Computer", "example": {"info": {"mdns_services": ["_ssh._tcp"]}}},
-  {"when": {"dhcp_vendor": "^MSFT"}, "type": "Windows PC", "example": {"info": {"dhcp_vendor_class": "MSFT-1.0"}}},
-  {"when": {"dhcp_vendor": "^android\\-dhcp"}, "type": "Android device", "example": {"info": {"dhcp_vendor_class": "android-dhcp-1.0"}}},
-  {"when": {"dhcp_vendor": "^dhcpcd"}, "type": "Linux device", "example": {"info": {"dhcp_vendor_class": "dhcpcd-1.0"}}},
-  {"when": {"dhcp_vendor": "^udhcp"}, "type": "Embedded Linux device", "tier": "fallback", "note": "BusyBox's DHCP client: firmware on all kinds of gadgets, so anything more specific wins", "example": {"info": {"dhcp_vendor_class": "udhcp-1.0"}}},
-  {"when": {"dhcp_vendor": "^Mfg="}, "type": "Printer", "example": {"info": {"dhcp_vendor_class": "Mfg=Hewlett"}}},
-  {"when": {"talks_to": "playstation.net"}, "type": "PlayStation", "example": {"names": ["x.playstation.net"]}},
-  {"when": {"talks_to": "playstation.com"}, "type": "PlayStation", "example": {"names": ["x.playstation.com"]}},
-  {"when": {"talks_to": "sonyentertainmentnetwork.com"}, "type": "PlayStation", "example": {"names": ["x.sonyentertainmentnetwork.com"]}},
-  {"when": {"talks_to": "xboxlive.com"}, "type": "Xbox", "example": {"names": ["x.xboxlive.com"]}},
-  {"when": {"talks_to": "xbox.com"}, "type": "Xbox", "example": {"names": ["x.xbox.com"]}},
-  {"when": {"talks_to": "nintendo.net"}, "type": "Nintendo Switch", "example": {"names": ["x.nintendo.net"]}},
-  {"when": {"talks_to": "nintendo.com"}, "type": "Nintendo Switch", "example": {"names": ["x.nintendo.com"]}},
-  {"when": {"talks_to": "roku.com"}, "type": "Roku", "example": {"names": ["x.roku.com"]}},
-  {"when": {"talks_to": "ring.com"}, "type": "Ring device", "example": {"names": ["x.ring.com"]}},
-  {"when": {"talks_to": "ecobee.com"}, "type": "Thermostat", "example": {"names": ["x.ecobee.com"]}},
-  {"when": {"talks_to": "sonos.com"}, "type": "Sonos speaker", "example": {"names": ["x.sonos.com"]}},
-  {"when": {"talks_to": "tuyaus.com"}, "type": "Smart home device", "example": {"names": ["x.tuyaus.com"]}},
-  {"when": {"talks_to": "tuya.com"}, "type": "Smart home device", "example": {"names": ["x.tuya.com"]}},
-  {"when": {"talks_to": "wyzecam.com"}, "type": "Camera", "example": {"names": ["x.wyzecam.com"]}},
-  {"when": {"talks_to": "reolink.com"}, "type": "Camera", "example": {"names": ["x.reolink.com"]}},
-  {"when": {"talks_to": "meethue.com"}, "type": "Hue bridge", "example": {"names": ["x.meethue.com"]}},
-  {"when": {"talks_to": "amazon-dss.com"}, "type": "Echo speaker", "example": {"names": ["x.amazon-dss.com"]}},
-  {"when": {"talks_to": "alexa.amazon.com"}, "type": "Echo speaker", "example": {"names": ["x.alexa.amazon.com"]}},
-  {"when": {"talks_to": "tesla.services"}, "type": "Tesla", "example": {"names": ["x.tesla.services"]}},
-  {"when": {"talks_to": "tesla.com"}, "type": "Tesla", "example": {"names": ["x.tesla.com"]}},
-  {"when": {"talks_to": ["archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "motd.ubuntu.com", "changelogs.ubuntu.com"]}, "type": "Ubuntu", "example": {"names": ["us.archive.ubuntu.com"]}},
-  {"when": {"talks_to": ["deb.debian.org", "security.debian.org"]}, "type": "Debian", "example": {"names": ["deb.debian.org"]}},
-  {"when": {"talks_to": ["mirrors.fedoraproject.org"]}, "type": "Fedora", "example": {"names": ["mirrors.fedoraproject.org"]}},
-  {"when": {"talks_to": ["archive.raspberrypi.com", "archive.raspberrypi.org"]}, "type": "Raspberry Pi", "example": {"names": ["archive.raspberrypi.com"]}},
-  {"when": {"talks_to": ["dl-cdn.alpinelinux.org"]}, "type": "Alpine Linux", "example": {"names": ["dl-cdn.alpinelinux.org"]}},
-  {"when": {"talks_to": "sznacaiotprod.azure-devices.net"}, "type": "Sub-Zero appliance", "vendor": "Sub-Zero", "note": "Sub-Zero, Wolf and Cove connected appliances: Azure Sphere modules reporting to Sub-Zero's IoT hub (SZNA = Sub-Zero North America, inferred); the Wi-Fi module's MAC vendor is Card Access", "example": {"names": ["sznacaiotprod.azure-devices.net", "prod.device.core.sphere.azure.net"]}},
-  {"when": {"talks_to": "sphere.azure.net"}, "type": "Azure Sphere device", "note": "Microsoft's IoT chip platform (appliances, commercial equipment)", "example": {"names": ["prod.device.core.sphere.azure.net"]}},
-  {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$", "private_mac": true}, "type": "iPhone/iPad/Mac", "note": "Apple's DHCP request (iOS, iPadOS, macOS) with a private MAC", "example": {"mac": "02:00:00:00:00:01", "info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252"}}},
-  {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$"}, "type": "Apple device", "example": {"info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252,95,44,46"}}},
-  {"when": {"vendor": "Tuya"}, "type": "Smart home device", "example": {"vendor": "Tuya Corp."}},
-  {"when": {"vendor": "Espressif"}, "type": "IoT device (ESP)", "example": {"vendor": "Espressif Corp."}},
-  {"when": {"vendor": "Sonos"}, "type": "Sonos speaker", "example": {"vendor": "Sonos Corp."}},
-  {"when": {"vendor": "Reolink"}, "type": "Camera", "example": {"vendor": "Reolink Corp."}},
-  {"when": {"vendor": "Roku"}, "type": "Roku", "example": {"vendor": "Roku Corp."}},
-  {"when": {"vendor": "ecobee"}, "type": "Thermostat", "example": {"vendor": "ecobee Corp."}},
-  {"when": {"vendor": "Lutron"}, "type": "Lutron hub", "example": {"vendor": "Lutron Corp."}},
-  {"when": {"vendor": "Ubiquiti"}, "type": "Network gear", "example": {"vendor": "Ubiquiti Corp."}},
-  {"when": {"vendor": "eero"}, "type": "Wi-Fi access point", "example": {"vendor": "eero Corp."}},
-  {"when": {"vendor": "Raspberry Pi"}, "type": "Raspberry Pi", "example": {"vendor": "Raspberry Pi Corp."}},
-  {"when": {"vendor": "Nintendo"}, "type": "Nintendo Switch", "example": {"vendor": "Nintendo Corp."}},
-  {"when": {"vendor": "Sony Interactive"}, "type": "PlayStation", "example": {"vendor": "Sony Interactive Corp."}},
-  {"when": {"vendor": "Nest Labs"}, "type": "Nest device", "example": {"vendor": "Nest Labs Corp."}},
-  {"when": {"vendor": "Phaten"}, "type": "Ceiling fan (fanSync)", "vendor": "Fanimation", "note": "Fanimation fans with a fanSync Wi-Fi receiver; the receiver's maker (Shenzhen Phaten Tech) owns the MAC prefix", "example": {"vendor": "Phaten Corp."}},
-  {"when": {"vendor": "Signify"}, "type": "Hue bridge", "example": {"vendor": "Signify Corp."}},
-  {"when": {"vendor": "Philips Lighting"}, "type": "Hue bridge", "example": {"vendor": "Philips Lighting Corp."}},
-  {"when": {"vendor": "Hon Hai"}, "type": "Device (Foxconn module)", "example": {"vendor": "Hon Hai Corp."}},
-  {"when": {"vendor": "Amazon Technologies"}, "type": "Amazon device", "example": {"vendor": "Amazon Technologies Corp."}},
-  {"when": {"vendor": "Google"}, "type": "Google device", "example": {"vendor": "Google Corp."}},
-  {"when": {"vendor": "Apple"}, "type": "Apple device", "example": {"vendor": "Apple Corp."}},
-  {"when": {"vendor": "Samsung"}, "type": "Samsung device", "example": {"vendor": "Samsung Corp."}},
-  {"when": {"vendor": "HP Inc"}, "type": "Printer", "example": {"vendor": "HP Inc Corp."}},
-  {"when": {"vendor": "Hewlett Packard"}, "type": "HP device", "example": {"vendor": "Hewlett Packard Corp."}},
-  {"when": {"vendor": "Intel"}, "type": "Computer", "example": {"vendor": "Intel Corp."}},
-  {"when": {"vendor": "Synology"}, "type": "NAS", "example": {"vendor": "Synology Corp."}},
-  {"when": {"vendor": "QNAP"}, "type": "NAS", "example": {"vendor": "QNAP Corp."}},
-  {"when": {"vendor": "TP-LINK"}, "type": "TP-Link device", "example": {"vendor": "TP-LINK Corp."}},
-  {"when": {"vendor": "Aqara"}, "type": "Smart home hub", "example": {"vendor": "Aqara Corp."}},
-  {"when": {"vendor": "Lumi United"}, "type": "Smart home hub", "example": {"vendor": "Lumi United Corp."}},
-  {"when": {"vendor": "D&M Holdings"}, "type": "AV receiver", "example": {"vendor": "D&M Holdings Corp."}},
-  {"when": {"vendor": "ASUSTek"}, "type": "Computer", "example": {"vendor": "ASUSTek Corp."}},
-  {"when": {"vendor": "Micro-Star"}, "type": "Computer", "example": {"vendor": "Micro-Star Corp."}},
-  {"when": {"vendor": "Dell"}, "type": "Computer", "example": {"vendor": "Dell Corp."}},
-  {"when": {"vendor": "Lenovo"}, "type": "Computer", "example": {"vendor": "Lenovo Corp."}},
-  {"when": {"vendor": "General Electric"}, "type": "Appliance (GE / Haier module)", "example": {"vendor": "General Electric Corp."}},
-  {"when": {"vendor": "Magicjack"}, "type": "VoIP adapter", "example": {"vendor": "Magicjack Corp."}},
-  {"when": {"vendor": "Globalscale"}, "type": "Embedded device", "example": {"vendor": "Globalscale Corp."}},
-  {"when": {"vendor": "Telit"}, "type": "Cellular IoT module", "example": {"vendor": "Telit Corp."}},
-  {"when": {"vendor": "Wyze"}, "type": "Camera", "example": {"vendor": "Wyze Corp."}},
-  {"when": {"vendor": "Ring"}, "type": "Ring device", "example": {"vendor": "Ring Corp."}},
-  {"when": {"private_mac": true}, "type": "Phone/tablet/laptop", "example": {"mac": "02:00:00:00:00:02"}}
+  {"type": "Virtual machine", "vendor": "QEMU/KVM", "any": [
+   {"when": {"mac_prefix": "52:54:00"}, "example": {"mac": "52:54:00:00:00:01"}}
+  ]},
+  {"type": "Tesla", "any": [
+   {"when": {"vendor": "Tesla"}, "tier": "mac_prefix", "note": "Tesla's own MAC block, only on Tesla hardware; the car's DHCP client says MSFT 5.0", "example": {"vendor": "Tesla,Inc.", "info": {"dhcp_vendor_class": "MSFT 5.0"}}},
+   {"when": {"talks_to": ["tesla.services", "tesla.com"]}, "example": {"names": ["x.tesla.services"]}}
+  ]},
+  {"type": "Miele appliance", "any": [
+   {"when": {"vendor": "Miele"}, "tier": "mac_prefix", "note": "Miele's own MAC block, on the Wi-Fi modules (XKM) in its ovens, washers, dishwashers and coffee machines", "example": {"vendor": "Miele & Cie. KG"}},
+   {"when": {"mdns_service": "_mieleathome._tcp"}, "vendor": "Miele", "note": "Miele@home, announced by the appliance's Wi-Fi module", "example": {"info": {"mdns_services": ["_mieleathome._tcp"]}}, "tier": "strong_service"}
+  ]},
+  {"type": "Apple TV", "any": [
+   {"when": {"mdns_model": "^AppleTV"}, "example": {"info": {"mdns_models": ["model=AppleTV14,1"]}}},
+   {"when": {"hostname": "(?i)apple-?tv"}, "example": {"hostname": "Den-Apple-TV"}},
+   {"when": {"category": "hap:24"}, "example": {"info": {"mdns_categories": ["hap:24"]}}}
+  ]},
+  {"type": "HomePod", "any": [
+   {"when": {"mdns_model": "^AudioAccessory"}, "example": {"info": {"mdns_models": ["model=AudioAccessory5,1"]}}},
+   {"when": {"hostname": "(?i)homepod"}, "example": {"hostname": "HomePod"}},
+   {"when": {"category": "hap:25"}, "example": {"info": {"mdns_categories": ["hap:25"]}}}
+  ]},
+  {"type": "Mac", "any": [
+   {"when": {"mdns_model": "^(MacBook|Macmini|MacPro|iMac|Mac\\d|MacStudio)"}, "example": {"info": {"mdns_models": ["model=Mac14,14"]}}},
+   {"when": {"hostname": "(?i)macbook|imac|mac-?mini|mac-?studio|mac-?pro"}, "example": {"hostname": "Someones-MacBook-Pro"}}
+  ]},
+  {"type": "iPhone", "any": [
+   {"when": {"mdns_model": "^iPhone"}, "example": {"info": {"mdns_models": ["model=iPhone15,2"]}}},
+   {"when": {"hostname": "(?i)iphone"}, "example": {"hostname": "Kids-iPhone"}}
+  ]},
+  {"type": "iPad", "any": [
+   {"when": {"mdns_model": "^iPad"}, "example": {"info": {"mdns_models": ["model=iPad13,1"]}}},
+   {"when": {"hostname": "(?i)ipad"}, "example": {"hostname": "iPad"}}
+  ]},
+  {"type": "Apple Watch", "any": [
+   {"when": {"mdns_model": "^Watch"}, "example": {"info": {"mdns_models": ["model=Watch6,1"]}}}
+  ]},
+  {"type": "Google Cast device", "any": [
+   {"when": {"mdns_model": "Chromecast|Google TV|Google Nest|Nest (Hub|Mini|Audio)|Google Home"}, "example": {"info": {"mdns_models": ["model=Chromecast Ultra"]}}},
+   {"when": {"hostname": "(?i)chromecast|google-?(home|nest|tv)"}, "example": {"hostname": "Chromecast"}},
+   {"when": {"mdns_service": "_googlecast._tcp"}, "example": {"info": {"mdns_services": ["_googlecast._tcp"]}}, "tier": "strong_service"}
+  ]},
+  {"type": "Sonos speaker", "any": [
+   {"when": {"mdns_model": "(?i)sonos"}, "example": {"info": {"mdns_models": ["model=Sonos One"]}}},
+   {"when": {"mdns_service": "_sonos._tcp"}, "example": {"info": {"mdns_services": ["_sonos._tcp"]}}, "tier": "strong_service"},
+   {"when": {"talks_to": "sonos.com"}, "example": {"names": ["x.sonos.com"]}},
+   {"when": {"vendor": "Sonos"}, "example": {"vendor": "Sonos Corp."}}
+  ]},
+  {"type": "Roku", "any": [
+   {"when": {"mdns_model": "(?i)roku"}, "example": {"info": {"mdns_models": ["model=Roku Ultra"]}}},
+   {"when": {"hostname": "(?i)roku"}, "example": {"hostname": "Roku-Ultra"}},
+   {"when": {"talks_to": "roku.com"}, "example": {"names": ["x.roku.com"]}},
+   {"when": {"vendor": "Roku"}, "example": {"vendor": "Roku Corp."}}
+  ]},
+  {"type": "Printer", "any": [
+   {"when": {"mdns_model": "(?i)^(usb_mdl|ty)=|laserjet|officejet|deskjet|envy|pixma|ecotank|brother|epson"}, "example": {"info": {"mdns_models": ["model=HP Color LaserJet MFP M476dw"]}}},
+   {"when": {"hostname": "(?i)printer|^hp[0-9a-f]{6}|^brw|^epson|^canon"}, "example": {"hostname": "HP0A1B2C"}},
+   {"when": {"mdns_service": ["_ipp._tcp", "_ipps._tcp", "_printer._tcp", "_pdl-datastream._tcp"]}, "example": {"info": {"mdns_services": ["_ipp._tcp"]}}, "tier": "strong_service"},
+   {"when": {"dhcp_vendor": "^Mfg="}, "example": {"info": {"dhcp_vendor_class": "Mfg=Hewlett"}}},
+   {"when": {"vendor": "HP Inc"}, "example": {"vendor": "HP Inc Corp."}}
+  ]},
+  {"type": "NanoKVM", "any": [
+   {"when": {"hostname": "(?i)^kvm-[0-9a-f]{4}$"}, "example": {"hostname": "kvm-0a1b"}}
+  ]},
+  {"type": "PiKVM", "any": [
+   {"when": {"hostname": "(?i)^pikvm\\b"}, "example": {"hostname": "pikvm"}}
+  ]},
+  {"type": "Watch", "any": [
+   {"when": {"hostname": "(?i)watch"}, "example": {"hostname": "Apple-Watch"}}
+  ]},
+  {"type": "PlayStation", "any": [
+   {"when": {"hostname": "(?i)^(ps[345]|playstation)"}, "example": {"hostname": "ps5-0a1b2c"}},
+   {"when": {"talks_to": ["playstation.net", "playstation.com", "sonyentertainmentnetwork.com"]}, "example": {"names": ["x.playstation.net"]}},
+   {"when": {"vendor": "Sony Interactive"}, "example": {"vendor": "Sony Interactive Corp."}}
+  ]},
+  {"type": "Xbox", "any": [
+   {"when": {"hostname": "(?i)xbox"}, "example": {"hostname": "XBOX"}},
+   {"when": {"talks_to": ["xboxlive.com", "xbox.com"]}, "example": {"names": ["x.xboxlive.com"]}}
+  ]},
+  {"type": "Nintendo Switch", "any": [
+   {"when": {"hostname": "(?i)nintendo|switch"}, "example": {"hostname": "Nintendo-Switch"}},
+   {"when": {"talks_to": ["nintendo.net", "nintendo.com"]}, "example": {"names": ["x.nintendo.net"]}},
+   {"when": {"vendor": "Nintendo"}, "example": {"vendor": "Nintendo Corp."}}
+  ]},
+  {"type": "Fire TV", "any": [
+   {"all": [{"vendor": "Amazon Technologies"}, {"hostname": "(?i)^android-"}], "tier": "hostname", "note": "Fire OS sends android-N as its DHCP name", "example": {"vendor": "Amazon Technologies Inc.", "hostname": "android-2"}}
+  ]},
+  {"type": "Android phone", "any": [
+   {"when": {"hostname": "(?i)galaxy|pixel|android|oneplus|moto"}, "example": {"hostname": "Galaxy-S23"}}
+  ]},
+  {"type": "Windows PC", "any": [
+   {"when": {"hostname": "(?i)desktop-|laptop-|^win"}, "example": {"hostname": "DESKTOP-AB12CD"}},
+   {"when": {"dhcp_vendor": "^MSFT"}, "example": {"info": {"dhcp_vendor_class": "MSFT-1.0"}}}
+  ]},
+  {"type": "Amazon device", "any": [
+   {"when": {"hostname": "(?i)fire-?tv|amazon-"}, "example": {"hostname": "Fire-TV-Stick"}},
+   {"when": {"vendor": "Amazon Technologies"}, "example": {"vendor": "Amazon Technologies Corp."}}
+  ]},
+  {"type": "Echo speaker", "any": [
+   {"when": {"hostname": "(?i)echo"}, "example": {"hostname": "Echo-Dot"}},
+   {"when": {"talks_to": ["amazon-dss.com", "alexa.amazon.com"]}, "example": {"names": ["x.amazon-dss.com"]}}
+  ]},
+  {"type": "TV", "any": [
+   {"when": {"mdns_model": "(?i)bravia|smart ?tv|^(LG|Samsung|Vizio|TCL|Hisense)"}, "example": {"info": {"mdns_models": ["model=BRAVIA 4K VH22"]}}},
+   {"when": {"hostname": "(?i)tv$|-tv-|bravia|lgwebos|samsung"}, "example": {"hostname": "Bedroom-TV"}},
+   {"when": {"category": ["hap:31", "matter:0x0028"]}, "example": {"info": {"mdns_categories": ["hap:31"]}}}
+  ]},
+  {"type": "Thermostat", "any": [
+   {"when": {"hostname": "(?i)ecobee|thermostat|nest-?(learning|thermostat)"}, "example": {"hostname": "ecobee-thermostat"}},
+   {"when": {"category": ["hap:9", "matter:0x0301"]}, "example": {"info": {"mdns_categories": ["hap:9"]}}},
+   {"when": {"talks_to": "ecobee.com"}, "example": {"names": ["x.ecobee.com"]}},
+   {"when": {"vendor": "ecobee"}, "example": {"vendor": "ecobee Corp."}}
+  ]},
+  {"type": "NVR", "any": [
+   {"when": {"hostname": "(?i)^nvr"}, "note": "Reolink NVRs call themselves NVR; nothing else sets them apart from their cameras", "example": {"hostname": "NVR"}}
+  ]},
+  {"type": "Camera", "any": [
+   {"when": {"hostname": "(?i)^(cam|camera)|reolink|ring-|wyze|arlo"}, "example": {"hostname": "cam-garage"}},
+   {"when": {"category": ["hap:17", "matter:0x0142", "matter:0x0144", "matter:0x0145"]}, "example": {"info": {"mdns_categories": ["hap:17"]}}},
+   {"when": {"talks_to": ["wyzecam.com", "reolink.com"]}, "example": {"names": ["x.wyzecam.com"]}},
+   {"when": {"vendor": ["Reolink", "Wyze"]}, "example": {"vendor": "Reolink Corp."}}
+  ]},
+  {"type": "Raspberry Pi", "any": [
+   {"when": {"hostname": "(?i)raspberrypi|^rpi"}, "example": {"hostname": "raspberrypi"}},
+   {"when": {"talks_to": ["archive.raspberrypi.com", "archive.raspberrypi.org"]}, "example": {"names": ["archive.raspberrypi.com"]}},
+   {"when": {"vendor": "Raspberry Pi"}, "example": {"vendor": "Raspberry Pi Corp."}}
+  ]},
+  {"type": "AV receiver", "any": [
+   {"when": {"hostname": "(?i)denon|marantz|onkyo|yamaha-?(rx|av)|avr"}, "example": {"hostname": "denon-avr-x1700h"}},
+   {"when": {"category": "hap:34"}, "example": {"info": {"mdns_categories": ["hap:34"]}}},
+   {"when": {"vendor": "D&M Holdings"}, "example": {"vendor": "D&M Holdings Corp."}}
+  ]},
+  {"type": "Smart plug", "any": [
+   {"when": {"hostname": "(?i)^(EP|HS|KP|KS|P1)\\d\\d|kasa|smart-?plug"}, "example": {"hostname": "HS105"}},
+   {"when": {"category": ["hap:7", "matter:0x010a", "matter:0x010b"]}, "example": {"info": {"mdns_categories": ["hap:7"]}}}
+  ]},
+  {"type": "Appliance (GE / Haier module)", "any": [
+   {"when": {"hostname": "(?i)^GEModule|^GE[-_]"}, "example": {"hostname": "GEModule1234"}, "note": "GE Appliances' Wi-Fi module, also used in Fisher & Paykel and other Haier brands"},
+   {"when": {"vendor": "General Electric"}, "example": {"vendor": "General Electric Corp."}}
+  ]},
+  {"type": "Smart lock", "any": [
+   {"when": {"hostname": "(?i)^schlage"}, "note": "Schlage Encode (Wi-Fi) uses its brand as its DHCP name", "example": {"hostname": "Schlage", "info": {"dhcp_params": "1,3,6"}}},
+   {"when": {"category": ["hap:6", "matter:0x000a"]}, "example": {"info": {"mdns_categories": ["hap:6"]}}}
+  ]},
+  {"type": "TV tuner", "any": [
+   {"when": {"hostname": "(?i)^HDHR-[0-9a-f]{8}$"}, "note": "SiliconDust HDHomeRun: HDHR- plus its device ID", "example": {"hostname": "HDHR-1A2B3C4D"}}
+  ]},
+  {"type": "Smart home device", "any": [
+   {"when": {"hostname": "(?i)tuya|^wlan0$|^esp[-_]"}, "example": {"hostname": "esp_0a1b2c"}},
+   {"when": {"talks_to": ["tuyaus.com", "tuya.com"]}, "example": {"names": ["x.tuyaus.com"]}},
+   {"when": {"vendor": "Tuya"}, "example": {"vendor": "Tuya Corp."}}
+  ]},
+  {"type": "Server", "any": [
+   {"when": {"mdns_model": "(?i)^(homebridge|scrypted)$"}, "tier": "role", "note": "hosts HomeKit bridges", "example": {"info": {"mdns_services": ["_hap._tcp"], "mdns_models": ["md=homebridge"]}}},
+   {"all": [{"mdns_service": "_hap._tcp"}, {"mdns_service": ["_smb._tcp", "_channels_dvr._tcp", "_plexmediasvr._tcp"]}], "tier": "role", "note": "serves files or media next to HomeKit", "example": {"info": {"mdns_services": ["_hap._tcp", "_channels_dvr._tcp"]}}}
+  ]},
+  {"type": "Window shade", "any": [
+   {"when": {"category": ["hap:14", "matter:0x0202"]}, "example": {"info": {"mdns_categories": ["hap:14"]}}}
+  ]},
+  {"type": "Speaker / streamer", "any": [
+   {"when": {"category": ["hap:26", "matter:0x0020", "matter:0x0021", "matter:0x0022"]}, "example": {"info": {"mdns_categories": ["hap:26"]}}},
+   {"when": {"mdns_service": "_spotify-connect._tcp"}, "example": {"info": {"mdns_services": ["_spotify-connect._tcp"]}}}
+  ]},
+  {"type": "Wi-Fi access point", "any": [
+   {"when": {"category": "hap:27"}, "example": {"info": {"mdns_categories": ["hap:27"]}}},
+   {"when": {"vendor": "eero"}, "example": {"vendor": "eero Corp."}}
+  ]},
+  {"type": "Network gear", "any": [
+   {"when": {"category": ["hap:33", "matter:0x0090"]}, "example": {"info": {"mdns_categories": ["hap:33"]}}},
+   {"when": {"vendor": "Ubiquiti"}, "example": {"vendor": "Ubiquiti Corp."}}
+  ]},
+  {"type": "TV streamer", "any": [
+   {"when": {"category": ["hap:35", "hap:36", "matter:0x0023"]}, "example": {"info": {"mdns_categories": ["hap:35"]}}}
+  ]},
+  {"type": "Fan", "any": [
+   {"when": {"category": ["hap:3", "matter:0x002b"]}, "example": {"info": {"mdns_categories": ["hap:3"]}}}
+  ]},
+  {"type": "Garage door opener", "any": [
+   {"when": {"category": "hap:4"}, "example": {"info": {"mdns_categories": ["hap:4"]}}}
+  ]},
+  {"type": "Light", "any": [
+   {"when": {"category": ["hap:5", "matter:0x0100", "matter:0x0101", "matter:0x010c", "matter:0x010d"]}, "example": {"info": {"mdns_categories": ["hap:5"]}}}
+  ]},
+  {"type": "Switch", "any": [
+   {"when": {"category": ["hap:8", "hap:15", "matter:0x000f", "matter:0x0103", "matter:0x0104", "matter:0x0105", "matter:0x010f", "matter:0x0110"]}, "example": {"info": {"mdns_categories": ["hap:8"]}}}
+  ]},
+  {"type": "Sensor", "any": [
+   {"when": {"category": ["hap:10", "matter:0x0015", "matter:0x002c", "matter:0x0041", "matter:0x0043", "matter:0x0044", "matter:0x0045", "matter:0x0106", "matter:0x0107", "matter:0x0302", "matter:0x0305", "matter:0x0306", "matter:0x0307", "matter:0x0850"]}, "example": {"info": {"mdns_categories": ["hap:10"]}}}
+  ]},
+  {"type": "Security system", "any": [
+   {"when": {"category": "hap:11"}, "example": {"info": {"mdns_categories": ["hap:11"]}}}
+  ]},
+  {"type": "Door", "any": [
+   {"when": {"category": "hap:12"}, "example": {"info": {"mdns_categories": ["hap:12"]}}}
+  ]},
+  {"type": "Window", "any": [
+   {"when": {"category": "hap:13"}, "example": {"info": {"mdns_categories": ["hap:13"]}}}
+  ]},
+  {"type": "Video doorbell", "any": [
+   {"when": {"category": ["hap:18", "matter:0x0143"]}, "example": {"info": {"mdns_categories": ["hap:18"]}}}
+  ]},
+  {"type": "Doorbell", "any": [
+   {"when": {"category": ["matter:0x0141", "matter:0x0148"]}, "example": {"info": {"mdns_categories": ["matter:0x0141"]}}}
+  ]},
+  {"type": "Air purifier", "any": [
+   {"when": {"category": ["hap:19", "matter:0x002d"]}, "example": {"info": {"mdns_categories": ["hap:19"]}}}
+  ]},
+  {"type": "Heater", "any": [
+   {"when": {"category": "hap:20"}, "example": {"info": {"mdns_categories": ["hap:20"]}}}
+  ]},
+  {"type": "Air conditioner", "any": [
+   {"when": {"category": ["hap:21", "matter:0x0072"]}, "example": {"info": {"mdns_categories": ["hap:21"]}}}
+  ]},
+  {"type": "Humidifier", "any": [
+   {"when": {"category": ["hap:22", "matter:0x007d"]}, "example": {"info": {"mdns_categories": ["hap:22"]}}}
+  ]},
+  {"type": "Dehumidifier", "any": [
+   {"when": {"category": "hap:23"}, "example": {"info": {"mdns_categories": ["hap:23"]}}}
+  ]},
+  {"type": "Sprinkler", "any": [
+   {"when": {"category": ["hap:28", "matter:0x0040"]}, "example": {"info": {"mdns_categories": ["hap:28"]}}}
+  ]},
+  {"type": "Faucet", "any": [
+   {"when": {"category": "hap:29"}, "example": {"info": {"mdns_categories": ["hap:29"]}}}
+  ]},
+  {"type": "Shower", "any": [
+   {"when": {"category": "hap:30"}, "example": {"info": {"mdns_categories": ["hap:30"]}}}
+  ]},
+  {"type": "Water valve", "any": [
+   {"when": {"category": "matter:0x0042"}, "example": {"info": {"mdns_categories": ["matter:0x0042"]}}}
+  ]},
+  {"type": "Refrigerator", "any": [
+   {"when": {"category": "matter:0x0070"}, "example": {"info": {"mdns_categories": ["matter:0x0070"]}}}
+  ]},
+  {"type": "Washing machine", "any": [
+   {"when": {"category": "matter:0x0073"}, "example": {"info": {"mdns_categories": ["matter:0x0073"]}}}
+  ]},
+  {"type": "Clothes dryer", "any": [
+   {"when": {"category": "matter:0x007c"}, "example": {"info": {"mdns_categories": ["matter:0x007c"]}}}
+  ]},
+  {"type": "Dishwasher", "any": [
+   {"when": {"category": "matter:0x0075"}, "example": {"info": {"mdns_categories": ["matter:0x0075"]}}}
+  ]},
+  {"type": "Robot vacuum", "any": [
+   {"when": {"category": "matter:0x0074"}, "example": {"info": {"mdns_categories": ["matter:0x0074"]}}}
+  ]},
+  {"type": "Smoke alarm", "any": [
+   {"when": {"category": "matter:0x0076"}, "example": {"info": {"mdns_categories": ["matter:0x0076"]}}}
+  ]},
+  {"type": "Cooktop", "any": [
+   {"when": {"category": "matter:0x0078"}, "example": {"info": {"mdns_categories": ["matter:0x0078"]}}}
+  ]},
+  {"type": "Oven", "any": [
+   {"when": {"category": "matter:0x007b"}, "example": {"info": {"mdns_categories": ["matter:0x007b"]}}}
+  ]},
+  {"type": "Microwave", "any": [
+   {"when": {"category": "matter:0x0079"}, "example": {"info": {"mdns_categories": ["matter:0x0079"]}}}
+  ]},
+  {"type": "Range hood", "any": [
+   {"when": {"category": "matter:0x007a"}, "example": {"info": {"mdns_categories": ["matter:0x007a"]}}}
+  ]},
+  {"type": "Heat pump", "any": [
+   {"when": {"category": "matter:0x0309"}, "example": {"info": {"mdns_categories": ["matter:0x0309"]}}}
+  ]},
+  {"type": "Water heater", "any": [
+   {"when": {"category": "matter:0x050f"}, "example": {"info": {"mdns_categories": ["matter:0x050f"]}}}
+  ]},
+  {"type": "EV charger", "any": [
+   {"when": {"category": "matter:0x050c"}, "example": {"info": {"mdns_categories": ["matter:0x050c"]}}}
+  ]},
+  {"type": "Solar inverter", "any": [
+   {"when": {"category": "matter:0x0017"}, "example": {"info": {"mdns_categories": ["matter:0x0017"]}}}
+  ]},
+  {"type": "Home battery", "any": [
+   {"when": {"category": "matter:0x0018"}, "example": {"info": {"mdns_categories": ["matter:0x0018"]}}}
+  ]},
+  {"type": "Energy meter", "any": [
+   {"when": {"category": ["matter:0x0510", "matter:0x0511"]}, "example": {"info": {"mdns_categories": ["matter:0x0510"]}}}
+  ]},
+  {"type": "HomeKit accessory", "any": [
+   {"when": {"mdns_service": ["_hap._tcp", "_hap._udp"]}, "example": {"info": {"mdns_services": ["_hap._tcp"]}}}
+  ]},
+  {"type": "Matter device", "any": [
+   {"when": {"mdns_service": "_matter._tcp"}, "example": {"info": {"mdns_services": ["_matter._tcp"]}}}
+  ]},
+  {"type": "AirPlay device", "any": [
+   {"when": {"mdns_service": ["_airplay._tcp", "_raop._tcp"]}, "example": {"info": {"mdns_services": ["_airplay._tcp"]}}}
+  ]},
+  {"type": "Media server", "any": [
+   {"when": {"mdns_service": ["_channels_dvr._tcp", "_plexmediasvr._tcp"]}, "example": {"info": {"mdns_services": ["_channels_dvr._tcp"]}}}
+  ]},
+  {"type": "Computer", "any": [
+   {"when": {"mdns_service": ["_smb._tcp", "_ssh._tcp"]}, "example": {"info": {"mdns_services": ["_smb._tcp"]}}},
+   {"when": {"vendor": ["Intel", "ASUSTek", "Micro-Star", "Dell", "Lenovo"]}, "example": {"vendor": "Intel Corp."}}
+  ]},
+  {"type": "Android device", "any": [
+   {"when": {"dhcp_vendor": "^android\\-dhcp"}, "example": {"info": {"dhcp_vendor_class": "android-dhcp-1.0"}}}
+  ]},
+  {"type": "Linux device", "any": [
+   {"when": {"dhcp_vendor": "^dhcpcd"}, "example": {"info": {"dhcp_vendor_class": "dhcpcd-1.0"}}}
+  ]},
+  {"type": "Embedded Linux device", "any": [
+   {"when": {"dhcp_vendor": "^udhcp"}, "tier": "fallback", "note": "BusyBox's DHCP client: firmware on all kinds of gadgets, so anything more specific wins", "example": {"info": {"dhcp_vendor_class": "udhcp-1.0"}}}
+  ]},
+  {"type": "Ring device", "any": [
+   {"when": {"talks_to": "ring.com"}, "example": {"names": ["x.ring.com"]}},
+   {"when": {"vendor": "Ring"}, "example": {"vendor": "Ring Corp."}}
+  ]},
+  {"type": "Hue bridge", "any": [
+   {"when": {"talks_to": "meethue.com"}, "example": {"names": ["x.meethue.com"]}},
+   {"when": {"vendor": ["Signify", "Philips Lighting"]}, "example": {"vendor": "Signify Corp."}}
+  ]},
+  {"type": "Ubuntu", "any": [
+   {"when": {"talks_to": ["archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "motd.ubuntu.com", "changelogs.ubuntu.com"]}, "example": {"names": ["us.archive.ubuntu.com"]}}
+  ]},
+  {"type": "Debian", "any": [
+   {"when": {"talks_to": ["deb.debian.org", "security.debian.org"]}, "example": {"names": ["deb.debian.org"]}}
+  ]},
+  {"type": "Fedora", "any": [
+   {"when": {"talks_to": ["mirrors.fedoraproject.org"]}, "example": {"names": ["mirrors.fedoraproject.org"]}}
+  ]},
+  {"type": "Alpine Linux", "any": [
+   {"when": {"talks_to": ["dl-cdn.alpinelinux.org"]}, "example": {"names": ["dl-cdn.alpinelinux.org"]}}
+  ]},
+  {"type": "Sub-Zero appliance", "vendor": "Sub-Zero", "any": [
+   {"when": {"talks_to": "sznacaiotprod.azure-devices.net"}, "note": "Sub-Zero, Wolf and Cove connected appliances: Azure Sphere modules reporting to Sub-Zero's IoT hub (SZNA = Sub-Zero North America, inferred); the Wi-Fi module's MAC vendor is Card Access", "example": {"names": ["sznacaiotprod.azure-devices.net", "prod.device.core.sphere.azure.net"]}}
+  ]},
+  {"type": "Azure Sphere device", "any": [
+   {"when": {"talks_to": "sphere.azure.net"}, "note": "Microsoft's IoT chip platform (appliances, commercial equipment)", "example": {"names": ["prod.device.core.sphere.azure.net"]}}
+  ]},
+  {"type": "iPhone/iPad/Mac", "any": [
+   {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$", "private_mac": true}, "note": "Apple's DHCP request (iOS, iPadOS, macOS) with a private MAC", "example": {"mac": "02:00:00:00:00:01", "info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252"}}}
+  ]},
+  {"type": "Apple device", "any": [
+   {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$"}, "example": {"info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252,95,44,46"}}},
+   {"when": {"vendor": "Apple"}, "example": {"vendor": "Apple Corp."}}
+  ]},
+  {"type": "IoT device (ESP)", "any": [
+   {"when": {"vendor": "Espressif"}, "example": {"vendor": "Espressif Corp."}}
+  ]},
+  {"type": "Lutron hub", "any": [
+   {"when": {"vendor": "Lutron"}, "example": {"vendor": "Lutron Corp."}}
+  ]},
+  {"type": "Nest device", "any": [
+   {"when": {"vendor": "Nest Labs"}, "example": {"vendor": "Nest Labs Corp."}}
+  ]},
+  {"type": "Ceiling fan (fanSync)", "vendor": "Fanimation", "any": [
+   {"when": {"vendor": "Phaten"}, "note": "Fanimation fans with a fanSync Wi-Fi receiver; the receiver's maker (Shenzhen Phaten Tech) owns the MAC prefix", "example": {"vendor": "Phaten Corp."}}
+  ]},
+  {"type": "Device (Foxconn module)", "any": [
+   {"when": {"vendor": "Hon Hai"}, "example": {"vendor": "Hon Hai Corp."}}
+  ]},
+  {"type": "Google device", "any": [
+   {"when": {"vendor": "Google"}, "example": {"vendor": "Google Corp."}}
+  ]},
+  {"type": "Samsung device", "any": [
+   {"when": {"vendor": "Samsung"}, "example": {"vendor": "Samsung Corp."}}
+  ]},
+  {"type": "HP device", "any": [
+   {"when": {"vendor": "Hewlett Packard"}, "example": {"vendor": "Hewlett Packard Corp."}}
+  ]},
+  {"type": "NAS", "any": [
+   {"when": {"vendor": ["Synology", "QNAP"]}, "example": {"vendor": "Synology Corp."}}
+  ]},
+  {"type": "TP-Link device", "any": [
+   {"when": {"vendor": "TP-LINK"}, "example": {"vendor": "TP-LINK Corp."}}
+  ]},
+  {"type": "Smart home hub", "any": [
+   {"when": {"vendor": ["Aqara", "Lumi United"]}, "example": {"vendor": "Aqara Corp."}}
+  ]},
+  {"type": "VoIP adapter", "any": [
+   {"when": {"vendor": "Magicjack"}, "example": {"vendor": "Magicjack Corp."}}
+  ]},
+  {"type": "Embedded device", "any": [
+   {"when": {"vendor": "Globalscale"}, "example": {"vendor": "Globalscale Corp."}}
+  ]},
+  {"type": "Cellular IoT module", "any": [
+   {"when": {"vendor": "Telit"}, "example": {"vendor": "Telit Corp."}}
+  ]},
+  {"type": "Phone/tablet/laptop", "any": [
+   {"when": {"private_mac": true}, "example": {"mac": "02:00:00:00:00:02"}}
+  ]}
  ],
  "computer_vendors": ["Apple", "Intel", "Samsung Electronics", "Google", "Dell", "Lenovo", "LCFC", "Hewlett Packard", "HP Inc", "ASUSTek", "Micro-Star", "GIGA-BYTE", "Liteon", "Motorola Mobility", "OnePlus"],
  "types": {

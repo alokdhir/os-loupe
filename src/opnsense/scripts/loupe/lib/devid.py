@@ -50,11 +50,15 @@ REGEX_FIELDS = ("hostname", "mdns_model", "mdns_name", "dhcp_vendor")
 
 
 def _tiers(rules):
+    """Each rule's conditions under its tier, in file order. A shipped entry is one device type with several
+    alternatives ("any"): each is tried at its own tier, as a rule of that type."""
     tiers = {t: [] for t in TIERS}
     for r in rules:
-        conds = r["all"] if "all" in r else [r["when"]]
-        tier = r.get("tier") or next(iter(conds[0]))
-        tiers[tier].append((conds, r))
+        for alt in r["any"] if "any" in r else [r]:
+            rule = {**{k: v for k, v in r.items() if k != "any"}, **alt} if "any" in r else r
+            conds = rule["all"] if "all" in rule else [rule["when"]]
+            tier = rule.get("tier") or next(iter(conds[0]))
+            tiers[tier].append((conds, rule))
     return tiers
 
 
