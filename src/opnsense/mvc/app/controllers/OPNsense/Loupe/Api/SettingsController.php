@@ -136,18 +136,36 @@ class SettingsController extends ApiMutableModelControllerBase
         /* the icon shown: the one picked, else (Automatic) the built-in type's of the same name, as loupd uses */
         $loose = fn($t) => preg_replace('/[^a-z0-9]/', '', strtolower($t));
         $data = json_decode((string)@file_get_contents('/usr/local/opnsense/scripts/loupe/data/devices.json'), true);
-        $builtin = [];
+        $builtin = $words = [];
         foreach (($data['types'] ?? []) as $type => $props) {
             if (!empty($props['icon'])) {
                 $builtin[$loose($type)] = $props['icon'];
+                /* a type's last word names an icon too (lib/devid.py Rules.word_icons), not a generic type's */
+                $parts = preg_split('/\s+/', trim($type));
+                $word = $loose(end($parts));
+                if (empty($props['generic']) && !in_array($word, ['device', 'appliance', 'module', 'accessory']) && !isset($words[$word])) {
+                    $words[$word] = $props['icon'];
+                }
             }
         }
+        foreach (($data['icon_words'] ?? []) as $word => $icon) {
+            $words[$loose($word)] = $icon;
+        }
+        $byWord = function ($type) use ($words, $loose) {
+            foreach (array_reverse(preg_split('/\s+/', trim($type))) as $w) {
+                if (isset($words[$loose($w)])) {
+                    return $words[$loose($w)];
+                }
+            }
+            return '';
+        };
         $picked = [];
         foreach ($this->getModel()->rules->rule->iterateItems() as $uuid => $rule) {
             $picked[$uuid] = (string)$rule->icon;
         }
         foreach ($result['rows'] as &$row) {
-            $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: ($builtin[$loose(html_entity_decode($row['type']))] ?? '');
+            $type = html_entity_decode($row['type']);
+            $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: (($builtin[$loose($type)] ?? '') ?: $byWord($type));
         }
         return $result;
     }

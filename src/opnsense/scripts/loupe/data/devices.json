@@ -12,7 +12,8 @@
   "each alternative's 'example' is synthetic evidence that must classify as the entry's type (checked by the tests).",
   "Distro rules (Ubuntu, Debian...) match the update servers a machine checks; containers can blur them.",
   "Shipped talks_to rules skip private MACs and computer_vendors: a phone or laptop opening a vendor's website is not",
-  "that vendor's device (devices themselves don't randomize their MAC and aren't built on these makers' network chips)."
+  "that vendor's device (devices themselves don't randomize their MAC and aren't built on these makers' network chips).",
+  "icon_words: an icon for a type with no icon of its own, by a word in its name (last word first), e.g. an AI rule's 'Smart clock'; a built-in type's last word counts too ('Steam oven' takes Oven's)."
  ],
  "rules": [
   {"type": "Virtual machine", "vendor": "QEMU/KVM", "any": [
@@ -565,5 +566,45 @@
   "AudioAccessory1,2": "HomePod",
   "AudioAccessory5,1": "HomePod mini",
   "AudioAccessory6,1": "HomePod (2nd gen)"
+ },
+ "icon_words": {
+  "clock": "fa-solid fa-clock",
+  "display": "fa-solid fa-display",
+  "screen": "fa-solid fa-display",
+  "scale": "fa-solid fa-weight-scale",
+  "generator": "fa-solid fa-bolt",
+  "battery": "fa-solid fa-car-battery",
+  "charger": "fa-solid fa-charging-station",
+  "meter": "fa-solid fa-gauge",
+  "monitor": "fa-solid fa-gauge",
+  "hub": "fa-solid fa-house-signal",
+  "bridge": "fa-solid fa-house-signal",
+  "controller": "fa-solid fa-microchip",
+  "fridge": "fa-solid fa-temperature-low",
+  "freezer": "fa-solid fa-temperature-low",
+  "coffee": "fa-solid fa-mug-hot",
+  "kettle": "fa-solid fa-mug-hot",
+  "blender": "fa-solid fa-blender",
+  "vacuum": "fa-solid fa-broom",
+  "pool": "fa-solid fa-water",
+  "spa": "fa-solid fa-water",
+  "aquarium": "fa-solid fa-fish",
+  "feeder": "fa-solid fa-paw",
+  "pet": "fa-solid fa-paw",
+  "baby": "fa-solid fa-baby",
+  "car": "fa-solid fa-car",
+  "garden": "fa-solid fa-leaf",
+  "irrigation": "fa-solid fa-faucet-drip",
+  "solar": "fa-solid fa-solar-panel",
+  "speaker": "fa-solid fa-volume-high",
+  "soundbar": "fa-solid fa-volume-high",
+  "projector": "fa-solid fa-film",
+  "router": "fa-solid fa-network-wired",
+  "switch": "fa-solid fa-toggle-on",
+  "bulb": "fa-solid fa-lightbulb",
+  "lamp": "fa-solid fa-lightbulb",
+  "blind": "fa-solid fa-table-columns",
+  "blinds": "fa-solid fa-table-columns",
+  "curtain": "fa-solid fa-table-columns"
  }
 }

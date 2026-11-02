@@ -99,6 +99,14 @@ class Rules:
         self.computer_vendors = data.get("computer_vendors", [])
         self.user_icons = {r["type"]: r["icon"] for r in user if r.get("icon") and r.get("type")}
         self.loose_icons = {loose(t): v["icon"] for t, v in self.types.items() if v.get("icon")}
+        # a type with no icon of its own takes one by a word of its name: the icon_words table, then the last word
+        # of a specific built-in type ("Smart plug" -> plug), never a generic one ("Samsung device")
+        self.word_icons = {}
+        for t, v in self.types.items():
+            word = loose(t.split()[-1]) if t.split() else ""
+            if v.get("icon") and not v.get("generic") and word not in ("device", "appliance", "module", "accessory"):
+                self.word_icons.setdefault(word, v["icon"])
+        self.word_icons.update({loose(w): i for w, i in data.get("icon_words", {}).items()})
         self.user = _tiers(user)
         self.tiers = _tiers(data.get("rules", []))
 
@@ -106,7 +114,8 @@ class Rules:
         """The icon a rule of the user's gave this type, else the built-in type's: "A/V Receiver" is "AV receiver"."""
         dtype = dtype or ""
         builtin = self.types.get(dtype, {}).get("icon") or self.loose_icons.get(loose(dtype))
-        return self.user_icons.get(dtype) or builtin or ""
+        by_word = next((self.word_icons[w] for w in (loose(x) for x in reversed(dtype.split())) if w in self.word_icons), "")
+        return self.user_icons.get(dtype) or builtin or by_word
 
     def vendor(self, dtype):
         return self.types.get(dtype, {}).get("vendor", "")

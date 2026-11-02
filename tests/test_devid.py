@@ -204,6 +204,22 @@ class TestRuleEvidence(unittest.TestCase):
         self.assertEqual(devid.classify("ac:00:00:00:00:32", "generac", info)[:2], ("Generator", "custom rule: hostname gs_611c0b"))
 
 
+class TestIcons(unittest.TestCase):
+    def test_icon_by_word(self):
+        """A type the AI made up takes an icon by a word of its name: the word table, or a built-in type's word."""
+        t = devid.rules()
+        self.assertEqual(t.icon("Smart clock"), "fa-solid fa-clock")
+        self.assertEqual(t.icon("Steam oven"), t.icon("Oven"))
+        self.assertEqual(t.icon("Wi-Fi smart plug"), t.icon("Smart plug"))
+        self.assertEqual(t.icon("Thermostat"), t.types["Thermostat"]["icon"])       # a built-in type: its own
+        self.assertEqual(t.icon("Acme widget device"), "")                          # nothing says what it is
+
+    def test_icon_words_exist(self):
+        """Every icon in the word table is a Font Awesome class name."""
+        for w, i in devid.rules().word_icons.items():
+            self.assertRegex(i, r"^fa-(solid|regular|brands) fa-[a-z0-9-]+$", w)
+
+
 class TestReplacedInterfaces(unittest.TestCase):
     """One device on two interfaces used at different times: linked by its own name and related MACs."""
 
