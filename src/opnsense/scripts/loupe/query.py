@@ -822,6 +822,7 @@ def ai_devices(db, ov):
         seen.setdefault(mac or ip, set()).add(name)
     info = devices_info(db, ov)
     leases, hosts = devid.leases(), devid.static_hosts()
+    oui = devid.load_oui()
     out = []
     for mac, ip, hostname, raw in db.execute("SELECT mac, ip, hostname, info FROM devices WHERE last_seen >= ?", (since,)):
         d = info.get(mac) or {}
@@ -829,8 +830,10 @@ def ai_devices(db, ov):
             continue
         current = devid.current_mdns(json.loads(raw or "{}"))
         names = sorted(seen.get(mac, set()) | seen.get(ip, set()))
+        # the MAC vendor, which rules match - not the maker a type names (a Sub-Zero rule calls its Card Access
+        # module's maker Sub-Zero)
         out.append({"mac": mac, "name": d.get("name") or hostname or ip or mac, "type": d.get("type") or "",
-                    "type_source": d.get("type_source") or "", "vendor": d.get("vendor") or "",
+                    "type_source": d.get("type_source") or "", "vendor": devid.vendor(mac, oui) or "",
                     "model": d.get("model") or "", "hostname": hostname or "", "private": is_private(mac),
                     "custom": d.get("type_source") == "set by you", "info": current, "names": names,
                     "for_rules": (mac, leases.get(mac) or hosts.get(ip) or hostname,
