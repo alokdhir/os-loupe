@@ -594,9 +594,9 @@ POSSIBILITY OF SUCH DAMAGE.
             dhcp_vendor: '{{ lang._("DHCP vendor class") }}', talks_to: '{{ lang._("Talks to") }}'};
         /* the AI's confidence in a rule, as a pill: high green, medium orange, low red */
         const AI_CONFIDENCE = {
-            high: '<span class="label label-success" style="margin-right: 6px">{{ lang._("high") }}</span>',
-            medium: '<span class="label label-warning" style="margin-right: 6px">{{ lang._("medium") }}</span>',
-            low: '<span class="label label-danger" style="margin-right: 6px">{{ lang._("low") }}</span>'};
+            high: '<span class="label label-success">{{ lang._("high") }}</span>',
+            medium: '<span class="label label-warning">{{ lang._("medium") }}</span>',
+            low: '<span class="label label-danger">{{ lang._("low") }}</span>'};
         function aiLoad() {
             ai.loaded = true;
             ajaxCall('/api/loupe/settings/ai_table', {scope: $('input[name="ai-scope"]:checked').val()}, function (data) {
@@ -651,13 +651,14 @@ POSSIBILITY OF SUCH DAMAGE.
                     }
                     if (r.vaguer) flags.push('<span class="text-warning">{{ lang._("makes a type vaguer") }}</span>');
                     const changes = (r.changes || []).map(c => c[2] + ' × ' + esc(c[0] || '{{ lang._("no type") }}') + ' → ' + esc(c[1])).join('<br>');
-                    const rows = esc((r.for || []).join(', '));
+                    const rows = (r.for || []).map(n => n === '?' ? '<span class="text-muted">{{ lang._("not in the list") }}</span>' : esc(n)).join(', ');
                     $body.append('<tr><td><input type="checkbox" data-i="' + i + '"' + (r.pick ? ' checked' : '') + (r.fields ? '' : ' disabled') + '></td>'
                         + '<td>' + esc(r.type) + (r.vendor ? ' <span class="text-muted">' + esc(r.vendor) + '</span>' : '')
                         + (r.model ? ' <span class="text-muted">' + esc(r.model) + '</span>' : '') + '</td>'
                         + '<td>' + esc(aiWhen(r.when)) + '</td><td>' + rows + '</td><td>' + (changes || '—') + '</td>'
-                        + '<td>' + (AI_CONFIDENCE[(r.confidence || '').toLowerCase()] || '')
-                        + flags.concat(r.note ? [esc(r.note)] : []).join('<br>') + '</td></tr>');
+                        + '<td>' + [AI_CONFIDENCE[(r.confidence || '').toLowerCase()]
+                            ? '{{ lang._("Confidence") }}: ' + AI_CONFIDENCE[r.confidence.toLowerCase()] : '']
+                            .concat(flags, r.note ? [esc(r.note)] : []).filter(Boolean).join('<br>') + '</td></tr>');
                 });
                 const unknown = (data.unknown || []).map(u => esc((u.for || []).join(', ')) + (u.note ? ': ' + esc(u.note) : ''));
                 $('#ai-unknown').html(unknown.length ? '<b>{{ lang._("Not identified") }}</b><br>' + unknown.join('<br>') : '');
