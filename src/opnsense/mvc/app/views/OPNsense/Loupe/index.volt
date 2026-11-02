@@ -849,6 +849,7 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $('#aim-check').click(function () {
             $('#aim-saved').text('');
+            $('#aim-done').text('');
             ajaxCall('/api/loupe/settings/ai_models_preview', {reply: $('#aim-reply').val()}, function (data) {
                 data = aiPlain(data);
                 aim.names = (data && data.models) || [];
@@ -900,10 +901,17 @@ POSSIBILITY OF SUCH DAMAGE.
                 $('#{{ formGridModelNames['table_id'] }}').bootgrid('reload');
                 ajaxCall('/api/loupe/service/reconfigure', {}, function (applied) {
                     $btn.prop('disabled', false);
-                    const ok = applied && applied.status === 'ok';
-                    $('#aim-saved').toggleClass('text-danger', !ok).text(data.named + ' ' + (ok
-                        ? '{{ lang._("names saved and applied: models update within a minute.") }}'
-                        : '{{ lang._("names saved, but applying failed: use Apply below.") }}'));
+                    if (!(applied && applied.status === 'ok')) {
+                        $('#aim-saved').addClass('text-danger').text(data.named + ' {{ lang._("names saved, but applying failed: use Apply below.") }}');
+                        return;
+                    }
+                    /* done: back to a fresh start, the outcome beside the prompt's buttons */
+                    const $reply = $('#aim-reply').val('');
+                    if ($reply.data('tall')) $reply.stop().animate({height: $reply.data('tall')}, 300);
+                    $('#aim-review, #aim-problem').hide();
+                    $('#aim-list tbody').empty();
+                    $('#aim-saved').text('');
+                    $('#aim-done').text(data.named + ' {{ lang._("names saved and applied: models update within a minute.") }}');
                     aimLoad();
                 });
             });
@@ -1139,6 +1147,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <div style="margin-bottom: 6px">
                         <button type="button" class="btn btn-primary" id="aim-copy"><i class="fa fa-copy fa-fw"></i> {{ lang._('Copy prompt') }}</button>
                         <a href="#" id="aim-show" style="margin-left: 12px">{{ lang._('Show prompt') }}</a>
+                        <span id="aim-done" class="text-success" style="margin-left: 12px"></span>
                     </div>
                     <pre id="aim-prompt" style="display: none; max-height: 24em; overflow: auto; white-space: pre-wrap"></pre>
                     <div id="aim-problem" class="alert alert-warning" style="display: none; margin-bottom: 6px"></div>
