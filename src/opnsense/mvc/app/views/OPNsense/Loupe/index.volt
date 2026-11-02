@@ -70,8 +70,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
         function editButton(r) {        /* on hover, beside a device's name and its type */
             if (!r.mac) return '';
+            /* data-name/type/ic: the override now (empty where Loupe's detection shows); shown-*: what the list shows */
             return '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Edit name, type and icon") }}" data-mac="' + esc(r.mac)
-                + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '') + '"></i>';
+                + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '')
+                + '" data-shown-name="' + esc(r.name !== r.ip ? r.name || '' : '') + '" data-shown-type="' + esc(r.type || '') + '" data-shown-ic="' + esc(r.icon || '') + '"></i>';
         }
 
         /* click a cell to copy its value (the cursor says so); it flashes green when copied */
@@ -512,17 +514,29 @@ POSSIBILITY OF SUCH DAMAGE.
             const $b = $(this);
             clearFormValidation('frm_' + dialog);
             /* a blank record first, for the icon choices */
+            /* opens with what the list shows; Save keeps what wasn't changed as it was (detected or set before) and
+               saves nothing at all when nothing changed */
+            const shown = {name: String($b.data('shown-name') || ''), type: String($b.data('shown-type') || ''), icon: ''};
+            const kept = {name: String($b.data('name') || ''), type: String($b.data('type') || ''), icon: String($b.data('ic') || '')};
             mapDataToFormUI({['frm_' + dialog]: '/api/loupe/settings/get_device'}).done(function () {
                 $('#device\\.mac').val($b.data('mac')).prop('readonly', true);
-                $('#device\\.name').val($b.data('name'));
-                $('#device\\.type').val($b.data('type'));
-                $('#device\\.icon').selectpicker('refresh').selectpicker('val', String($b.data('ic') || ''));
+                $('#device\\.name').val(shown.name);
+                $('#device\\.type').val(shown.type);
+                const $icon = $('#device\\.icon').selectpicker('refresh');
+                const ic = String($b.data('shown-ic') || '');
+                shown.icon = $icon.find('option').filter(function () { return this.value === ic; }).length ? ic : '';
+                $icon.selectpicker('val', shown.icon);
                 $('#' + dialog).modal('show');
             });
             $('#btn_' + dialog + '_save').unbind('click').click(function () {
+                const now = {name: $('#device\\.name').val(), type: $('#device\\.type').val(), icon: $('#device\\.icon').val() || ''};
+                if (now.name === shown.name && now.type === shown.type && now.icon === shown.icon) {
+                    $('#' + dialog).modal('hide');
+                    return;
+                }
+                const pick = (f) => now[f] === shown[f] ? kept[f] : now[f];
                 ajaxCall('/api/loupe/settings/override', {
-                    mac: $('#device\\.mac').val(), name: $('#device\\.name').val(), type: $('#device\\.type').val(),
-                    icon: $('#device\\.icon').val()
+                    mac: $('#device\\.mac').val(), name: pick('name'), type: pick('type'), icon: pick('icon')
                 }, function (data) {
                     if (data.result === 'saved') {
                         $('#' + dialog).modal('hide');
