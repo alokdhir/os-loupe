@@ -116,7 +116,7 @@ class SettingsController extends ApiMutableModelControllerBase
 
     public function searchRuleAction()
     {
-        $fields = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description', 'source', 'ai_model']);
+        $fields = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description', 'source']);
         /* the grid's Source filter: manual or AI rules only */
         $source = (string)$this->request->getPost('source', null, '');
         $only = in_array($source, ['manual', 'ai'], true) ? fn($rule) => (string)$rule->source === $source : null;
@@ -203,14 +203,10 @@ class SettingsController extends ApiMutableModelControllerBase
         return is_array($out) ? $out : ['error' => gettext('No answer from Loupe.')];
     }
 
-    /* the devices to ask about (MACs picked by hand, comma-separated; none: the ones Loupe can't tell apart) */
+    /* the devices to ask about: the ones Loupe couldn't identify, or (scope=all) every device */
     public function aiTableAction()
     {
-        $macs = strtolower(trim((string)$this->request->getPost('macs', null, '')));
-        if ($macs !== '' && !preg_match('/^[0-9a-f]{2}(:[0-9a-f]{2}){5}(,[0-9a-f]{2}(:[0-9a-f]{2}){5})*$/', $macs)) {
-            return ['error' => gettext('Invalid device list.')];
-        }
-        return $this->aiQuery(['aitable', $macs]);
+        return $this->aiQuery(['aitable', $this->request->getPost('scope', null, '') === 'all' ? 'all' : '']);
     }
 
     /* the AI's reply, checked against every device: left in a file for query.py (too long for an argument), which removes it */
@@ -240,8 +236,7 @@ class SettingsController extends ApiMutableModelControllerBase
     public function aiSaveAction()
     {
         $rules = $this->request->getPost('rules');
-        $model = trim((string)$this->request->getPost('ai_model', null, ''));
-        if (!$this->request->isPost() || !is_array($rules) || empty($rules) || strlen($model) > 64) {
+        if (!$this->request->isPost() || !is_array($rules) || empty($rules)) {
             return ['result' => 'failed', 'error' => gettext('Nothing to save.')];
         }
         $allowed = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description']);
@@ -257,7 +252,7 @@ class SettingsController extends ApiMutableModelControllerBase
                     $bad ? implode(' ', $bad['validations']) : gettext('it has no type.'))];
             }
             $node = $mdl->rules->rule->Add();
-            $node->setNodes($rule + ['source' => 'ai', 'ai_model' => $model]);
+            $node->setNodes($rule + ['source' => 'ai']);
             $saved++;
         }
         $messages = $mdl->performValidation();

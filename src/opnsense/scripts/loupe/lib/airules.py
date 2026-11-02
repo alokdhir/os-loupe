@@ -44,7 +44,7 @@ COMMON_DOMAINS = ("google.com", "googleapis.com", "gstatic.com", "googleusercont
                   "edgesuite.net", "cloudflare.com", "cloudflare-dns.com", "cloudfront.net", "fastly.net",
                   "amazonaws.com", "amazontrust.com", "azure.com", "azure.net", "windows.net", "microsoft.com",
                   "msftconnecttest.com", "ntp.org", "nist.gov", "arpa", "local")
-MAX_ROWS = 60
+MAX_ROWS = 200        # a question an AI chat still takes (~50 KB); a bigger network asks in parts
 
 
 def _registered(name):
@@ -102,7 +102,8 @@ COLUMNS = ("vendor", "current", "model", "hostname", "bonjour_names", "bonjour_h
 
 
 def rows(devices):
-    """Devices with identical evidence share a row: [(id, [macs], evidence)], D1... in the order given."""
+    """Devices with identical evidence share a row: [(id, [macs], evidence)], D1... in the order given; at most
+    MAX_ROWS (the caller can tell from the count)."""
     out, seen = [], {}
     for mac, ev in devices:
         key = json.dumps(ev, sort_keys=True)

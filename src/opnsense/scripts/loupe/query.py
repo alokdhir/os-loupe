@@ -839,21 +839,21 @@ def ai_devices(db, ov):
 
 
 def cmd_aitable(arg):
-    """The AI Rule Generator's table and prompt: the devices Loupe can't tell apart (no type, or a generic one; not
-    ones you typed), or the MACs in `arg` (comma-separated). Also every device, for picking others."""
-    macs = {m.strip().lower() for m in (arg or "").split(",") if m.strip()}
-    if macs and not all(MAC.match(m) for m in macs):
-        raise ValueError("expected a comma-separated list of MAC addresses")
+    """The AI Rule Generator's table and prompt: the devices Loupe couldn't identify from their own evidence (no
+    type, or a generic one; not ones you typed), or with `arg` "all" every device. Also how many each choice has."""
+    if arg not in ("", "all"):
+        raise ValueError("expected nothing or 'all'")
     db, _, ov = load()
     devs = ai_devices(db, ov)
-    chosen = [d for d in devs if d["mac"] in macs] if macs else \
-        [d for d in devs if airules.needs_help(d["type"]) and not d["custom"]]
+    unknown = [d for d in devs if airules.needs_help(d["type"]) and not d["custom"]]
+    chosen = devs if arg == "all" else unknown
     table = airules.rows([(d["mac"], airules.evidence(d)) for d in chosen])
+    asked = sum(len(ms) for _rid, ms, _ev in table)
     by_mac = {d["mac"]: d for d in devs}
     return {"prompt": airules.prompt(table, rules().types) if table else "",
             "rows": [{"id": rid, "macs": ms, "names": [by_mac[m]["name"] for m in ms], "type": by_mac[ms[0]]["type"]}
                      for rid, ms, _ev in table],
-            "devices": [{"mac": d["mac"], "name": d["name"], "type": d["type"], "picked": d in chosen} for d in devs]}
+            "unidentified": len(unknown), "all": len(devs), "asked": asked, "chosen": len(chosen)}
 
 
 def cmd_aipreview(path):
