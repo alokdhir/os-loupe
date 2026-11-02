@@ -82,12 +82,14 @@
         <label>Type</label>
         <type>text</type>
         <help>The device type to show, e.g. Window shade. Your rules are checked before the built-in ones; an override for one device still wins.</help>
+        <grid_view><width>14em</width></grid_view>
     </field>
     <field>
         <id>rule.icon</id>
         <label>Icon</label>
         <type>dropdown</type>
         <help>Shown next to the type. Automatic uses the icon of a built-in type with the same name.</help>
+        <grid_view><width>4em</width></grid_view>
     </field>
     <field>
         <id>rule.description</id>
@@ -99,5 +101,6 @@
         <label>Source</label>
         <type>dropdown</type>
         <help>Whether you wrote this rule or the AI Rule Generator suggested it.</help>
+        <grid_view><width>6em</width></grid_view>
     </field>
 </form>
