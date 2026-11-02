@@ -51,7 +51,8 @@ class TestParse(unittest.TestCase):
         text = '```json\n{"rules": [' + RULE + ', {"devices": ["D2"], "when": {"hostname": "^Acme"}, "type": "Ov'
         rules, unknown, problem = airules.parse(text)
         self.assertEqual(len(rules), 1)
-        self.assertIn("incomplete", problem)
+        self.assertIn("stops partway", problem)
+        self.assertIn("kept the 1 complete rules", problem)
 
     def test_nothing(self):
         self.assertEqual(airules.parse("sorry, I can't help")[2], "no JSON in the reply")

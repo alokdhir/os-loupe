@@ -242,7 +242,11 @@ def parse(text):
         problem = None
     except ValueError:
         data = {"rules": _objects(body, "rules"), "unknown": _objects(body, "unknown")}
-        problem = "the reply was incomplete or not valid JSON: kept the complete rules"
+        kept = len(data["rules"])
+        depth = body.count("{") - body.count("}")       # still open at the end: the answer stops partway
+        problem = (f"The answer stops partway, in the middle of a rule: kept the {kept} complete rules. Copy the whole "
+                   "answer, or ask the AI to continue and paste the rest." if depth > 0 else
+                   f"The answer isn't valid JSON: kept the {kept} rules that could be read.")
     rules = [r for r in data.get("rules") or [] if isinstance(r, dict)]
     unknown = [u for u in data.get("unknown") or [] if isinstance(u, dict)]
     if not rules and not unknown:
