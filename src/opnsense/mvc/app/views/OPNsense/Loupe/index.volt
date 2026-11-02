@@ -73,7 +73,8 @@ POSSIBILITY OF SUCH DAMAGE.
             /* data-name/type/ic: the override now (empty where Loupe's detection shows); shown-*: what the list shows */
             return '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Edit name, type and icon") }}" data-mac="' + esc(r.mac)
                 + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '')
-                + '" data-shown-name="' + esc(r.name !== r.ip ? r.name || '' : '') + '" data-shown-type="' + esc(r.type || '') + '" data-shown-ic="' + esc(r.icon || '') + '"></i>';
+                + '" data-shown-name="' + esc(r.name !== r.ip ? r.name || '' : '') + '" data-shown-type="' + esc(r.type || '') + '" data-shown-ic="' + esc(r.icon || '')
+                + '" data-source="' + esc(r.type_source || '') + '"></i>';
         }
 
         /* click a cell to copy its value (the cursor says so); it flashes green when copied */
@@ -526,6 +527,15 @@ POSSIBILITY OF SUCH DAMAGE.
                 const ic = String($b.data('shown-ic') || '');
                 shown.icon = $icon.find('option').filter(function () { return this.value === ic; }).length ? ic : '';
                 $icon.selectpicker('val', shown.icon);
+                /* where the type comes from, under its box: a rule's type is changed for every device in the rule */
+                const src = String($b.data('source') || '');
+                let $why = $('#device-type-source');
+                if (!$why.length) $why = $('<div id="device-type-source" class="text-muted" style="margin-top: 4px"></div>').insertAfter('#device\\.type');
+                const rule = src.match(/^(AI rule|custom rule): (.*)$/);
+                $why.text(!src ? '' : src === 'set by you' ? '{{ lang._("Set by you for this device.") }}'
+                    : rule ? (rule[1] === 'AI rule' ? '{{ lang._("From your AI rule:") }} ' : '{{ lang._("From your rule:") }} ') + rule[2]
+                        + '. {{ lang._("Changing it here sets it for this device only; edit the rule to change every device it matches.") }}'
+                    : '{{ lang._("Detected from:") }} ' + src);
                 $('#' + dialog).modal('show');
             });
             $('#btn_' + dialog + '_save').unbind('click').click(function () {
