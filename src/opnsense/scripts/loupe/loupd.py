@@ -246,7 +246,8 @@ class Loupe:
             known[mac] = {"name": hostname, "hosts": info.get("mdns_hosts", [])}
             info = devid.current_mdns(info)     # what the device announces now outranks older announcements
             name = leases.get(mac) or hosts.get(ip)
-            t, src, ven = devid.classify(mac, name or hostname, info, seen, self.oui)
+            # the name it has here (a lease or static mapping) and the one it sent: rules match either
+            t, src, ven = devid.classify(mac, name or hostname, {**info, "dhcp_hostname": hostname}, seen, self.oui)
             known[mac]["type"] = t
             rows.append((devid.display_name(name, hostname, devid.mdns_name(info)), ven, t, src, devid.model(info), mac))
         self.store.set_device_types(rows)

@@ -184,6 +184,26 @@ class TestCategories(unittest.TestCase):
         self.assertEqual(devid.categories({"mdns_categories": sorted(m["categories"])}), {"hap:9", "matter:0x007b"})
 
 
+class TestRuleEvidence(unittest.TestCase):
+    def tearDown(self):
+        devid.set_user_rules([])
+
+    def test_ai_rules_keep_the_talks_to_guard(self):
+        """A server using a vendor's cloud (Home Assistant driving a garage door) isn't that vendor's device: a rule
+        the user typed applies anyway, one an AI suggested doesn't (like the shipped ones)."""
+        server = ("02:00:00:00:00:31", None, {}, ["api.acme-garage.example"])    # private MAC: a computer
+        devid.set_user_rules([{"when": {"talks_to": "acme-garage.example"}, "type": "Garage door opener", "source": "ai"}])
+        self.assertNotEqual(devid.classify(*server)[0], "Garage door opener")
+        devid.set_user_rules([{"when": {"talks_to": "acme-garage.example"}, "type": "Garage door opener"}])
+        self.assertEqual(devid.classify(*server)[0], "Garage door opener")
+
+    def test_both_host_names_case_insensitive(self):
+        """The name it has here and the one it sent both count, in any case."""
+        devid.set_user_rules([{"when": {"hostname": "^GS_"}, "type": "Generator"}])
+        info = {"dhcp_hostname": "gs_611c0b"}
+        self.assertEqual(devid.classify("ac:00:00:00:00:32", "generac", info)[:2], ("Generator", "custom rule: hostname gs_611c0b"))
+
+
 class TestReplacedInterfaces(unittest.TestCase):
     """One device on two interfaces used at different times: linked by its own name and related MACs."""
 

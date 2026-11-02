@@ -178,7 +178,7 @@ def _check(field, want, ev):
         return f"{CATEGORY_KINDS[want.split(':')[0]]} {want.split(':')[1]}" if want and want in ev["categories"] else None
     if field == "hostname":
         for h in ev["hosts"]:
-            if h and re.search(want, h.removesuffix(".local")):
+            if h and re.search(want, h.removesuffix(".local"), re.IGNORECASE):     # host names have no case
                 return f"hostname {h}"
         return None
     if field == "mdns_service":
@@ -263,9 +263,11 @@ def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
     t = table or rules()
     computer = private or any(re.search(r"(?i)\b" + re.escape(v) + r"\b", ven or "") for v in t.computer_vendors)
     for mine, tiers in ((True, t.user), (False, t.tiers)):
-        ev["computer"] = computer and not mine      # the user's own talks_to rules apply to any device
         for tier in tiers.values():
             for conds, r in tier:
+                # talks_to skips phones, computers and private MACs (using a vendor's app or site isn't being its
+                # device), except in rules the user typed in; an AI-suggested rule is held to it like a shipped one
+                ev["computer"] = computer and not (mine and r.get("source") != "ai")
                 src = _match(conds, ev)
                 if src is not None:
                     by = "AI rule" if r.get("source") == "ai" else "custom rule"     # the AI flow's, or typed in
