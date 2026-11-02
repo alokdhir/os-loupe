@@ -90,7 +90,7 @@ OPNsense's own reports, Insight (NetFlow) and Unbound's DNS reporting, name a de
 
 Loupe keys everything on the device's MAC address and works out what it is from what the device says about itself:
 
-- **The model**, from Bonjour/mDNS: devices announce it (*Sonos One*, *Google Nest Mini*, *HP LaserJet Pro M404*), and Apple's identifiers (`Mac15,13`, `AppleTV14,1`) become *MacBook Air 15″ (M3)* or *Apple TV 4K (3rd gen)*; printers, speakers and Cast devices announce their services.
+- **The model**, from Bonjour/mDNS: devices announce it (*Sonos One*, *Google Nest Mini*, *HP LaserJet Pro M404*); where it's a code (Apple's `Mac15,13`, `AppleTV14,1`), *Settings → Device rules → Model names* gives it a name, and the AI Rule Generator suggests them; printers, speakers and Cast devices announce their services.
 - **The category**, where a device states it: HomeKit's accessory category and Matter's device type (a thermostat, a lock, an oven), whatever the brand.
 - **The name**, from the DHCP lease, the hostname the device sends, or its Bonjour name, preferring a real name over the placeholders phones with private addresses send (*iPhone*, *Mac*).
 - **The type and maker**, from DHCP fingerprints (vendor class and parameter list), the MAC vendor, and the services it talks to (`playstation.net` → PlayStation, `ring.com` → Ring device).
@@ -114,7 +114,7 @@ Those are broader tools — deep packet inspection, alerts, policies, live flows
 
 ## Device rules
 
-How Loupe recognises devices is data, not code: [`data/devices.json`](src/opnsense/scripts/loupe/data/devices.json) (device rules, the icon and maker for each type, Apple model names) and [`data/services.json`](src/opnsense/scripts/loupe/data/services.json) (site and service names, address ranges, ports, VPN providers). Each device type is one entry, with the alternatives that identify it, one per line:
+How Loupe recognises devices is data, not code: [`data/devices.json`](src/opnsense/scripts/loupe/data/devices.json) (device rules, the icon and maker for each type) and [`data/services.json`](src/opnsense/scripts/loupe/data/services.json) (site and service names, address ranges, ports, VPN providers). Each device type is one entry, with the alternatives that identify it, one per line:
 
 ```json
 {"type": "Printer", "any": [

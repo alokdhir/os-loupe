@@ -95,10 +95,6 @@ class TestDeviceRules(unittest.TestCase):
             with self.subTest(rule=r):
                 self.assertEqual(run_example(r["example"])[0], r["type"])
 
-    def test_apple_models(self):
-        for ident, name in self.data["apple_models"].items():
-            self.assertRegex(ident, r"^[A-Za-z]+\d+,\d+$")
-            self.assertTrue(name)
 
 
 class TestServiceData(unittest.TestCase):

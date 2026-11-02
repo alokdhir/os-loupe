@@ -154,6 +154,22 @@
                 <ai_model type="TextField"/>
             </rule>
         </rules>
+        <models>
+            <model type="ArrayField">
+                <identifier type="TextField">
+                    <Required>Y</Required>
+                    <Constraints>
+                        <check001>
+                            <ValidationMessage>This model already has a name.</ValidationMessage>
+                            <type>UniqueConstraint</type>
+                        </check001>
+                    </Constraints>
+                </identifier>
+                <name type="TextField">
+                    <Required>Y</Required>
+                </name>
+            </model>
+        </models>
         <devices>
             <device type="ArrayField">
                 <mac type="MacAddressField">

@@ -43,6 +43,8 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->view->formDialogDevice = $this->getForm('dialogDevice');
         $this->view->formGridServices = $this->getFormGrid('dialogService', 'gridServiceNames');
         $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'gridOverrides');
+        $this->view->formDialogModelName = $this->getForm('dialogModelName');
+        $this->view->formGridModelNames = $this->getFormGrid('dialogModelName', 'gridModelNames');
         $this->view->formDialogRule = $this->getForm('dialogRule');
         // a rule's clues are hidden columns; one column says what it matches (built by search_rule)
         $grid = $this->getFormGrid('dialogRule', 'gridRules');

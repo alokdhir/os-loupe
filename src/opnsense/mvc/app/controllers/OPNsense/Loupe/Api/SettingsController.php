@@ -249,7 +249,10 @@ class SettingsController extends ApiMutableModelControllerBase
     public function aiSaveAction()
     {
         $rules = $this->request->getPost('rules');
-        if (!$this->request->isPost() || !is_array($rules) || empty($rules)) {
+        $rules = is_array($rules) ? $rules : [];
+        $models = $this->request->getPost('models');
+        $models = is_array($models) ? $models : [];
+        if (!$this->request->isPost() || (empty($rules) && empty($models))) {
             return ['result' => 'failed', 'error' => gettext('Nothing to save.')];
         }
         $allowed = array_merge(array_keys(self::RULE_FIELDS), ['type', 'description', 'icon']);
@@ -268,6 +271,24 @@ class SettingsController extends ApiMutableModelControllerBase
             $node->setNodes($rule + ['source' => 'ai']);
             $saved++;
         }
+        /* model names: an identifier already named gets the new name */
+        $named = 0;
+        foreach ($models as $m) {
+            $identifier = trim((string)($m['identifier'] ?? ''));
+            $name = mb_substr(trim((string)($m['name'] ?? '')), 0, 100);
+            if ($identifier === '' || $name === '' || strlen($identifier) > 64) {
+                continue;
+            }
+            $node = null;
+            foreach ($mdl->models->model->iterateItems() as $existing) {
+                if ((string)$existing->identifier === $identifier) {
+                    $node = $existing;
+                }
+            }
+            $node = $node ?? $mdl->models->model->Add();
+            $node->setNodes(['identifier' => $identifier, 'name' => $name]);
+            $named++;
+        }
         $messages = $mdl->performValidation();
         if (count($messages)) {
             foreach ($messages as $msg) {
@@ -275,7 +296,7 @@ class SettingsController extends ApiMutableModelControllerBase
             }
         }
         $this->save(false, true);
-        return ['result' => 'saved', 'saved' => $saved];
+        return ['result' => 'saved', 'saved' => $saved, 'named' => $named];
     }
 
     public function addRuleAction()
@@ -316,6 +337,32 @@ class SettingsController extends ApiMutableModelControllerBase
             $row['icon_class'] = ($picked[$row['uuid']] ?? '') ?: ($sameType ?: ($auto[$mac] ?? ''));
         }
         return $result;
+    }
+
+    /* names for model identifiers devices announce (Device rules > Model names) */
+    public function searchModelNameAction()
+    {
+        return $this->searchBase('models.model', ['identifier', 'name'], 'identifier');
+    }
+
+    public function getModelNameAction($uuid = null)
+    {
+        return $this->getBase('model', 'models.model', $uuid);
+    }
+
+    public function addModelNameAction()
+    {
+        return $this->addBase('model', 'models.model');
+    }
+
+    public function setModelNameAction($uuid)
+    {
+        return $this->setBase('model', 'models.model', $uuid);
+    }
+
+    public function delModelNameAction($uuid)
+    {
+        return $this->delBase('models.model', $uuid);
     }
 
     public function getDeviceAction($uuid = null)

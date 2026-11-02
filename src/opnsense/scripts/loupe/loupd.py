@@ -367,6 +367,7 @@ def main():
     if not ifaces:
         syslog.syslog(syslog.LOG_ERR, "loupe: no interfaces configured")
         sys.exit(1)
+    devid.set_model_names(conf.get("model_names", {}))
     for rule, problem in devid.set_user_rules(conf.get("rules", [])):
         syslog.syslog(syslog.LOG_WARNING, f"loupe: skipping device rule {json.dumps(rule)}: {problem}")
     r = conf.get("retention", {})

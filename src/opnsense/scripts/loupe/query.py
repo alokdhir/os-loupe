@@ -105,6 +105,7 @@ def load():
     except (OSError, ValueError):
         conf = {}
     set_user_rules(conf.get("rules", []))          # their icons
+    devid.set_model_names(conf.get("model_names", {}))
     nets = Networks(conf)
     db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     return db, ServiceMap(conf.get("services")), {k.lower().replace("-", ":"): v for k, v in conf.get("devices", {}).items()}
@@ -895,7 +896,7 @@ def cmd_aipreview(path):
             os.unlink(path)
         except OSError:
             pass
-    suggested, unknown, problem = airules.parse(data.get("reply") or "")
+    suggested, unknown, problem, model_names = airules.parse(data.get("reply") or "")
     try:
         with open(CONF) as f:
             user = json.load(f).get("rules", [])
@@ -913,7 +914,16 @@ def cmd_aipreview(path):
         r["for"] = [n for rid in r["devices"] for n in names.get(rid.upper(), ["?"])]
         r["others"] = [by_mac.get(m, m) for m in r["others"]]      # the devices it would change besides its own
         r["icon"] = rules().icon(r["type"])         # the type's icon now ('': a new type, the page offers a choice)
-    return {"problem": problem, "rules": checked,
+    # names the AI gave for code-like models: identifier (what the devices announce) -> name, unless already so
+    announced = {d["mac"]: devid.model(d["info"], names={}) for d in devs}
+    proposals = {}
+    for rids, name in model_names:
+        macs = [m for rid in rids for m in ids.get(rid.upper(), [])]
+        for code in {announced.get(m) for m in macs} - {None, "", name}:
+            if devid._model_names.get(code) != name:
+                p = proposals.setdefault(code, {"identifier": code, "name": name, "for": [], "now": devid._model_names.get(code, "")})
+                p["for"] += [by_mac.get(m, m) for m in macs if announced.get(m) == code]
+    return {"problem": problem, "rules": checked, "models": list(proposals.values()),
             "unknown": [{"for": [n for rid in u.get("devices") or [] for n in names.get(str(rid).upper(), ["?"])],
                          "note": u.get("note") or ""} for u in unknown]}
 

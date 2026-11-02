@@ -95,7 +95,6 @@ class Rules:
 
     def __init__(self, data, user=()):
         self.types = data.get("types", {})
-        self.apple_models = data.get("apple_models", {})
         self.computer_vendors = data.get("computer_vendors", [])
         self.user_icons = {r["type"]: r["icon"] for r in user if r.get("icon") and r.get("type")}
         self.loose_icons = {loose(t): v["icon"] for t, v in self.types.items() if v.get("icon")}
@@ -324,12 +323,22 @@ MODEL_ORDER = ("model", "am", "ty", "usb_mdl", "md")
 NOT_A_MODEL = re.compile(r"^[\d,.\s]*$|^[A-Z]\d+[a-z]*AP$|^(?i:[0-9a-f]{12,})$")
 
 
-def model(info):
-    """The device's model: an Apple identifier's marketing name when known (apple_models), else what it announces
-    in Bonjour TXT, by MODEL_ORDER. A key with several different values names other things (a bridge announcing
-    the accessories it serves): no model from it, nor from the keys after it."""
+_model_names = {}
+
+
+def set_model_names(names):
+    """The user's names for model identifiers devices announce ({"AppleTV14,1": "Apple TV 4K (3rd gen)"}), from
+    loupe.json (Settings: Device rules > Model names; the AI Rule Generator suggests them)."""
+    global _model_names
+    _model_names = {str(k).strip(): str(v).strip() for k, v in (names or {}).items() if str(k).strip() and str(v).strip()}
+
+
+def model(info, names=None):
+    """The device's model: the user's name for an identifier it announces, else what it announces in Bonjour TXT,
+    by MODEL_ORDER. A key with several different values names other things (a bridge announcing the accessories it
+    serves): no model from it, nor from the keys after it. names={}: what it announces, not the user's name."""
     announced = (info or {}).get("mdns_models", [])
-    names = rules().apple_models
+    names = _model_names if names is None else names
     for m in announced:
         hit = names.get(m.split("=", 1)[1] if "=" in m else m)
         if hit:

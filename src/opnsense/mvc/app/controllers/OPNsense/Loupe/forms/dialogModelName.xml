@@ -1,0 +1,14 @@
+<form>
+    <field>
+        <id>model.identifier</id>
+        <label>Identifier</label>
+        <type>text</type>
+        <help>What the device announces as its model, exactly, e.g. AppleTV14,1.</help>
+    </field>
+    <field>
+        <id>model.name</id>
+        <label>Name</label>
+        <type>text</type>
+        <help>The name to show for it, e.g. Apple TV 4K (3rd gen).</help>
+    </field>
+</form>

@@ -416,9 +416,15 @@ class TestVendorWords(unittest.TestCase):
 
 
 class TestModelAndName(unittest.TestCase):
+    def tearDown(self):
+        devid.set_model_names({})
+
     def test_model(self):
-        self.assertEqual(devid.model({"mdns_models": ["model=Mac15,13"]}), "MacBook Air 15″ (M3)")
-        self.assertEqual(devid.model({"mdns_models": ["model=Mac99,1"]}), "Mac99,1")     # not in the table: as announced
+        """Your name for an identifier (Settings: Model names, suggested by the AI Rule Generator), else as announced."""
+        self.assertEqual(devid.model({"mdns_models": ["model=AcmeBook9,1"]}), "AcmeBook9,1")
+        devid.set_model_names({"AcmeBook9,1": "AcmeBook Air 15", " ": "x"})
+        self.assertEqual(devid.model({"mdns_models": ["model=AcmeBook9,1"]}), "AcmeBook Air 15")
+        self.assertEqual(devid.model({"mdns_models": ["model=AcmeBook9,2"]}), "AcmeBook9,2")
 
     def test_announced_model(self):
         model = lambda *m: devid.model({"mdns_models": list(m)})       # noqa: E731
