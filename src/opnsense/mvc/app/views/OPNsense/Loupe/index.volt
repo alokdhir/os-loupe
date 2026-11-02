@@ -28,6 +28,7 @@ POSSIBILITY OF SUCH DAMAGE.
 <script src="{{ cache_safe('/ui/js/moment-with-locales.min.js') }}"></script>
 <script src="{{ cache_safe('/ui/js/chartjs-adapter-moment.min.js') }}"></script>
 <script src="{{ cache_safe('/ui/js/chartjs-plugin-colorschemes.min.js') }}"></script>
+<script src="{{ cache_safe('/ui/js/chartjs-plugin-zoom.min.js') }}"></script>
 <style>
     .loupe-edit { color: #999; cursor: pointer; visibility: hidden; padding-left: 8px; }
     .tabulator-row:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
@@ -184,7 +185,22 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* a chart of a device's or a service's traffic: Mbps down and up, each point the average over its bucket */
         const charts = {};
+        /* drag across a chart to zoom into that time (the points it has; a smooth line between them), × to go back */
+        function zoomReset(canvas) {
+            let $b = $('#' + canvas + '-reset');
+            if (!$b.length) {
+                $b = $('<button type="button" class="btn btn-default btn-xs" style="position: absolute; top: 0; right: 15px; display: none">'
+                    + '<i class="fa fa-times fa-fw"></i> {{ lang._("Reset zoom") }}</button>').attr('id', canvas + '-reset');
+                $('#' + canvas).parent().css('position', 'relative').append($b);
+                $b.on('click', function () {
+                    if (charts[canvas]) charts[canvas].resetZoom();
+                    $b.hide();
+                });
+            }
+            return $b;
+        }
         function clearChart(canvas) {
+            zoomReset(canvas).hide();
             if (charts[canvas]) charts[canvas].destroy();
             delete charts[canvas];
         }
@@ -192,6 +208,7 @@ POSSIBILITY OF SUCH DAMAGE.
             const tl = data.timeline || [], step = data.step || 300;
             const mbps = b => b * 8 / step / 1e6;
             if (charts[canvas]) charts[canvas].destroy();
+            zoomReset(canvas).hide();
             charts[canvas] = new Chart(document.getElementById(canvas), {
                 type: 'line',
                 data: {
@@ -214,8 +231,16 @@ POSSIBILITY OF SUCH DAMAGE.
                         x: {type: 'time', time: {tooltipFormat: step >= 86400 ? 'll' : 'lll'}},
                         y: {beginAtZero: true, title: {display: true, text: 'Mbps'}, ticks: {callback: v => +v.toFixed(2)}}
                     },
-                    plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + c.raw.toFixed(c.raw < 10 ? 2 : 1)
-                        + ' Mbps (' + byteFormat(c.dataset.bytes[c.dataIndex], 1) + ')'}}}
+                    plugins: {
+                        tooltip: {callbacks: {label: c => c.dataset.label + ': ' + c.raw.toFixed(c.raw < 10 ? 2 : 1)
+                            + ' Mbps (' + byteFormat(c.dataset.bytes[c.dataIndex], 1) + ')'}},
+                        zoom: {
+                            zoom: {mode: 'x', drag: {enabled: true, backgroundColor: 'rgba(54,162,235,0.15)',
+                                                     borderColor: 'rgba(54,162,235,0.6)', borderWidth: 1},
+                                   onZoomComplete: () => zoomReset(canvas).show()},
+                            limits: {x: {minRange: 2 * step * 1000}}       /* at least two of its points */
+                        }
+                    }
                 }
             });
         }
