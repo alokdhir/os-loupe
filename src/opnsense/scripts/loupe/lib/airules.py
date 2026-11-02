@@ -186,12 +186,10 @@ Reply with ONE JSON object in a single ```json code block. No comments inside th
       "note": "one sentence: what the evidence shows"
     }}
   ],
-  "unknown": [{{"devices": ["D3D4E5F"], "note": "what is missing to identify it"}}],
-  "models": [{{"devices": ["D6A7B8C"], "model": "Acme TV 4K (2nd gen)"}}]
+  "unknown": [{{"devices": ["D3D4E5F"], "note": "what is missing to identify it"}}]
 }}
 ```
 - "model" only if the evidence shows it; otherwise leave it out. "confidence": high, medium or low.
-- "models": for every row whose model column isn't the name people know the product by - an internal identifier (Apple's Mac16,1), a part number or SKU (any maker's: a streaming stick's ABCD002, a thermostat's XY501) - the product's everyday name with its generation, whether or not you also wrote a rule for the row. Check identifiers against a reliable source (e.g. the maker's support pages or a model identifier list); leave out codes you can't confirm, and models that are already a readable name.
 - "devices" lists row ids exactly as they appear in the table; every row appears in a rule's "devices" or in "unknown".
 - Don't invent evidence that isn't in the table.
 
@@ -287,6 +285,50 @@ def parse_models(data):
         if isinstance(m, dict) and isinstance(m.get("model"), str) and m["model"].strip() and isinstance(m.get("devices"), list):
             out.append(([str(d) for d in m["devices"]], m["model"].strip()[:100]))
     return out
+
+
+MODELS_START = "You are helping Loupe name product models"
+
+
+def models_prompt(codes):
+    """The prompt for naming model codes: [(code, maker, device type, how many devices)] - nothing else about them."""
+    lines = [f"| {code} | {maker or '-'} | {dtype or '-'} | {n} |".replace("\n", " ") for code, maker, dtype, n in codes]
+    return f"""{MODELS_START}. Devices on a home network announce these model codes: internal identifiers (like Apple's Mac16,1), part numbers or SKUs. For each, give the name people know the product by, with its generation or year where that tells it apart (e.g. "Apple TV 4K (3rd generation)", "MacBook Air (15-inch, M3, 2024)").
+
+Check each code against a reliable source (the maker's support pages, a model identifier list); leave out codes you can't confirm, and codes that are already a readable product name.
+
+## Response format
+Reply with ONE JSON object in a single ```json code block, nothing inside it but this shape (made-up example):
+```json
+{{"models": [{{"identifier": "ACME9,1", "model": "Acme Box (2nd generation)", "confidence": "high"}}]}}
+```
+"identifier" exactly as listed; "confidence": high, medium or low.
+
+## Codes
+| code | maker | device type | devices |
+|---|---|---|---|
+""" + "\n".join(lines) + "\n"
+
+
+def parse_model_names(text):
+    """(names, problem) from a pasted answer to the model-name prompt: [(identifier, name, confidence)]."""
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text or "")
+    if MODELS_START in text and "## Codes" in text:
+        return [], "That's the prompt. Paste it into the AI chat, then paste the AI's answer here."
+    block = re.search(r"```(?:json)?\s*(\{.*?)```", text, re.S)
+    body = block.group(1) if block else text[text.find("{"):] if "{" in text else ""
+    try:
+        data = _loads(body[:body.rfind("}") + 1] if block is None else body) if body else {}
+        listed = data.get("models") if isinstance(data, dict) else None
+        problem = None
+    except ValueError:
+        listed, problem = _objects(body, "models"), "The answer stops partway or isn't valid JSON: kept the names that could be read."
+    names = [(m["identifier"].strip(), m["model"].strip()[:100], str(m.get("confidence") or ""))
+             for m in listed or [] if isinstance(m, dict) and isinstance(m.get("identifier"), str)
+             and isinstance(m.get("model"), str) and m["identifier"].strip() and m["model"].strip()]
+    if not names:
+        return [], "No model names in what was pasted. Paste the AI's whole answer: the names come as a JSON block."
+    return names, problem
 
 
 def to_rule(r):

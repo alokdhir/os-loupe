@@ -66,6 +66,17 @@ class TestParse(unittest.TestCase):
                                                   ' {"devices": ["D9"], "model": ""}, "x"]}')
         self.assertEqual((rules, problem, models), ([], None, [(["DA1B2C3"], "Acme TV 4K")]))
 
+    def test_model_name_prompt_and_answer(self):
+        prompt = airules.models_prompt([("ACME9,1", "Acme Inc.", "Media player", 2)])
+        self.assertIn("| ACME9,1 | Acme Inc. | Media player | 2 |", prompt)
+        self.assertEqual(airules.parse_model_names(prompt)[0], [])                        # the prompt pasted back
+        names, problem = airules.parse_model_names('Sure:\n```json\n{"models": [{"identifier": "ACME9,1", "model": "Acme Box (2nd gen)",'
+                                                   ' "confidence": "high"}, {"identifier": "", "model": "x"}]}\n```')
+        self.assertEqual((names, problem), ([("ACME9,1", "Acme Box (2nd gen)", "high")], None))
+        names, problem = airules.parse_model_names('{"models": [{"identifier": "A1", "model": "One"}, {"identifier": "A2", "mod')
+        self.assertEqual(([n[0] for n in names], "stops partway" in problem), (["A1"], True))
+        self.assertIn("No model names", airules.parse_model_names("no idea")[1])
+
     def test_the_prompt_is_not_an_answer(self):
         prompt = airules.prompt(airules.rows([("ac:00:00:00:00:01", airules.evidence({"vendor": "Acme"}))]), {"Oven": {}})
         rules, _, problem, _ = airules.parse(prompt)

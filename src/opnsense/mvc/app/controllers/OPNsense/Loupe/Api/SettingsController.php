@@ -245,6 +245,30 @@ class SettingsController extends ApiMutableModelControllerBase
         return $out;
     }
 
+    /* Model names' AI prompt: the codes devices announce that have no name yet (maker and type only) */
+    public function aiModelsAction()
+    {
+        return $this->aiQuery(['aimodels']);
+    }
+
+    /* the AI's names for those codes, checked against what devices announce (via a file, as ai_preview) */
+    public function aiModelsPreviewAction()
+    {
+        $reply = (string)$this->request->getPost('reply', null, '');
+        if (trim($reply) === '' || strlen($reply) > 262144) {
+            return ['error' => gettext('Paste the AI\'s answer first.')];
+        }
+        $path = '/tmp/loupe-ai-' . bin2hex(random_bytes(8)) . '.json';
+        $json = json_encode(['reply' => $reply], JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($json === false || @file_put_contents($path, $json) === false) {
+            return ['error' => gettext('Could not keep the answer for checking.')];
+        }
+        @chmod($path, 0600);
+        $out = $this->aiQuery(['aimodelpreview', $path]);
+        @unlink($path);
+        return $out;
+    }
+
     /* the rules picked, saved as the user's own with source AI; validated as the rule dialog does */
     public function aiSaveAction()
     {

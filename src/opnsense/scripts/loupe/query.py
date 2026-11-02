@@ -896,7 +896,7 @@ def cmd_aipreview(path):
             os.unlink(path)
         except OSError:
             pass
-    suggested, unknown, problem, model_names = airules.parse(data.get("reply") or "")
+    suggested, unknown, problem, _models = airules.parse(data.get("reply") or "")
     try:
         with open(CONF) as f:
             user = json.load(f).get("rules", [])
@@ -914,16 +914,7 @@ def cmd_aipreview(path):
         r["for"] = [n for rid in r["devices"] for n in names.get(rid.upper(), ["?"])]
         r["others"] = [by_mac.get(m, m) for m in r["others"]]      # the devices it would change besides its own
         r["icon"] = rules().icon(r["type"])         # the type's icon now ('': a new type, the page offers a choice)
-    # names the AI gave for code-like models: identifier (what the devices announce) -> name, unless already so
-    announced = {d["mac"]: devid.model(d["info"], names={}) for d in devs}
-    proposals = {}
-    for rids, name in model_names:
-        macs = [m for rid in rids for m in ids.get(rid.upper(), [])]
-        for code in {announced.get(m) for m in macs} - {None, "", name}:
-            if devid._model_names.get(code) != name:
-                p = proposals.setdefault(code, {"identifier": code, "name": name, "for": [], "now": devid._model_names.get(code, "")})
-                p["for"] += [by_mac.get(m, m) for m in macs if announced.get(m) == code]
-    return {"problem": problem, "rules": checked, "models": list(proposals.values()),
+    return {"problem": problem, "rules": checked,
             "unknown": [{"for": [n for rid in u.get("devices") or [] for n in names.get(str(rid).upper(), ["?"])],
                          "note": u.get("note") or ""} for u in unknown]}
 
@@ -936,6 +927,60 @@ def span_arg(start, end):
     if not 0 < span[0] < span[1] <= time.time() + 3600:
         raise ValueError("bad time range")
     return span
+
+
+def model_codes(db, ov):
+    """The model codes devices announce (what they say, not the user's names): {code: [device dicts]}; codes with a
+    space are a readable name already (Lutron Processor), not a code."""
+    codes = collections.defaultdict(list)
+    for d in ai_devices(db, ov):
+        code = devid.model(d["info"], names={})
+        if code and " " not in code:
+            codes[code].append(d)
+    return codes
+
+
+def cmd_aimodels():
+    """Model names' AI prompt: the codes devices announce that have no name yet, with only maker and type."""
+    db, _, ov = load()
+    info = devices_info(db, ov)
+    rows = []
+    for code, devs in sorted(model_codes(db, ov).items()):
+        if code in devid._model_names:
+            continue
+        maker = next((info.get(d["mac"], {}).get("vendor") for d in devs if info.get(d["mac"], {}).get("vendor")), "")
+        rows.append((code, maker, devs[0]["type"], len(devs)))
+    return {"prompt": airules.models_prompt(rows) if rows else "", "codes": len(rows),
+            "named": len(devid._model_names)}
+
+
+def cmd_aimodelpreview(path):
+    """The AI's answer to the model-name prompt (a file the GUI wrote, removed once read): proposals for codes
+    devices announce, with the devices that have them and the name now."""
+    if not AI_REPLY.match(path or ""):
+        raise ValueError("expected a reply file")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    names, problem = airules.parse_model_names(data.get("reply") or "")
+    db, _, ov = load()
+    codes = model_codes(db, ov)
+    out, unknown = [], []
+    for code, name, confidence in names:
+        if code not in codes:
+            unknown.append(code)
+        elif devid._model_names.get(code) != name:
+            out.append({"identifier": code, "name": name, "confidence": confidence,
+                        "for": [d["name"] for d in codes[code]], "now": devid._model_names.get(code, "")})
+    if unknown:
+        note = f"Not announced by any device here, left out: {', '.join(unknown[:5])}{'…' if len(unknown) > 5 else ''}."
+        problem = f"{problem} {note}" if problem else note
+    return {"problem": problem if (out or problem) else None, "models": out}
 
 
 def main(argv):
@@ -966,6 +1011,10 @@ def main(argv):
             out = cmd_aitable(arg(2))
         elif cmd == "aipreview":
             out = cmd_aipreview(arg(2))
+        elif cmd == "aimodels":
+            out = cmd_aimodels()
+        elif cmd == "aimodelpreview":
+            out = cmd_aimodelpreview(arg(2))
         else:
             out = {"error": "unknown command"}
     except (IndexError, ValueError) as e:
