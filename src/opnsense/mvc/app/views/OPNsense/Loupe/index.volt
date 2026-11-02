@@ -178,6 +178,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* a device's traffic: each service, with its sites when opened (core's tree, as Unbound's overrides) */
         const TREE = {dataTree: true, dataTreeElementColumn: 'label',
+            dataTreeStartExpanded: (row) => !!row.getData()._open,      /* what a search found */
             dataTreeCollapseElement: '<i class="fa-regular fa-square-minus" style="margin-right: 6px"></i>',
             dataTreeExpandElement: '<i class="fa-regular fa-square-plus" style="margin-right: 6px"></i>'};
 

@@ -173,7 +173,35 @@ class ReportController extends ApiControllerBase
             return $this->searchRecordsetBase([]);
         }
         $data = $this->cached(['device', $id, $this->postHours()]);
-        return $this->grid($data['traffic'] ?? [], 'down', null, self::SEARCH['device']);
+        $rows = $data['traffic'] ?? [];
+        $words = preg_split('/\s+/', trim((string)$this->request->getPost('searchPhrase', null, '')), -1, PREG_SPLIT_NO_EMPTY);
+        if (empty($words)) {
+            return $this->grid($rows, 'down', null, self::SEARCH['device']);
+        }
+        /* a search shows what matched: a service whose name matches with all its sites, else only the matching
+           sites under their service, opened (every word must match, as the grids' own search) */
+        $match = function ($text) use ($words) {
+            foreach ($words as $w) {
+                if (mb_stripos($text, $w) === false) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $found = [];
+        foreach ($rows as $r) {
+            if (!$match($r['label'])) {
+                $r['_children'] = array_values(array_filter($r['_children'] ?? [], function ($c) use ($match, $r) {
+                    return $match($r['label'] . ' ' . $c['label']);
+                }));
+                if (empty($r['_children'])) {
+                    continue;
+                }
+            }
+            $r['_open'] = true;
+            $found[] = $r;
+        }
+        return $this->grid($found, 'down', []);     // filtered here: no row search on top
     }
 
     /* a service, site or address: any printable text except double quotes, backslash and backtick
