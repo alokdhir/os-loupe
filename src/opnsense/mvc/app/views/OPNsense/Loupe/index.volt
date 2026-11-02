@@ -154,22 +154,6 @@ POSSIBILITY OF SUCH DAMAGE.
             }
         };
 
-        /* a clear (×) button at the end of each grid's search field (any browser): shown while there is text;
-           the grid searches on keyup, so clearing is passed on as one */
-        function clearable(id) {
-            const $f = $('#' + id + '-search-field');
-            if (!$f.length || $f.next('.loupe-clear').length) return;
-            const $x = $('<span class="input-group-btn loupe-clear"><button class="btn btn-default" type="button" title="{{ lang._("Clear") }}"><i class="fa fa-times"></i></button></span>');
-            $f.after($x);
-            const sync = () => $x.toggle($f.val() !== '');
-            $f.on('input keyup', sync);
-            $x.find('button').on('click', function () {
-                $f.val('').trigger('keyup').focus();
-                sync();
-            });
-            sync();
-        }
-
         function grid(id, endpoint, extra, tabulatorOptions) {
             if (grids[id]) {
                 $('#' + id).bootgrid('reload');
@@ -190,7 +174,6 @@ POSSIBILITY OF SUCH DAMAGE.
                 },
                 tabulatorOptions: tabulatorOptions || {}
             });
-            clearable(id);
         }
 
         /* a device's traffic: each service, with its sites when opened (core's tree, as Unbound's overrides) */
@@ -314,7 +297,6 @@ POSSIBILITY OF SUCH DAMAGE.
                     add: '/api/loupe/settings/add_service/',
                     del: '/api/loupe/settings/del_service/'
                 });
-                clearable('{{ formGridServices['table_id'] }}');
             },
             rules: function () {
                 $('#{{ formGridRules['table_id'] }}').UIBootgrid({
@@ -324,7 +306,6 @@ POSSIBILITY OF SUCH DAMAGE.
                     add: '/api/loupe/settings/add_rule/',
                     del: '/api/loupe/settings/del_rule/'
                 });
-                clearable('{{ formGridRules['table_id'] }}');
             },
             overrides: function () {
                 $('#{{ formGridOverrides['table_id'] }}').UIBootgrid({
@@ -339,7 +320,6 @@ POSSIBILITY OF SUCH DAMAGE.
                             : '<i class="fa fa-fw"></i> ') + esc(row.type)
                     }}
                 });
-                clearable('{{ formGridOverrides['table_id'] }}');
             }
         };
         /* Custom | Built-in on Service names and Device rules: the shipped rules, read-only */
@@ -361,7 +341,6 @@ POSSIBILITY OF SUCH DAMAGE.
                     search: builtin[id],
                     options: {selection: false, multiSelect: false, formatters: formatters}
                 });
-                clearable(id);
             }
         });
 
