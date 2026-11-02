@@ -150,8 +150,52 @@ def icon_for(o, dtype, picked):
     return o.get("icon") or picked.get(loose(dtype or "")) or rules().icon(dtype)
 
 
+def device_groups(db):
+    """{mac: sorted MACs of its device} for MACs loupd linked as one device (lib/store.py device_links); MACs
+    on their own aren't in it."""
+    parent = {}
+
+    def root(m):
+        while parent.setdefault(m, m) != m:
+            parent[m] = parent[parent[m]]
+            m = parent[m]
+        return m
+    try:
+        for a, b in db.execute("SELECT a, b FROM device_links"):
+            parent[root(a)] = root(b)
+    except sqlite3.OperationalError:        # loupd hasn't created the table yet (just updated)
+        return {}
+    members = collections.defaultdict(list)
+    for m in parent:
+        members[root(m)].append(m)
+    return {m: sorted(ms) for ms in members.values() for m in ms}
+
+
+# how much a type's evidence says, for picking a linked device's type from its MACs (weakest last)
+WEAK_SOURCES = ("vendor ", "private MAC", "dhcp fingerprint")
+
+
+def merge_group(devs):
+    """One device from the records of its MACs: the address and MAC it used last, your name and type set on
+    any of them, else the best-identified MAC's type and the most recent name."""
+    devs = sorted(devs, key=lambda d: -(d["last_seen"] or 0))
+    main = devs[0]
+    typed = ([d for d in devs if d["type_source"] == "set by you"]
+             or [d for d in devs if d["type"] and not d["type_source"].startswith(WEAK_SOURCES)]
+             or [d for d in devs if d["type"]] or [main])[0]
+    named = next((d for d in devs if d["custom"] and d["name"]), None) or next((d for d in devs if d["name"]), main)
+    return {**main, "name": named["name"],
+            **{k: typed[k] for k in ("type", "type_source", "vendor", "vendor_note", "icon", "icon_set", "model")},
+            "first_seen": min(d["first_seen"] or 0 for d in devs), "custom": any(d["custom"] for d in devs),
+            "macs": [d["mac"] for d in devs]}
+
+
 def devices_info(db, overrides, macs=None):
-    """Everything known about each device, with overrides applied; only `macs` (a set) if given."""
+    """Everything known about each device, with overrides applied; only `macs` (a set) if given. MACs linked as
+    one device all map to the same merged record, whose "mac" is the one it used last and "macs" all of them."""
+    groups = device_groups(db)
+    if macs is not None:
+        macs = set(macs) | {m for mac in macs for m in groups.get(mac, ())}
     out = {}
     picked = {}                         # type -> icon picked on some device of that type
     for o in overrides.values():
@@ -178,6 +222,10 @@ def devices_info(db, overrides, macs=None):
                              "type": o.get("type") or "",
                              "type_source": "set by you" if o.get("type") else "", "model": "", "first_seen": 0, "last_seen": 0,
                              "custom": True})
+    for mac in [m for m in out if m in groups and m == groups[m][0]]:       # each group once
+        merged = merge_group([out[m] for m in groups[mac] if m in out])
+        for m in merged["macs"]:
+            out[m] = merged
     return out
 
 
@@ -225,14 +273,14 @@ def cmd_devices(hours, want=None):
         net = nets.of(ip)
         if want and net not in want:
             continue
-        key = mac or ip
+        d = info.get(mac, {})
+        key = d.get("mac") or mac or ip           # MACs linked as one device: one row
         on[key].add(net)
         r = rows.get(key)
         if r is None:
-            d = info.get(mac, {})
             r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model")},
                              "custom": d.get("custom", False),
-                             "mac": mac, "ip": ip, "down": 0, "up": 0, "conns": 0, "last": 0}
+                             "mac": d.get("mac") or mac, "ip": ip, "down": 0, "up": 0, "conns": 0, "last": 0}
         r["down"] += down
         r["up"] += up
         r["conns"] += conns
@@ -245,7 +293,8 @@ def cmd_devices(hours, want=None):
     # its own NIC's MAC on the network)
     start = period(hours)[1]
     busy = {r["ip"] for r in rows.values()} | set(rows)
-    for mac, d in info.items():
+    for d in {id(d): d for d in info.values()}.values():         # a linked device once
+        mac = d["mac"]
         if mac in rows or d["ip"] in busy or (d.get("last_seen") or 0) < start:
             continue
         net = nets.of(d["ip"]) if d["ip"] else None
@@ -465,6 +514,11 @@ def cmd_device(arg, hours):
         dev = info.get(val)
     else:
         dev = next((d for d in info.values() if d["ip"] == val), None)
+    # its traffic: by address, or by MAC - all of a linked device's MACs
+    if col == "mac":
+        who, whom = "mac IN (SELECT value FROM json_each(?))", json.dumps((dev or {}).get("macs") or [val])
+    else:
+        who, whom = "ip = ?", val
     if dev and dev["mac"]:              # the name it sent in DHCP, when it has a domain (a work laptop's says whose)
         row = db.execute("SELECT info FROM devices WHERE mac = ?", (dev["mac"],)).fetchone()
         fqdn = (json.loads(row[0] or "{}").get("dhcp_fqdn") or "").rstrip(".") if row else ""
@@ -510,7 +564,7 @@ def cmd_device(arg, hours):
     if stored:
         for day, ip, s, site_name, named, inferred, up, down, conns, first, last, servers, ports in db.execute(
                 f"SELECT day, ip, service, site, named, inferred, up, down, conns, first, last, servers, ports FROM sites_1d "
-                f"WHERE {col} = ? AND {DAYS_IN}", (val, json.dumps([d for d, _ in stored]))):
+                f"WHERE {who} AND {DAYS_IN}", (whom, json.dumps([d for d, _ in stored]))):
             addresses.add(ip)
             count(ip, s, site_name, bool(inferred), up, down, conns, first, last,
                   servers.split() if named else [site_name], json.loads(ports) if ports else {})
@@ -522,14 +576,14 @@ def cmd_device(arg, hours):
             for day, cut in stored:
                 for bucket, down, up in db.execute(
                         f"SELECT bucket, sum(down), sum(up) FROM {table} WHERE ip IN (SELECT value FROM json_each(?)) "
-                        f"AND bucket >= ? AND bucket < ? AND {col} = ? GROUP BY bucket",
-                        (json.dumps(sorted(addresses)), day, cut, val)):
+                        f"AND bucket >= ? AND bucket < ? AND {who} GROUP BY bucket",
+                        (json.dumps(sorted(addresses)), day, cut, whom)):
                     tl = timeline[slot(bucket)]
                     tl[0] += down
                     tl[1] += up
     for day, a, b in live:       # each day's traffic named with that day's evidence
         rows = db.execute(f"SELECT bucket, last, ip, mac, name, server, port, proto, inbound, up, down, conns FROM {table} "
-                          f"WHERE {col} = ? AND bucket >= ? AND bucket < ?", (val, a, b)).fetchall()
+                          f"WHERE {who} AND bucket >= ? AND bucket < ?", (whom, a, b)).fetchall()
         if not rows:
             continue
         keys = tuple(sorted({r[2] for r in rows} | {r[3] for r in rows if r[3]}))
@@ -646,7 +700,7 @@ def cmd_service(text, hours, want=None, chart=False):
                     spans[key] = (times + [(first, last)], s, was or bool(inferred))
             continue
         name = site if named else ""
-        r = rows[(mac or ip, name or (s and "\0" + s) or site)]     # nameless traffic: one row per service
+        r = rows[((info.get(mac) or {}).get("mac") or mac or ip, name or (s and "\0" + s) or site)]   # nameless: per service
         if r["first"] is None or last >= r["last"]:     # the address, and service, it had most recently
             r.update(ip=ip, mac=mac, name=name, service=s)
         r["inferred"] = r.get("inferred", True) and bool(inferred)
@@ -741,7 +795,8 @@ def cmd_identities(arg):
         info = devices_info(db, overrides, macs)
     finally:
         db.close()
-    return {"version": 1, "devices": {mac: {k: d.get(k) or "" for k in IDENTITY_FIELDS} for mac, d in info.items()}}
+    return {"version": 1, "devices": {mac: {k: d.get(k) or "" for k in IDENTITY_FIELDS} for mac, d in info.items()
+                                      if mac in macs}}       # not the other MACs of a linked device
 
 
 def hours_arg(v):

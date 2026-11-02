@@ -144,6 +144,35 @@ class TestLateHello(unittest.TestCase):
             s.forget_devices({own})
             self.assertEqual([m for m, in s.db.execute("SELECT mac FROM devices")], ["02:00:00:00:00:02"])
 
+    def test_links(self):
+        """One device, several MACs: an address both use for SHARED_ADDRESS, or a Bonjour host name both claim
+        with their own addresses at the same time. A name announced with another device's address is relayed."""
+        import collections
+        import loupd
+        lp = self.lp
+        lp.devices, lp.claims, lp.shared, lp.links = collections.defaultdict(dict), {}, {}, {}
+        bridge, nic, other, relay = "02:00:00:00:00:10", "ac:00:00:00:00:10", "02:00:00:00:00:20", "02:00:00:00:00:30"
+
+        def mdns(mac, client, hosts, ts):
+            lp.emit({"ev": "mdns", "ts": ts, "client": client, "mac": mac, "hosts": hosts, "services": [], "models": [],
+                     "names": [], "categories": []})
+        lp.ip_mac = {"10.9.1.10": bridge}
+        mdns(nic, "10.9.1.10", {}, 1000)
+        self.assertEqual(lp.links, {})                              # not yet: could be an address handed over
+        mdns(nic, "10.9.1.10", {}, 1000 + loupd.SHARED_ADDRESS)
+        self.assertEqual(lp.links, {(nic, bridge) if nic < bridge else (bridge, nic):
+                                    ("same address 10.9.1.10", 1000 + loupd.SHARED_ADDRESS)})
+        lp.links = {}
+        mdns(other, "10.9.1.20", {"desk.local": ["10.9.1.20"]}, 5000)
+        mdns(relay, "10.9.1.30", {"desk.local": ["10.9.1.20"], "lock.local": ["fd00::5"]}, 5010)    # relayed
+        self.assertEqual(lp.links, {})
+        mdns(nic, "fe80::1", {"desk.local": ["fe80::1", "10.9.1.21"]}, 5030)
+        self.assertEqual(list(lp.links), [(other, nic)])
+        lp.links = {}
+        mdns(relay, "10.9.1.30", {"later.local": ["10.9.1.30"]}, 5000)
+        mdns(other, "10.9.1.20", {"later.local": ["10.9.1.20"]}, 5000 + loupd.SAME_CLAIM + 1)    # renamed hand-over
+        self.assertEqual(lp.links, {})
+
     def test_no_hello(self):
         self.lp.count(110, [pfstate.Delta(state(), 10, 20, 1, 1, True)])
         self.lp.count(120, [])

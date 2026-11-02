@@ -434,6 +434,26 @@ class TestDailySummary(unittest.TestCase):
         self.assertIn(self.today, [d for d, in db.execute("SELECT day FROM summary_days")])
         self.assertEqual(db.execute("SELECT count(*) FROM flows_1h WHERE bucket < ?", (self.today,)).fetchone(), (0,))
 
+    def test_linked_macs_are_one_device(self):
+        """MACs loupd linked (a bridge and its NIC, wired and Wi-Fi) are one device in every report."""
+        a, b = "02:00:00:00:00:61", "02:00:00:00:00:62"
+        before = {r["mac"]: r for r in self.query.cmd_devices(72)["rows"]}
+        alone = {m: self.query.cmd_device(m, 72)["traffic"] for m in (a, b)}
+        self.store.link_devices([(a, b, "same address 10.9.2.61", self.now)])
+        self.store.write({}, {}, {b: {"ts": self.now + 5}}, self.now + 5)      # b used last: the device's MAC
+        rows = self.query.cmd_devices(72)["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["mac"], b)
+        self.assertEqual(rows[0]["up"] + rows[0]["down"], sum(before[m]["up"] + before[m]["down"] for m in (a, b)))
+        for m in (a, b):                          # the device page from either MAC: all its traffic
+            page = self.query.cmd_device(m, 72)
+            self.assertEqual(page["device"]["macs"], [b, a])
+            self.assertEqual(sum(r["up"] + r["down"] for r in page["traffic"]),
+                             sum(r["up"] + r["down"] for m2 in (a, b) for r in alone[m2]))
+        self.assertEqual(set(self.query.cmd_identities(a)["devices"]), {a})       # only what was asked
+        netflix = self.query.cmd_service("Netflix", 72)["traffic"]
+        self.assertEqual(len({r["device"] for r in netflix}), 1)
+
     def test_seen_without_traffic(self):
         """A device on the network but silent is listed with no traffic in every period it was seen in."""
         c, d = "02:00:00:00:00:63", "02:00:00:00:00:64"

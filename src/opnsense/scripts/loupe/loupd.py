@@ -44,6 +44,8 @@ from lib.report import local_day  # noqa: E402
 
 
 CATCHUP_BUDGET = 5.0        # seconds of summary work per poll while days wait to be built
+SHARED_ADDRESS = 1800       # two MACs using one IPv4 address this long are one host (not an address handed over)
+SAME_CLAIM = 120            # two MACs announcing one Bonjour host name this close together are one host
 MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
 
 
@@ -66,6 +68,9 @@ class Loupe:
         self.oui = devid.load_oui()
         self.ip_mac = {}
         self.own_macs = set()
+        self.claims = {}            # Bonjour host name -> {mac: when it last announced it with its own address}
+        self.shared = {}            # (ip, mac, mac) -> [first, last] seen with the address at the same time
+        self.links = {}             # (mac, mac) -> (reason, when): one device, written at the next flush
         self.refresh_own_macs()
         self.store.forget_devices(self.own_macs)       # recorded before loupd knew to skip them
         self.flows = {}
@@ -99,6 +104,7 @@ class Loupe:
                 return  # LAN<->LAN TLS (AirPlay, lockdownd, ...) carries no site
             self.names.tls(ev, "sni" if kind == "tls" else "quic")
             if ev["mac"] not in self.own_macs:
+                self.same_address(ev["client"], ev["mac"], ev["ts"])
                 self.ip_mac[ev["client"]] = ev["mac"]   # the frame's own source: who has the address now
             if ev.get("sni"):
                 self.saw_site(ev["ts"], ev["client"], ev["sni"], kind if kind == "quic" else "sni")
@@ -122,6 +128,8 @@ class Loupe:
             d["ts"] = ev["ts"]
             if ":" not in ev["client"]:
                 d["ip"] = ev["client"]    # mDNS often comes from the IPv6 link-local address
+                self.same_address(ev["client"], ev["mac"], ev["ts"])
+            self.claimed(ev)
             info = d.setdefault("info", {})
             seen = info.setdefault("seen", {})          # when each item was last announced (devid.current_mdns)
             hosts = [h for h in ev.get("hosts", {}) if h.endswith(".local")]
@@ -132,6 +140,43 @@ class Loupe:
                     info[f"mdns_{k}"] = sorted(set(info.get(f"mdns_{k}", [])) | set(items))
                     for item in items:
                         seen[devid.seen_key(k, item)] = int(ev["ts"])
+
+    # ---- one device, several MACs (lib/store.py device_links) -------------------------
+    def link(self, a, b, reason, ts):
+        self.links[(min(a, b), max(a, b))] = (reason, ts)
+
+    def same_address(self, ip, mac, ts):
+        """A frame from `mac` with an IPv4 address the neighbour table gives another MAC: both have it now. Kept
+        up for SHARED_ADDRESS, they are one host (a bridge and its NIC, a VM host); an address handed to another
+        device moves in the table within minutes."""
+        other = self.ip_mac.get(ip)
+        if ":" in ip or not other or other == mac or other in self.own_macs:
+            return
+        k = (ip, min(mac, other), max(mac, other))
+        span = self.shared.setdefault(k, [ts, ts])
+        span[1] = max(span[1], ts)
+        if span[1] - span[0] >= SHARED_ADDRESS:
+            self.link(mac, other, f"same address {ip}", ts)
+
+    def claimed(self, ev):
+        """Bonjour host names are unique on a network (a second claimant renames itself), so two MACs announcing
+        one name with their own addresses at the same time are one host on two interfaces. A name announced with
+        someone else's address is relayed (a Thread border router announcing its accessories): not a claim."""
+        mac, ts = ev["mac"], ev["ts"]
+        for host, addrs in (ev.get("hosts") or {}).items():
+            if not host.endswith(".local") or ev["client"] not in addrs:
+                continue
+            by = self.claims.setdefault(host, {})
+            for other, t in by.items():
+                if other != mac and abs(ts - t) <= SAME_CLAIM:
+                    self.link(mac, other, f"both announced {host}", ts)
+            by[mac] = ts
+
+    def expire_links(self, now):
+        for host in [h for h, by in self.claims.items() if max(by.values()) < now - SAME_CLAIM]:
+            del self.claims[host]
+        for k in [k for k, (_first, last) in self.shared.items() if last < now - 3600]:
+            del self.shared[k]
 
     def saw_site(self, ts, ip, name, source):
         k = (local_day(ts), ip, name, source)
@@ -279,8 +324,12 @@ class Loupe:
                 v[3] = self.ip_mac.get(ip, "")
         devices = {m: d for m, d in self.devices.items() if "ts" in d}
         self.names.expire(self.live, now)      # also while the database fails: it must not grow
+        self.expire_links(now)
         try:
             self.store.write(self.flows, self.sites_seen, devices, now)
+            if self.links:
+                self.store.link_devices([(a, b, reason, ts) for (a, b), (reason, ts) in self.links.items()])
+                self.links = {}
         except Exception:
             if len(self.flows) + len(self.sites_seen) > MAX_BUFFERED:     # the database has been failing for a while
                 syslog.syslog(syslog.LOG_ERR, f"loupe: dropping {len(self.flows)} unwritten traffic rows")

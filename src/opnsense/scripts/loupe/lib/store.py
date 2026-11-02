@@ -166,6 +166,16 @@ CREATE TABLE IF NOT EXISTS summary_days (
     map TEXT NOT NULL,              -- fingerprint of the service map it was built with
     built INTEGER NOT NULL          -- when
 );
+-- MACs that are one device (a host's bridge and its NIC, a box's wired and Wi-Fi ports), as loupd saw it: kept
+-- when one of them goes away, so the reports keep treating them as one (query.py groups them)
+CREATE TABLE IF NOT EXISTS device_links (
+    a TEXT NOT NULL,                -- the two MACs, a < b
+    b TEXT NOT NULL,
+    reason TEXT NOT NULL,           -- what showed it, e.g. "same address 192.0.2.10"
+    first INTEGER NOT NULL,
+    last INTEGER NOT NULL,
+    PRIMARY KEY (a, b)
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
@@ -309,6 +319,13 @@ class Store:
                 by_ip.setdefault(ip, set()).add(name)
         return [(mac, ip, hn, json.loads(info), sorted(by_mac.get(mac, set()) | by_ip.get(ip, set())))
                 for mac, ip, hn, info in self.db.execute("SELECT mac, ip, hostname, info FROM devices")]
+
+    def link_devices(self, links):
+        """links: [(mac, mac, reason, ts)]: these MACs are one device."""
+        self.db.executemany(
+            "INSERT INTO device_links (a, b, reason, first, last) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT (a, b) DO UPDATE SET last = max(last, excluded.last)",
+            [(min(x, y), max(x, y), reason, int(ts), int(ts)) for x, y, reason, ts in links if x != y])
 
     def forget_devices(self, macs):
         """Remove devices (the router's own MACs, recorded before loupd skipped them)."""
