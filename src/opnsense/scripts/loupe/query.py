@@ -214,7 +214,8 @@ def service_rows(db, svc, hours):
 
 
 def cmd_devices(hours, want=None):
-    """Devices with traffic in the period, biggest first; only traffic on the networks in `want` if given."""
+    """Devices with traffic in the period, biggest first, then those seen in it without traffic; only traffic
+    on the networks in `want` if given."""
     db, svc, ov = load()
     info = devices_info(db, ov)
     rows = {}
@@ -238,13 +239,25 @@ def cmd_devices(hours, want=None):
         if last > r["last"]:
             r["last"], r["ip"] = last, ip       # the address it used most recently
         tops[key][service or "Other"] += up + down
+    # devices seen in the period without traffic in it are listed too, with none: a device that is on the network
+    # but silent (stuck, or idle) is worth seeing, and "last seen 2 minutes ago" mustn't hide from the last hour
+    start = period(hours)[1]
+    for mac, d in info.items():
+        if mac in rows or d["ip"] in rows or (d.get("last_seen") or 0) < start:
+            continue
+        net = nets.of(d["ip"]) if d["ip"] else None
+        if want and net not in want:
+            continue
+        on[mac].add(net)
+        rows[mac] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model")},
+                     "custom": d.get("custom", False), "mac": mac, "ip": d["ip"], "down": 0, "up": 0, "conns": 0, "last": 0}
     for key, r in rows.items():
         r["top"] = [s for s, _ in tops[key].most_common(3)]     # "Other" too: an unnamed stream can be the biggest
         r["networks"] = nets.sort(on[key])
         # traffic is filed under its 5-minute bucket; loupd also stamps each device it saw (every minute)
         r["last"] = max(r["last"], (info.get(r["mac"]) or {}).get("last_seen") or 0)
         if not r["name"]:
-            r["name"] = r["ip"]
+            r["name"] = r["ip"] or r["mac"]
     return {"hours": hours, "networks": nets.shown(), "rows": sorted(rows.values(), key=lambda r: -(r["down"] + r["up"]))}
 
 

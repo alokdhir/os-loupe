@@ -434,6 +434,22 @@ class TestDailySummary(unittest.TestCase):
         self.assertIn(self.today, [d for d, in db.execute("SELECT day FROM summary_days")])
         self.assertEqual(db.execute("SELECT count(*) FROM flows_1h WHERE bucket < ?", (self.today,)).fetchone(), (0,))
 
+    def test_seen_without_traffic(self):
+        """A device on the network but silent is listed with no traffic in every period it was seen in."""
+        c, d = "02:00:00:00:00:63", "02:00:00:00:00:64"
+        self.store.write({}, {}, {c: {"ip": "10.9.2.63", "ts": self.now - 120},
+                                  d: {"ip": "10.9.2.64", "ts": self.now - 5 * 86400}}, self.now)
+        for hours in (1, 3, 24, 72):
+            rows = self.query.cmd_devices(hours)["rows"]
+            idle = next(r for r in rows if r["mac"] == c)
+            self.assertEqual((idle["up"], idle["down"], idle["top"]), (0, 0, []))
+            self.assertEqual(rows[-1]["mac"], c, "after the devices with traffic")
+            self.assertNotIn(d, [r["mac"] for r in rows])
+        self.assertIn(d, [r["mac"] for r in self.query.cmd_devices(168)["rows"]])
+        e = "02:00:00:00:00:65"                         # seen without an address (a private MAC): named by its MAC
+        self.store.write({}, {}, {e: {"ip": None, "ts": self.now - 60}}, self.now)
+        self.assertEqual(next(r for r in self.query.cmd_devices(1)["rows"] if r["mac"] == e)["name"], e)
+
     def test_network_filter(self):
         """Traffic is filed under the network its address is in; a filter keeps those networks' traffic only."""
         orig = self.query.Networks.__init__
