@@ -498,3 +498,48 @@ def static_hosts():
         for ip, name in found.items():
             out.setdefault(ip, name)
     return out
+
+
+# ---- one device, several MACs: an interface that replaced another (loupd links them, lib/store.py device_links) --
+RELAYS_OVER = 5         # a MAC announcing more host names than this relays others' records (a Thread border router)
+TOGETHER_DAYS = 2       # two MACs with traffic on more days than this together are two devices
+
+
+def _sibling(a, b):
+    """How two MACs look related: same maker block, a few addresses apart, or the locally administered twin."""
+    x, y = int(a.replace(":", ""), 16), int(b.replace(":", ""), 16)
+    if abs((x ^ (0x02 << 40)) - y) <= 16:
+        return "locally administered twin"
+    if a[:8] == b[:8] and not (is_private(a) or is_private(b)):
+        return "adjacent MACs" if abs(x - y) <= 16 else "same maker"
+    return None
+
+
+def replaced_interfaces(devices, active_days):
+    """Pairs of MACs that are one device on two interfaces used at different times (an Apple TV moved from Wi-Fi to
+    Ethernet, a Mac's dock and its Wi-Fi, a phone's new private address): [(mac, mac, reason)].
+
+    `devices`: {mac: {"name": its DHCP host name, "type": its type, "hosts": Bonjour host names it announced}};
+    `active_days(mac)`: the days it had traffic. A pair shares its own name - one only these two MACs ever used, so
+    not a default name (eero, iphone) - is related (same maker, adjacent, the locally administered twin, or a private
+    address with the same type), and was hardly ever active on the same days."""
+    by_name = {}
+    for mac, d in devices.items():
+        hosts = {h.removesuffix(".local").lower() for h in d.get("hosts") or () if h.endswith(".local")}
+        hosts = {h for h in hosts if not ID_NAME.match(h)}
+        names = {(d.get("name") or "").lower()} | (hosts if len(hosts) <= RELAYS_OVER else set())
+        for n in names:
+            if n and n not in PLACEHOLDERS and not ID_NAME.match(n):
+                by_name.setdefault(n, set()).add(mac)
+    out = []
+    for name, macs in sorted(by_name.items()):
+        if len(macs) != 2:
+            continue
+        a, b = sorted(macs)
+        how = _sibling(a, b)
+        if not how and (is_private(a) or is_private(b)) and devices[a].get("type") \
+                and devices[a].get("type") == devices[b].get("type"):
+            how = "private address, same type"
+        if how and len(active_days(a) & active_days(b)) <= TOGETHER_DAYS:
+            out.append((a, b, f"both named {name}, {how}, not active together"))
+    return out

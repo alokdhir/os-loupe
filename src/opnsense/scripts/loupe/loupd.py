@@ -29,6 +29,7 @@ usage: loupd.py [--config /usr/local/etc/loupe.json] [--db PATH] [--poll S] [--f
 """
 import argparse
 import collections
+import functools
 import json
 import signal
 import ssl
@@ -238,13 +239,21 @@ class Loupe:
         """Store what loupe detects. Names/types set in the GUI are layered on at report time
         (query.py), so editing or resetting them shows up immediately."""
         leases, hosts = devid.leases(), devid.static_hosts()
-        rows = []
+        rows, known = [], {}
         for mac, ip, hostname, info, seen in self.store.devices_with_names(now - 7 * 86400):
+            if mac in self.own_macs:
+                continue
+            known[mac] = {"name": hostname, "hosts": info.get("mdns_hosts", [])}
             info = devid.current_mdns(info)     # what the device announces now outranks older announcements
             name = leases.get(mac) or hosts.get(ip)
             t, src, ven = devid.classify(mac, name or hostname, info, seen, self.oui)
+            known[mac]["type"] = t
             rows.append((devid.display_name(name, hostname, devid.mdns_name(info)), ven, t, src, devid.model(info), mac))
         self.store.set_device_types(rows)
+        # an interface that replaced another (wired and Wi-Fi at different times, a new private address)
+        days = functools.lru_cache(maxsize=None)(self.store.active_days)
+        for a, b, reason in devid.replaced_interfaces(known, days):
+            self.link(a, b, reason, now)
 
     def summarize(self, now, budget=1.0):
         """Keep the summaries current: today every 10 minutes, a day again once it has ended, and every day after

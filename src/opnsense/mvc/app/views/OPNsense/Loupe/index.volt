@@ -254,6 +254,9 @@ POSSIBILITY OF SUCH DAMAGE.
                 $('#loupe-detail-title').html((d.icon ? '<i class="' + esc(d.icon) + ' fa-fw text-muted"></i> ' : '')
                     + esc(d.name || d.ip || id) + editButton(d)
                     + ' <small class="text-muted">' + esc([d.model, d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
+                    /* one device seen with several MACs (a bridge and its NIC, wired and Wi-Fi): the others too */
+                    + ((d.macs || []).length > 1 ? ' <span title="{{ lang._('Loupe saw these MACs as one device') }}">('
+                        + esc('{{ lang._('also') }} ' + d.macs.filter(m => m !== d.mac).join(', ')) + ')</span>' : '')
                     + ' ' + (data.networks || []).map(n => pill(n.id)).join('') + '</small>');
                 drawChart('loupe-chart', data);
             });

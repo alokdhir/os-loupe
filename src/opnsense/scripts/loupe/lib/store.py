@@ -327,6 +327,10 @@ class Store:
             "ON CONFLICT (a, b) DO UPDATE SET last = max(last, excluded.last)",
             [(min(x, y), max(x, y), reason, int(ts), int(ts)) for x, y, reason, ts in links if x != y])
 
+    def active_days(self, mac):
+        """The days a MAC had traffic (the daily site summary, by its mac index)."""
+        return {d for (d,) in self.db.execute("SELECT DISTINCT day FROM sites_1d WHERE mac = ?", (mac,))}
+
     def forget_devices(self, macs):
         """Remove devices (the router's own MACs, recorded before loupd skipped them)."""
         if macs:

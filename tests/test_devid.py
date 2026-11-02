@@ -184,6 +184,45 @@ class TestCategories(unittest.TestCase):
         self.assertEqual(devid.categories({"mdns_categories": sorted(m["categories"])}), {"hap:9", "matter:0x007b"})
 
 
+class TestReplacedInterfaces(unittest.TestCase):
+    """One device on two interfaces used at different times: linked by its own name and related MACs."""
+
+    def pairs(self, devices, together=()):
+        days = {m: {1, 2, 3} for m in devices}
+        for m in together:
+            days[m] = {1, 2, 3, 4, 5}
+        return [(a, b) for a, b, _ in devid.replaced_interfaces(devices, days.get)]
+
+    def test_adjacent_and_twin(self):
+        self.assertEqual(self.pairs({"ac:00:00:00:00:10": {"name": "Den"}, "ac:00:00:00:00:12": {"name": "Den"}}),
+                         [])                                        # active on the same days: two devices
+        days = {"ac:00:00:00:00:10": {1, 2}, "ac:00:00:00:00:12": {5, 6}}.get
+        self.assertEqual(len(devid.replaced_interfaces({"ac:00:00:00:00:10": {"name": "Den"},
+                                                        "ac:00:00:00:00:12": {"name": "Den"}}, days)), 1)
+        days = {"ac:00:00:00:00:10": {1}, "ae:00:00:00:00:11": {2}}.get
+        reason = devid.replaced_interfaces({"ac:00:00:00:00:10": {"hosts": ["den.local"]},
+                                            "ae:00:00:00:00:11": {"hosts": ["den.local"]}}, days)[0][2]
+        self.assertIn("locally administered twin", reason)
+
+    def test_private_needs_same_type(self):
+        days = {"ac:00:00:00:00:10": {1}, "02:00:00:00:00:20": {2}, "06:00:00:00:00:30": {3}}.get
+        devs = {"ac:00:00:00:00:10": {"name": "laptop", "type": "Mac"}, "02:00:00:00:00:20": {"name": "laptop", "type": "Mac"}}
+        self.assertEqual(len(devid.replaced_interfaces(devs, days)), 1)
+        devs["02:00:00:00:00:20"]["type"] = "iPhone"
+        self.assertEqual(devid.replaced_interfaces(devs, days), [])
+
+    def test_shared_and_relayed_names(self):
+        days = {"ac:00:00:00:00:01": {1}, "ac:00:00:00:00:02": {2}, "ac:00:00:00:00:03": {3}}.get
+        three = {m: {"name": "eero"} for m in ("ac:00:00:00:00:01", "ac:00:00:00:00:02", "ac:00:00:00:00:03")}
+        self.assertEqual(devid.replaced_interfaces(three, days), [])        # a default name: three devices
+        relay = {"ac:00:00:00:00:01": {"name": "Den"}, "ac:00:00:00:00:02": {"name": "Den"},
+                 "02:00:00:00:00:09": {"hosts": [f"h{i}.local" for i in range(8)] + ["den.local"]}}
+        days = {"ac:00:00:00:00:01": {1}, "ac:00:00:00:00:02": {2}, "02:00:00:00:00:09": {3}}.get
+        self.assertEqual(len(devid.replaced_interfaces(relay, days)), 1)    # the relay's copy of the name doesn't count
+        self.assertEqual(devid.replaced_interfaces({"ac:00:00:00:00:01": {"name": "Mac"},
+                                                    "ac:00:00:00:00:02": {"name": "Mac"}}, days), [])   # placeholder
+
+
 class TestMdnsName(unittest.TestCase):
     def tearDown(self):
         devid.set_user_rules([])
