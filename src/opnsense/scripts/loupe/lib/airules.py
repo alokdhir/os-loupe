@@ -133,7 +133,7 @@ def prompt(table_rows, types):
     reuse and the answer format (a made-up example), then the table."""
     cell = lambda v: (", ".join(v) if isinstance(v, list) else str(v)).replace("|", "/") or "-"     # noqa: E731
     lines = [f"| {rid} | {len(macs)} | " + " | ".join(cell(ev[c]) for c in COLUMNS) + " |" for rid, macs, ev in table_rows]
-    return f"""You are helping Loupe, a home-network monitor on an OPNsense router, identify devices it could not identify, or only identified generically (from the maker of their network chip). Each row below is one device, or a group of identical devices ("count"). Use web search where it helps: model numbers, cloud domains, Bonjour service names, MAC vendors.
+    return f"""{PROMPT_START}, a home-network monitor on an OPNsense router, identify devices it could not identify, or only identified generically (from the maker of their network chip). Each row below is one device, or a group of identical devices ("count"). Use web search where it helps: model numbers, cloud domains, Bonjour service names, MAC vendors.
 
 For each row, work out what the device is: its category (what kind of thing it is, e.g. "Garage door opener", "Smart scale", "Oven"), its brand, and its model if the evidence shows one. Then write RULES that recognise this device and others like it in the future.
 
@@ -199,6 +199,10 @@ Reply with ONE JSON object in a single ```json code block. No comments inside th
 """ + "\n".join(lines) + "\n"
 
 
+NO_RULES = "No rules in what was pasted. Paste the AI's whole answer: the rules come as a JSON block."
+PROMPT_START = "You are helping Loupe"      # how the prompt begins: pasted back by mistake, it isn't an answer
+
+
 # ---- the reply ----------------------------------------------------------------------------------------------------
 _ESCAPE = re.compile(r'\\(.)', re.S)       # a backslash and the character after it, pair by pair
 
@@ -243,10 +247,12 @@ def parse(text):
     invalid escapes tolerated; a reply cut off keeps its complete rules. problem is None, or what went wrong."""
     # control characters other than line breaks and tabs: copied along from some chat pages, never meant
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text or "")
+    if PROMPT_START in text and "## Response format" in text:     # its example would read as a rule
+        return [], [], "That's the prompt. Paste it into the AI chat, then paste the AI's answer here."
     block = re.search(r"```(?:json)?\s*(\{.*?)```", text, re.S)
     body = block.group(1) if block else text[text.find("{"):] if "{" in text else ""
     if not body:
-        return [], [], "no JSON in the reply"
+        return [], [], NO_RULES
     try:
         data = _loads(body[:body.rfind("}") + 1] if block is None else body)
         if not isinstance(data, dict):
@@ -259,10 +265,16 @@ def parse(text):
         problem = (f"The answer stops partway, in the middle of a rule: kept the {kept} complete rules. Copy it again "
                    "once the AI has finished writing, or ask it to continue and paste the rest." if depth > 0 else
                    f"The answer isn't valid JSON: kept the {kept} rules that could be read.")
-    rules = [r for r in data.get("rules") or [] if isinstance(r, dict)]
-    unknown = [u for u in data.get("unknown") or [] if isinstance(u, dict)]
-    if not rules and not unknown:
-        return [], [], problem or "the reply has no rules"
+    listed = data.get("rules") if isinstance(data.get("rules"), list) else []
+    # a rule is an object with conditions ("when", an object) and a type; anything else in the list is skipped
+    rules = [r for r in listed if isinstance(r, dict) and isinstance(r.get("when"), dict) and r["when"]
+             and isinstance(r.get("type"), str) and r["type"].strip()]
+    unknown = [u for u in data.get("unknown") or [] if isinstance(u, dict)] if isinstance(data.get("unknown"), list) else []
+    if not rules:
+        return [], [], NO_RULES
+    if len(rules) < len(listed):
+        skipped = f"Skipped {len(listed) - len(rules)} entries that aren't rules (no conditions or no type)."
+        problem = f"{problem} {skipped}" if problem else skipped
     return rules, unknown, problem
 
 

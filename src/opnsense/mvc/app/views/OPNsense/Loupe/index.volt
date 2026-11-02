@@ -30,6 +30,8 @@ POSSIBILITY OF SUCH DAMAGE.
 <script src="{{ cache_safe('/ui/js/chartjs-plugin-colorschemes.min.js') }}"></script>
 <script src="{{ cache_safe('/ui/js/chartjs-plugin-zoom.min.js') }}"></script>
 <style>
+    /* the AI Rule Generator's confidence pills: small, beside their label */
+    .loupe-pill { font-size: 75%; font-weight: 600; padding: 1px 6px; border-radius: 8px; vertical-align: 1px; }
     .loupe-edit { color: #999; cursor: pointer; visibility: hidden; padding-left: 8px; }
     .tabulator-row:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
     @media (hover: none) { .loupe-edit { visibility: visible; } }
@@ -594,9 +596,9 @@ POSSIBILITY OF SUCH DAMAGE.
             dhcp_vendor: '{{ lang._("DHCP vendor class") }}', talks_to: '{{ lang._("Talks to") }}'};
         /* the AI's confidence in a rule, as a pill: high green, medium orange, low red */
         const AI_CONFIDENCE = {
-            high: '<span class="label label-success">{{ lang._("high") }}</span>',
-            medium: '<span class="label label-warning">{{ lang._("medium") }}</span>',
-            low: '<span class="label label-danger">{{ lang._("low") }}</span>'};
+            high: '<span class="label label-success loupe-pill">{{ lang._("high") }}</span>',
+            medium: '<span class="label label-warning loupe-pill">{{ lang._("medium") }}</span>',
+            low: '<span class="label label-danger loupe-pill">{{ lang._("low") }}</span>'};
         function aiLoad() {
             ai.loaded = true;
             ajaxCall('/api/loupe/settings/ai_table', {scope: $('input[name="ai-scope"]:checked').val()}, function (data) {
@@ -611,7 +613,12 @@ POSSIBILITY OF SUCH DAMAGE.
             });
         }
         $('input[name="ai-scope"]').change(aiLoad);
-        $('#ai-show').click(function (e) { e.preventDefault(); $('#ai-prompt').toggle(); });
+        $('#ai-show').click(function (e) {          /* slides like the answer box folds */
+            e.preventDefault();
+            const $p = $('#ai-prompt'), opening = !$p.is(':visible');
+            $(this).text(opening ? '{{ lang._("Hide prompt") }}' : '{{ lang._("Show prompt") }}');
+            $p.stop(true, true).slideToggle(300);
+        });
         $('#ai-copy').click(function () {
             const done = () => $(this).find('i').removeClass('fa-copy').addClass('fa-check');
             if (navigator.clipboard) {
@@ -662,12 +669,22 @@ POSSIBILITY OF SUCH DAMAGE.
                         + (r.model ? ' <span class="text-muted">' + esc(r.model) + '</span>' : '') + '</td>'
                         + '<td>' + esc(aiWhen(r.when)) + '</td><td>' + rows + '</td><td>' + (changes || '—') + '</td>'
                         + '<td>' + [AI_CONFIDENCE[(r.confidence || '').toLowerCase()]
-                            ? '{{ lang._("Confidence") }}: ' + AI_CONFIDENCE[r.confidence.toLowerCase()] : '']
+                            ? '{{ lang._("Confidence") }} ' + AI_CONFIDENCE[r.confidence.toLowerCase()] : '']
                             .concat(flags, r.note ? [esc(r.note)] : []).filter(Boolean).join('<br>') + '</td></tr>');
                 });
                 const unknown = (data.unknown || []).map(u => esc((u.for || []).join(', ')) + (u.note ? ': ' + esc(u.note) : ''));
                 $('#ai-unknown').html(unknown.length ? '<b>{{ lang._("Not identified") }}</b><br>' + unknown.join('<br>') : '');
+                /* the answer box folds down so the review is in view (it opens up again when clicked) */
+                const $reply = $('#ai-reply');
+                if (!aiChecked.length) return;          /* nothing read: leave the box open to paste again */
+                $reply.data('tall', $reply.data('tall') || $reply.outerHeight());
+                $reply.stop().animate({height: '7em'}, 300, function () {
+                    $('html, body').animate({scrollTop: $('#ai-review').offset().top - 70}, 400);
+                });
             });
+        });
+        $('#ai-reply').on('focus', function () {
+            if ($(this).data('tall')) $(this).stop().animate({height: $(this).data('tall')}, 300);
         });
         $('#ai-save').click(function () {
             const picked = $('#ai-rules input:checked').map(function () { return aiChecked[$(this).data('i')]; }).get();
@@ -907,7 +924,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     <h4>{{ lang._('2. Paste the answer') }}</h4>
                     <p class="text-muted">{{ lang._('Paste the whole reply; the rules are read from it, even when the reply is cut off.') }}</p>
                     <textarea id="ai-reply" class="form-control" rows="20" style="font-family: monospace; width: 100%; max-width: none; resize: vertical"></textarea>
-                    <button type="button" class="btn btn-default" id="ai-check" style="margin-top: 6px"><i class="fa fa-wand-magic-sparkles fa-fw"></i> {{ lang._('Generate rules') }}</button>
+                    <button type="button" class="btn btn-primary" id="ai-check" style="margin-top: 6px"><i class="fa fa-wand-magic-sparkles fa-fw"></i> {{ lang._('Generate rules') }}</button>
                 </div>
                 <div class="loupe-ai-step" id="ai-review" style="display: none">
                     <h4>{{ lang._('3. Review') }}</h4>

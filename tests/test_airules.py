@@ -60,8 +60,19 @@ class TestParse(unittest.TestCase):
         rules, _, problem = airules.parse(text)
         self.assertEqual((len(rules), problem), (2, None))
 
+    def test_the_prompt_is_not_an_answer(self):
+        prompt = airules.prompt(airules.rows([("ac:00:00:00:00:01", airules.evidence({"vendor": "Acme"}))]), {"Oven": {}})
+        rules, _, problem = airules.parse(prompt)
+        self.assertEqual(rules, [])
+        self.assertIn("That's the prompt", problem)
+
     def test_nothing(self):
-        self.assertEqual(airules.parse("sorry, I can't help")[2], "no JSON in the reply")
+        self.assertEqual(airules.parse("sorry, I can't help")[2], airules.NO_RULES)
+        self.assertEqual(airules.parse('{"answer": 42}')[2], airules.NO_RULES)
+        self.assertEqual(airules.parse('{"rules": ["x", {"type": "Oven"}, {"when": {}, "type": "Oven"}]}')[2], airules.NO_RULES)
+        rules, _, problem = airules.parse('{"rules": [' + RULE + ', {"devices": ["D2"], "type": "Oven"}]}')
+        self.assertEqual(len(rules), 1)
+        self.assertIn("Skipped 1 entries", problem)
 
 
 class TestToRule(unittest.TestCase):
