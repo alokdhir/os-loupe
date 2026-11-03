@@ -189,11 +189,11 @@ fetch -o /usr/local/etc/pkg/repos/dhir-os-plugins.conf https://alokdhir.github.i
 pkg update
 ```
 
-Then install **os-loupe** from **System → Firmware → Plugins** (or `pkg install os-loupe`). Updates arrive with OPNsense's own, under **System → Firmware → Updates**. The same repository has [os-eero](https://github.com/alokdhir/os-eero), the eero mesh Wi-Fi plugin.
+Then install **os-loupe** from **System → Firmware → Plugins** (or `pkg install os-loupe`); OPNsense shows its standard *Third party software* notice first, as it does for any package not from OPNsense. Updates arrive with OPNsense's own, under **System → Firmware → Updates**. The repository is signed: `pkg` checks everything it installs from it against the public key fetched above. The same repository has [os-eero](https://github.com/alokdhir/os-eero), the eero mesh Wi-Fi plugin.
 
 Once installed, open **Reporting → Loupe → Settings**, tick *Enable* on the *General* page, choose the LAN interface(s) and press *Apply*.
 
-Removing the plugin (or `pkg delete os-loupe`) keeps the traffic data in `/var/db/loupe` until you delete it. Requires OPNsense 26.x (Python 3 with `cryptography` and `sqlite3`, both present by default).
+Removing the plugin (or `pkg delete os-loupe`) keeps the traffic data in `/var/db/loupe` until you delete it. Requires OPNsense 26.x, on any architecture (the package holds no compiled code; it uses Python 3 with `cryptography` and `sqlite3`, both part of OPNsense).
 
 For development, `ROUTER=user@router tools/deploy.sh` copies your working tree to a router over SSH and installs it there (`tools/install.sh`, without the package). Packages are built and published by `tools/publish.sh` in [os-plugins](https://github.com/alokdhir/os-plugins), the package repository; a changed plugin needs a new `PLUGIN_VERSION` or `PLUGIN_REVISION`.
 
@@ -202,7 +202,7 @@ The layout follows a plugin directory in [opnsense/plugins](https://github.com/o
 ## Tests
 
 ```sh
-cd tests && python3 -m unittest test_tls test_quic test_pfstate test_store test_devid test_services test_rules
+cd tests && python3 -m unittest test_tls test_quic test_pfstate test_store test_devid test_services test_rules test_airules test_hass
 ```
 
 All test data is synthetic.
