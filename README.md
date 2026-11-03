@@ -6,7 +6,9 @@ Loupe answers questions like *"what was the PlayStation doing at 2 a.m.?"*, *"wh
 
 Loupe is about each device's traffic to and from the internet. Traffic between your own devices isn't counted: on the same network it never reaches the router, and between networks (VLANs) Loupe leaves it out (firewall logs and Insight cover it).
 
-Devices are identified automatically, not left as IP addresses. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and goes with the strongest evidence, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 135 rules covering 71 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
+**A clean device list is half the point.** Much of Loupe's work goes into telling you what each device actually is: a real name, a type and, where it can, the model, instead of an IP address or `ESP_3A1F2C`. What it can't work out on its own, [*Settings*](#settings) helps you fix: rename or retype a device, write rules that type a whole group at once, name model codes, take names from Home Assistant, or have an AI chat suggest rules for the devices it's unsure of.
+
+Devices are identified automatically, not left as IP addresses. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and goes with the strongest evidence, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 162 rules covering 109 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
 
 ![Devices list: every device, its type, vendor, traffic and top services](docs/images/devices.png)
 
