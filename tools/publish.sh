@@ -64,8 +64,8 @@ for p in $PLUGIN_DIRS; do
     git -C "$dir" archive HEAD | tar -xf - -C "$WORK/plugins/net-mgmt/$name"
     version=$(sed -n 's/^PLUGIN_VERSION=[[:space:]]*//p' "$dir/Makefile")
     commit="$version 0 $(git -C "$dir" rev-parse --short HEAD)"
-    # PLUGIN_DEVEL empty: a release package (os-NAME, not os-NAME-devel); PLUGIN_NO_ABI: any FreeBSD ABI/arch
-    BUILD="$BUILD (cd plugins/net-mgmt/$name && make package PLUGIN_DEVEL= PLUGIN_NO_ABI=yes PLUGIN_COMMIT='$commit' >/dev/null) &&"
+    # GIT: the commit comes from PLUGIN_COMMIT, the build tree has no history; PLUGIN_DEVEL empty: a release package (os-NAME, not os-NAME-devel); PLUGIN_NO_ABI: any FreeBSD ABI/arch
+    BUILD="$BUILD (cd plugins/net-mgmt/$name && make package GIT=/nonexistent PLUGIN_DEVEL= PLUGIN_NO_ABI=yes PLUGIN_COMMIT='$commit' >/dev/null) &&"
 done
 
 REMOTE=$($SSH "$ROUTER" mktemp -d /tmp/publish.XXXXXX)
@@ -76,7 +76,9 @@ set -e
 for pkg in repo/All/*.pkg; do
     name=$(basename "$pkg")
     fetch -qo "old-$name" "https://alokdhir.github.io/os-loupe/repo/All/$name" 2>/dev/null || continue
-    if [ "$(tar -xOf "$pkg" --exclude '+*' | sha256)" != "$(tar -xOf "old-$name" --exclude '+*' | sha256)" ]; then
+    # the version file records the commit built from: it changes with every commit, plugin files or not
+    same() { tar -xOf "$1" --exclude '+*' --exclude '*/opnsense/version/*' 2>/dev/null | sha256; }
+    if [ "$(same "$pkg")" != "$(same "old-$name")" ]; then
         echo "$name is already published with different contents: bump PLUGIN_VERSION" >&2
         exit 1
     fi
