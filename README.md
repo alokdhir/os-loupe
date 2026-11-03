@@ -184,6 +184,7 @@ In a workplace, tell people that their devices' traffic is recorded this way. Pe
 Loupe installs from a package repository, [os-plugins](https://alokdhir.github.io/os-plugins/) (it isn't in the official plugin list: [plugins there wrap FreeBSD ports](https://github.com/opnsense/plugins/issues/5854)). Add the repository once, on the OPNsense box itself — from the console (option 8, *Shell*) or SSH, as root:
 
 ```sh
+fetch -o /usr/local/etc/ssl/dhir-os-plugins.pub https://alokdhir.github.io/os-plugins/dhir-os-plugins.pub
 fetch -o /usr/local/etc/pkg/repos/dhir-os-plugins.conf https://alokdhir.github.io/os-plugins/dhir-os-plugins.conf
 pkg update
 ```
