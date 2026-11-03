@@ -88,7 +88,9 @@ CREATE TABLE IF NOT EXISTS devices (
     type TEXT,
     type_source TEXT,
     model TEXT,                       -- e.g. "MacBook Air 15″ (M3)" when the device announces it
-    name_source TEXT,                 -- "model": named after its model (it calls itself only by an ID or a serial)
+    name_source TEXT,                 -- "model": named after its model (it calls itself only by an ID or a serial);
+                                      -- "home assistant": the name it has there
+    area TEXT,                        -- its area (room) in Home Assistant
     info TEXT NOT NULL DEFAULT '{}',  -- JSON: dhcp, mdns, ... clues for device identification
     first_seen INTEGER NOT NULL,
     last_seen INTEGER NOT NULL
@@ -203,7 +205,7 @@ class Store:
         self._rename_lookups()
         self.db.executescript(SCHEMA)
         cols = {r[1] for r in self.db.execute("PRAGMA table_info(devices)")}
-        for col in ("name", "model", "name_source"):      # added after the first release
+        for col in ("name", "model", "name_source", "area"):      # added after the first release
             if col not in cols:
                 self.db.execute(f"ALTER TABLE devices ADD COLUMN {col} TEXT")
         if "ports" not in {r[1] for r in self.db.execute("PRAGMA table_info(sites_1d)")}:     # added later; the
@@ -338,10 +340,10 @@ class Store:
             self.db.execute("DELETE FROM devices WHERE mac IN (%s)" % ",".join("?" * len(macs)), sorted(macs))
 
     def set_device_types(self, rows):
-        """rows: [(name, name_source, vendor, type, type_source, model, mac)]"""
+        """rows: [(name, name_source, area, vendor, type, type_source, model, mac)]"""
         self.db.execute("BEGIN")
         try:
-            self.db.executemany("UPDATE devices SET name = ?, name_source = ?, vendor = ?, type = ?, type_source = ?, model = ? "
+            self.db.executemany("UPDATE devices SET name = ?, name_source = ?, area = ?, vendor = ?, type = ?, type_source = ?, model = ? "
                                 "WHERE mac = ?", rows)
             self.db.execute("COMMIT")
         except BaseException:

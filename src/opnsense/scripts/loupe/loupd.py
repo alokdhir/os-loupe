@@ -31,16 +31,18 @@ import argparse
 import collections
 import functools
 import json
+import os
 import signal
 import ssl
 import sys
 import syslog
+import threading
 import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, names, neighbours, netif, pfstate, report, services, store, unbound  # noqa: E402
+from lib import devid, hass, names, neighbours, netif, pfstate, report, services, store, unbound  # noqa: E402
 from lib.report import local_day  # noqa: E402
 
 
@@ -51,7 +53,7 @@ MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
 
 
 class Loupe:
-    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), service_map=None):
+    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), service_map=None, hass_names=None):
         self.ifaces = set(ifaces)
         self.is_local = pfstate.local_matcher(pfstate.interface_networks(ifaces))
         self.store = store.Store(db)
@@ -66,6 +68,7 @@ class Loupe:
         self.svc = services.ServiceMap(service_map)
         self.map_fingerprint = report.map_fingerprint(self.svc)
         self.stopping = False
+        self.hass = hass_names         # names from Home Assistant (optional), kept fresh by a thread
         self.oui = devid.load_oui()
         self.ip_mac = {}
         self.own_macs = set()
@@ -252,7 +255,10 @@ class Loupe:
             model = devid.model(info, fallback=rule_model)
             # a device that only calls itself by an ID or a serial is named after its model
             shown, by_model = devid.name_with_model(devid.display_name(name, hostname, devid.mdns_name(info)), ven, model)
-            rows.append((shown, "model" if by_model else None, ven, t, src, model, mac))
+            # Home Assistant's name for it (the user's, in its device registry) wins over any the device sent
+            ha = self.hass.get(mac) if self.hass else None
+            source = "home assistant" if ha else ("model" if by_model else None)
+            rows.append((ha["name"] if ha else shown, source, (ha or {}).get("area") or None, ven, t, src, model, mac))
         self.store.set_device_types(rows)
         # an interface that replaced another (wired and Wi-Fi at different times, a new private address)
         days = functools.lru_cache(maxsize=None)(self.store.active_days)
@@ -373,9 +379,27 @@ def main():
     devid.set_model_names(conf.get("model_names", {}))
     for rule, problem in devid.set_user_rules(conf.get("rules", [])):
         syslog.syslog(syslog.LOG_WARNING, f"loupe: skipping device rule {json.dumps(rule)}: {problem}")
+    try:
+        os.chmod(args.config, 0o600)        # it may hold the Home Assistant token; only root (loupd, query.py) reads it
+    except (OSError, TypeError):
+        pass
     r = conf.get("retention", {})
+    ha = conf.get("home_assistant") or {}
+    ha_names = hass.Names(os.path.join(os.path.dirname(args.db), "hass.json"), ha.get("url") or "", ha.get("token") or "",
+                          ha.get("verify", True))
     lp = Loupe(ifaces, args.db, args.poll, args.flush,
-               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_sites_seen", 30)), conf.get("services"))
+               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_sites_seen", 30)), conf.get("services"), ha_names)
+    if ha_names.enabled:
+        def refresh():
+            while not lp.stopping:
+                state = ha_names.refresh()
+                if state.get("error"):
+                    syslog.syslog(syslog.LOG_WARNING, f"loupe: Home Assistant: {state['error']}")
+                for _ in range(hass.REFRESH):
+                    if lp.stopping:
+                        return
+                    time.sleep(1)
+        threading.Thread(target=refresh, name="hass", daemon=True).start()
     cap = Capture(lp.emit)
 
     def stop(*_):

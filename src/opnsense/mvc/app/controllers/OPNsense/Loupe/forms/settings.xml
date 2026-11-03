@@ -27,4 +27,26 @@
         <type>text</type>
         <help>Site names each device used (from DNS answers and TLS and QUIC connections), kept to name its traffic and identify it.</help>
     </field>
+    <field>
+        <type>header</type>
+        <label>Home Assistant (optional)</label>
+    </field>
+    <field>
+        <id>loupe.general.hass_url</id>
+        <label>Address</label>
+        <type>text</type>
+        <help>Loupe names devices as Home Assistant does and shows their area, for devices it knows by MAC address (most network integrations; cloud ones such as Tuya don't share it). Your own names in Loupe still win. Leave empty to not use it.</help>
+    </field>
+    <field>
+        <id>loupe.general.hass_token</id>
+        <label>Access token</label>
+        <type>password</type>
+        <help>In Home Assistant: your profile (your name, bottom left) &gt; Security &gt; Long-lived access tokens &gt; Create token. Name it Loupe and paste it here. Loupe only reads device names and areas.</help>
+    </field>
+    <field>
+        <id>loupe.general.hass_verify</id>
+        <label>Check its certificate</label>
+        <type>checkbox</type>
+        <help>Turn off for a self-signed certificate (Home Assistant's default when it uses HTTPS without a domain).</help>
+    </field>
 </form>

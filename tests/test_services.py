@@ -197,8 +197,8 @@ class TestIdentities(unittest.TestCase):
             now = int(time.time())
             s.write({}, {}, {"02:00:00:00:00:60": {"ip": "10.9.1.60", "hostname": "tv", "ts": now},
                              "02:00:00:00:00:61": {"ip": "10.9.1.61", "hostname": "phone", "ts": now}})
-            s.set_device_types([("Den TV", None, "Example", "Apple TV", "mdns", "", "02:00:00:00:00:60"),
-                                ("Example Phone 2", "model", "", "iPhone", "mdns", "Phone 2", "02:00:00:00:00:61")])
+            s.set_device_types([("Den TV", None, None, "Example", "Apple TV", "mdns", "", "02:00:00:00:00:60"),
+                                ("Example Phone 2", "model", None, "", "iPhone", "mdns", "Phone 2", "02:00:00:00:00:61")])
             s.close()
             conf = os.path.join(d, "loupe.json")
             with open(conf, "w") as f:

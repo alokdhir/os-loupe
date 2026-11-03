@@ -221,6 +221,12 @@ class SettingsController extends ApiMutableModelControllerBase
         return is_array($out) ? $out : ['error' => gettext('No answer from Loupe.')];
     }
 
+    /* Home Assistant names: when loupd last fetched them, how many devices, the last error */
+    public function hassStatusAction()
+    {
+        return $this->aiQuery(['hass']);
+    }
+
     /* the devices to ask about: the ones Loupe couldn't identify, or (scope=all) every device */
     public function aiTableAction()
     {

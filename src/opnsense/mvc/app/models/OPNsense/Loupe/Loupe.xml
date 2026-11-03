@@ -37,6 +37,17 @@
                 <MinimumValue>7</MinimumValue>
                 <MaximumValue>365</MaximumValue>
             </retention_sites_seen>
+            <hass_url type="UrlField">
+                <ValidationMessage>Enter Home Assistant's address, e.g. https://homeassistant.local:8123</ValidationMessage>
+            </hass_url>
+            <hass_token type="TextField">
+                <Mask>/^[A-Za-z0-9._-]{20,1000}$/</Mask>
+                <ValidationMessage>Paste the whole long-lived access token.</ValidationMessage>
+            </hass_token>
+            <hass_verify type="BooleanField">
+                <Default>1</Default>
+                <Required>Y</Required>
+            </hass_verify>
         </general>
         <services>
             <service type="ArrayField">

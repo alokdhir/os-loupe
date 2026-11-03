@@ -63,7 +63,24 @@ POSSIBILITY OF SUCH DAMAGE.
         const esc = s => (s == null ? '' : String(s).includes('&') ? htmlDecode(String(s)) : String(s))
             .replace(/[&<>"']/g, c => ESC[c]);
         /* a device's model, unless loupd named the device after it ("Miele Combi-Steam Oven XXL") */
+        /* where a device's name comes from, on hover, when it isn't the user's or the device's own */
+        const nameTitle = d => d.name_source === 'home assistant'
+            ? ' title="' + esc('{{ lang._("Name from Home Assistant") }}' + (d.area ? ' · ' + d.area : '')) + '"' : '';
         const modelShown = d => d.model_in_name ? '' : (d.model || '');
+        /* Settings > General: how the Home Assistant link is doing (loupd fetches names every 10 minutes) */
+        function hassStatus() {
+            const $s = $('#hass-status');
+            if (!$('[id="loupe.general.hass_url"]').val()) { $s.hide(); return; }
+            ajaxGet('/api/loupe/settings/hass_status', {}, function (st) {
+                st = st || {};
+                const parts = [];
+                if (st.fetched) parts.push('{{ lang._("Home Assistant: names for %s devices, fetched %s.") }}'
+                    .replace('%s', st.devices).replace('%s', ago(st.fetched)));
+                else if (!st.error) parts.push('{{ lang._("Home Assistant: no names fetched yet (Loupe asks within a minute of Apply, then every 10 minutes).") }}');
+                if (st.error) parts.push('{{ lang._("Last try failed: %s") }}'.replace('%s', st.error));
+                $s.toggleClass('text-danger', !!st.error).text(parts.join(' ')).show();
+            });
+        }
         const ago = ts => ts ? moment(ts * 1000).fromNow() : '';
         const dash = '<span class="text-muted">&mdash;</span>';
         /* named from the same device's other traffic to the same server (query.py Labels) */
@@ -106,7 +123,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 return (row.networks || []).map(pill).join('');
             },
             device: function (column, row) {
-                return '<a href="#device=' + esc(row.id) + '">' + esc(row.name) + '</a>' + editButton(row);
+                return '<a href="#device=' + esc(row.id) + '"' + nameTitle(row) + '>' + esc(row.name) + '</a>' + editButton(row);
             },
             devtype: function (column, row) {           /* the type, its model (when known) after it */
                 const model = modelShown(row);
@@ -309,7 +326,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 deviceColumns($(DEVICE_GRIDS));
                 $('#loupe-detail-title').html((d.icon ? '<i class="' + esc(d.icon) + ' fa-fw text-muted"></i> ' : '')
                     + esc(d.name || d.ip || id) + editButton(d)
-                    + ' <small class="text-muted">' + esc([modelShown(d), d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
+                    + ' <small class="text-muted">' + esc([d.area, modelShown(d), d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
                     /* one device seen with several MACs (a bridge and its NIC, wired and Wi-Fi): the others too */
                     + ((d.macs || []).length > 1 ? ' <span title="{{ lang._('Loupe saw these MACs as one device') }}">('
                         + esc('{{ lang._('also') }} ' + d.macs.filter(m => m !== d.mac).join(', ')) + ')</span>' : '')
@@ -348,6 +365,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 mapDataToFormUI({'frm_settings': '/api/loupe/settings/get'}).done(function () {
                     formatTokenizersUI();
                     $('.selectpicker').selectpicker('refresh');
+                    hassStatus();
                 });
             },
             servicenames: function () {
@@ -1084,6 +1102,7 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
         <div id="page_general" class="loupe-page">
             {{ partial("layout_partials/base_form", ['fields': formSettings, 'id': 'frm_settings']) }}
+            <p id="hass-status" class="text-muted" style="display: none; padding: 0 15px"></p>
         </div>
         <div id="page_servicenames" class="loupe-page">
             <div class="loupe-bar">

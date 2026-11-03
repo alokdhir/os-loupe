@@ -5,6 +5,11 @@
         for intf in OPNsense.Loupe.general.interfaces.split(',') %}
         {"id": {{ intf | tojson }}, "device": {{ helpers.physical_interface(intf) | tojson }}, "name": {{ (helpers.getNodeByTag('interfaces.'+intf+'.descr') or intf | upper) | tojson }}}{{ "," if not loop.last }}{% endfor %}{% endif %}
     ],
+    "home_assistant": {
+        "url": {{ helpers.getNodeByTag('OPNsense.Loupe.general.hass_url') | default('') | tojson }},
+        "token": {{ helpers.getNodeByTag('OPNsense.Loupe.general.hass_token') | default('') | tojson }},
+        "verify": {{ 'false' if helpers.getNodeByTag('OPNsense.Loupe.general.hass_verify') == '0' else 'true' }}
+    },
     "retention": {
         "days_5m": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_5m') or '30' }},
         "days_1h": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_1h') or '365' }},
