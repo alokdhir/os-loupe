@@ -387,14 +387,18 @@ POSSIBILITY OF SUCH DAMAGE.
                     del: '/api/loupe/settings/del_rule/',
                     options: {
                         initialSearchPhrase: rulesSearch,       /* opened from a device's "edit the rule" link */
-                        requestHandler: (request) => Object.assign(request, {source: $('#rule-source-filter').val()}),
+                        requestHandler: (request) => Object.assign(request, {source: $('#rule-source-filter').val() || ''}),
                         formatters: {ruleicon: (column, row) => row.icon_class
                             ? '<i class="' + esc(row.icon_class) + ' fa-fw text-muted"></i>' : ''}
                     }
                 });
                 /* the Source filter sits after the grid's search box, as core's dnsmasq page places its tag filter */
                 $('#rule-source-container').detach().insertAfter($('#' + id + '-header .actionBar .search')).show();
-                $('#rule-source-filter').selectpicker().on('changed.bs.select', () => $('#' + id).bootgrid('reload'));
+                /* All is the same as no filter: back to showing the title (Source) */
+                $('#rule-source-filter').selectpicker().on('changed.bs.select', function () {
+                    if ($(this).val() === '') { this.selectedIndex = -1; $(this).selectpicker('refresh'); }
+                    $('#' + id).bootgrid('reload');
+                });
             },
             overrides: function () {
                 $('#{{ formGridOverrides['table_id'] }}').UIBootgrid({
@@ -1143,8 +1147,8 @@ POSSIBILITY OF SUCH DAMAGE.
             <div data-source-pane="mine">
                 {{ partial('layout_partials/base_bootgrid_table', formGridRules) }}
                 <div id="rule-source-container" class="btn-group" style="display: none">
-                    <select id="rule-source-filter" data-width="140px" title="{{ lang._('Which rules to list') }}">
-                        <option value="">{{ lang._('All rules') }}</option>
+                    <select id="rule-source-filter" data-width="140px" title="{{ lang._('Source') }}">
+                        <option value="">{{ lang._('All') }}</option>
                         <option value="manual">{{ lang._('Manual') }}</option>
                         <option value="ai">{{ lang._('AI') }}</option>
                     </select>
