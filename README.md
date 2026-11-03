@@ -181,28 +181,22 @@ In a workplace, tell people that their devices' traffic is recorded this way. Pe
 
 ## Install
 
-Loupe is not in the official plugin list [yet](https://github.com/opnsense/plugins/issues/5854). To try it, install it from this repository on the OPNsense box itself — from the console (option 8, *Shell*) or SSH, as root:
+Loupe installs from its own package repository (it isn't in the official plugin list: [plugins there wrap FreeBSD ports](https://github.com/opnsense/plugins/issues/5854)). Add the repository once, on the OPNsense box itself — from the console (option 8, *Shell*) or SSH, as root:
 
 ```sh
-fetch -o - https://github.com/alokdhir/os-loupe/archive/refs/heads/master.tar.gz | tar -xzf - -C /tmp
-sh /tmp/os-loupe-master/tools/install.sh
+fetch -o /usr/local/etc/pkg/repos/alokdhir.conf https://alokdhir.github.io/os-loupe/alokdhir.conf
+pkg update
 ```
 
-or, where `git` is installed (`pkg install git`), which makes updating a `git pull`:
+Then install **os-loupe** from **System → Firmware → Plugins** (or `pkg install os-loupe`). Updates arrive with OPNsense's own, under **System → Firmware → Updates**. The same repository has [os-eero](https://github.com/alokdhir/os-eero), the eero mesh Wi-Fi plugin.
 
-```sh
-git clone https://github.com/alokdhir/os-loupe /root/os-loupe
-sh /root/os-loupe/tools/install.sh                                   # install
-cd /root/os-loupe && git pull && sh tools/install.sh                 # update
-```
+Once installed, open **Reporting → Loupe → Settings**, tick *Enable* on the *General* page, choose the LAN interface(s) and press *Apply*.
 
-Then open **Reporting → Loupe → Settings**, tick *Enable* on the *General* page, choose the LAN interface(s) and press *Apply*.
+Removing the plugin (or `pkg delete os-loupe`) keeps the traffic data in `/var/db/loupe` until you delete it. Requires OPNsense 26.x (Python 3 with `cryptography` and `sqlite3`, both present by default).
 
-`sh tools/uninstall.sh` removes it again; the traffic data in `/var/db/loupe` is kept until you delete it. Requires OPNsense 26.x (Python 3 with `cryptography` and `sqlite3`, both present by default).
+For development, `ROUTER=user@router tools/deploy.sh` copies your working tree to a router over SSH and installs it there (`tools/install.sh`, without the package). `ROUTER=user@router tools/publish.sh` builds the os-loupe and os-eero packages on an OPNsense box from what is committed and publishes them to the repository (GitHub Pages, the `gh-pages` branch); a changed plugin needs a new `PLUGIN_VERSION` or `PLUGIN_REVISION`.
 
-For development, `ROUTER=user@router tools/deploy.sh` copies your working tree to a router over SSH and runs the same installer there.
-
-The layout follows a plugin directory in [opnsense/plugins](https://github.com/opnsense/plugins) (`Makefile`, `pkg-descr`, `src/` installed under `/usr/local`), so it can be built as a package from that tree.
+The layout follows a plugin directory in [opnsense/plugins](https://github.com/opnsense/plugins) (`Makefile`, `pkg-descr`, `src/` installed under `/usr/local`), and is built as a package with that tree's tooling.
 
 ## Tests
 
