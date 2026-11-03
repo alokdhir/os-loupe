@@ -112,7 +112,63 @@ To see which device looked up which name, use Unbound's report: it has per-query
 
 Those are broader tools — deep packet inspection, alerts, policies, live flows — and they're good at it. Loupe does one narrower job: per-device history by site and service, with good device identification, built into OPNsense's own Reporting menu, free, and light enough to leave running on a small box.
 
-## Device rules
+## Settings
+
+*Reporting → Loupe → Settings* has four pages: **General**, **Service names**, **Device rules** and **Overrides**. As elsewhere in OPNsense, changes to the lists are saved at once and used after *Apply*.
+
+### General
+
+- **Enable** and **Interfaces**: the LAN or VLAN interfaces your devices are on. With a bridge, choose the bridge (its member ports aren't listed, and neither is WAN).
+- **Keep 5-minute detail** (30 days), **hourly totals** (365 days) and **sites seen** (30 days): how long each kind of data is kept.
+- **Home Assistant (optional)**: its **Address** and an **Access token** (in Home Assistant: your profile → *Security* → *Long-lived access tokens* → *Create token*). Devices Home Assistant knows by MAC address take the name you gave them there, and their area shows on the device page. Most network integrations know the MAC; cloud ones (Tuya, for one) don't. Loupe only reads names and areas, every 10 minutes, and keeps the last ones if Home Assistant is down. Turn off **Check its certificate** for a self-signed certificate.
+
+### Fix one device
+
+The pencil next to a device's name or type sets its **name**, **type** or **icon**; *Settings → Overrides* lists them all. An override follows the device by MAC address, wins over everything Loupe detects, and takes effect immediately. An icon you pick applies to every device of that type. Clear the name and type to go back to what Loupe detects.
+
+### Type many devices at once: Device rules → Custom
+
+A rule sets the type of every device that matches it, e.g. *every device whose MAC vendor is Tuya is a Window shade*. Fill in one clue, or several for a compound rule (a device must match all of them; a clue with several values separated by commas matches any of them):
+
+| Clue | Example |
+|---|---|
+| MAC vendor | `Tuya` (a whole word of the maker's name) |
+| MAC prefix | `52:54:00` |
+| MAC address | private (randomized) or not |
+| Host name | `^kvm-[0-9a-f]{4}$` (regular expression) |
+| Bonjour model | `^AppleTV` (regular expression) |
+| Bonjour name | `^acme x1` (lower case, regular expression) |
+| Bonjour service | `_hap._tcp` |
+| Category code | `hap:9` (HomeKit thermostat), `matter:0x0301` |
+| DHCP vendor class | `^udhcp` (regular expression) |
+| Talks to | `nordvpn.com` (and its subdomains) |
+
+Then the **Type** to show, an optional **Icon**, and an optional **Model** for devices that don't announce one (a device with no real name of its own is then named after it). Your rules are checked before the built-in ones; an override for one device still wins. They're tried by their strongest clue (MAC prefix, Bonjour model, host name, DHCP vendor class, domain, Bonjour service, MAC vendor), then in the order you added them, and the first that matches decides. After *Apply*, devices are reclassified within a minute. The **Source** filter shows the rules you wrote (*Manual*), the AI Rule Generator's (*AI*) or both.
+
+*Device rules → Built-in* lists the rules Loupe ships with, in the order they're tried.
+
+### Name model codes: Device rules → Model names
+
+Many devices announce their model as a code (`Mac15,13`, `AppleTV14,1`). *Model names* maps a code to a name (*MacBook Air 15″ (M3)*). Add them by hand, or let an AI chat name them: the prompt lists only the codes your devices announce that have no name yet, each with its maker and device type, nothing else about your devices. Paste the answer back and press *Generate names*, tick *Name now* for the names to keep, and *Save and apply*.
+
+### Ask an AI about unknown devices: Device rules → AI Rule Generator
+
+For the devices Loupe can only guess at (no type, or a generic one such as *IoT device (ESP)*), it builds a prompt to paste into any AI chat (Claude, ChatGPT, Gemini…), ideally one that can search the web. The prompt carries what the devices announce and the domains they use, without MAC or IP addresses; Loupe itself sends nothing anywhere. Paste the answer back: Loupe reads the rules out of it (around prose, even from a reply that was cut off), shows what each would change on your network, and saves the ones you tick as your rules, marked *AI*. A rule that would also change devices outside its own row, changes nothing (it says why: you have it already, its devices already have that type…) or makes a type vaguer starts unticked. A rule the AI bases on a domain alone doesn't type phones, computers or devices with private MACs that use that domain, as for the built-in rules.
+
+### Name services: Service names
+
+*Service names → Custom* adds your own names and overrides the built-in ones (*Built-in* lists them). They apply to all history. Each entry is one **Kind**:
+
+| Kind | Pattern | Names |
+|---|---|---|
+| Domain | `example.com`, or `cdn-*.example.com` (names under example.com whose next label starts with `cdn-`) | traffic to it and its subdomains |
+| Address or range | `192.0.2.10`, `203.0.113.0/24`, `2001:db8::/48` | traffic to those servers, whatever their name says |
+| Port | `tcp/8443`, `udp/51820` | traffic with no other name on that port |
+| VPN app domain | `nordvpn.com` | a device that looks it up has its VPN tunnel labelled with this name |
+
+Traffic named only for its CDN (Fastly, Akamai, CloudFront…), or with no name at all, takes the service the same device was using on the same server, marked *(same server)*.
+
+## Rule files (for contributors)
 
 How Loupe recognises devices is data, not code: [`data/devices.json`](src/opnsense/scripts/loupe/data/devices.json) (device rules, the icon and maker for each type) and [`data/services.json`](src/opnsense/scripts/loupe/data/services.json) (site and service names, address ranges, ports, VPN providers). Each device type is one entry, with the alternatives that identify it, one per line:
 
@@ -141,9 +197,7 @@ A device is the type when any alternative matches. An alternative matches when a
 
 Evidence is trusted in a fixed order — Bonjour model, Bonjour name, host name, hosting role, strong Bonjour services, standard category (exact, but generic: a Fire TV stays a Fire TV), DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching alternative wins (file order within a tier: specific makers come before general categories). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
 
-**For your own network** you don't need to edit these files: *Settings → Device rules* takes rules in the GUI (checked before the shipped ones; fill in one clue or several for a compound rule; your rules are tried by their strongest clue, then in the order you added them, and the first that matches decides), and *Settings → Service names* takes your own names. As elsewhere in OPNsense, changes to these lists are saved at once and used after *Apply*. The pencil beside a device's name or type sets that one device's name, type or icon, and takes effect immediately.
-
-**AI Rule Generator.** *Device rules → AI Rule Generator* asks about the devices with no type or only a generic one (or all of them): copy the prompt into an AI chat, ideally one that can search the web, and paste its answer back. Loupe reads the rules out of the answer (around prose, through a reply cut off), shows for each what it would change on your network, and saves the ones you tick as your rules, marked *AI* (the custom rules list filters by it). A rule that would also change devices outside its own row, changes nothing (and why: you have it already, its devices already have that type…) or makes a type vaguer starts unticked. A rule the AI suggests on a domain alone doesn't type phones, computers or devices with private MACs that use that domain, as for the shipped rules.
+For your own network you don't need to edit these files: see [Settings](#settings).
 
 **Adding a rule to the shipped file:** add it with an `example` — made-up evidence that should come out as your type (no real MACs or names) — then run the tests. They fail if the example lands on another type, or if your rule takes over another rule's example. `tools/fmtjson.py` keeps the files one entry per line.
 
