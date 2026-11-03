@@ -175,6 +175,55 @@ class TestBpfCompile(unittest.TestCase):
         with self.assertRaises(ValueError):
             bpf.compile_filter("tcp and bogus(")
 
+    @staticmethod
+    def payload_loads(prog):
+        """Loads that reach past the Ethernet, IP (with options or IPv6's fixed header) and UDP headers."""
+        out = []
+        for code, _jt, _jf, k in prog:
+            cls, mode = code & 0x07, code & 0xe0
+            if cls not in (0x00, 0x01):         # BPF_LD, BPF_LDX
+                continue
+            if mode == 0x20 and k >= 14 + 40 + 8:       # BPF_ABS: a fixed offset into the frame
+                out.append(k)
+            if mode == 0x40 and k >= 14 + 8:            # BPF_IND: X (the IPv4 header length) + k
+                out.append(k)
+        return out
+
+    def test_outgoing_filter_reads_only_headers(self):
+        """Packets the router sends can hold their data in unmapped pages (sendfile on drivers with IFCAP_MEXTPG),
+        and the kernel's bpf_filter() faults reading payload from them: the filter on outgoing packets may only
+        read headers. The incoming filter does read payload (TLS ClientHellos), so the check means something."""
+        from lib import bpf
+        import capture
+        self.assertEqual(self.payload_loads(bpf.compile_filter(capture.OUT_FILTER)), [])
+        self.assertNotEqual(self.payload_loads(bpf.compile_filter(capture.FILTER)), [])
+
+    def test_capture_taps_by_direction(self):
+        """The payload-reading filter only ever sees incoming packets; outgoing ones get the header-only one."""
+        from lib import bpf
+        import capture
+        made = []
+
+        class Fake:
+            def __init__(self, iface, expr, direction):
+                made.append((iface, expr, direction))
+
+            def fileno(self):
+                return len(made)
+
+        def stop(*_):
+            raise StopIteration
+
+        real_bpf, real_select = bpf.Bpf, capture.select.select
+        bpf.Bpf, capture.select.select = Fake, stop
+        try:
+            with self.assertRaises(StopIteration):
+                capture.Capture(lambda ev: None).run(["lan0", "lan1"])
+        finally:
+            bpf.Bpf, capture.select.select = real_bpf, real_select
+        self.assertEqual(sorted(made), sorted([("lan0", capture.FILTER, bpf.D_IN), ("lan1", capture.FILTER, bpf.D_IN),
+                                               ("lan0", capture.OUT_FILTER, bpf.D_OUT),
+                                               ("lan1", capture.OUT_FILTER, bpf.D_OUT)]))
 
 if __name__ == "__main__":
     unittest.main()

@@ -58,6 +58,12 @@ CONT6 = (f"(ip6 and ip6[6] = 6 and ip6[42:2] = 443 and ip6[53] & 8 != 0 and {PL6
          " and ip6[40+((ip6[52]&0xf0)>>2)] & 0xfc != 0x14)")
 OTHER = "(udp src port 53 or udp dst port 67 or udp port 5353)"
 FILTER = f"{TLS4} or {TLS6} or {QUIC4} or {QUIC6} or {CONT4} or {CONT6} or {OTHER}"
+# FILTER runs on packets arriving on the LAN interfaces only: everything above comes from the devices. The only
+# packets Loupe needs going out are DNS answers (from the router, or forwarded), and those get a filter that reads
+# nothing past the UDP header. Packets the router itself sends can hold their data in unmapped pages (sendfile(),
+# e.g. the web GUI's lighttpd, on drivers with IFCAP_MEXTPG such as igc), and the kernel's bpf_filter() faults
+# reading payload from those: a filter that reads TCP payload must never see outgoing packets.
+OUT_FILTER = "udp src port 53"
 PARTIAL_TTL = 3.0
 MAX_PARTIAL = 4096
 
@@ -72,7 +78,8 @@ class Capture:
 
     def run(self, ifaces, tick=None):
         """Capture forever. `tick(now)` runs about once a second, between reads."""
-        fds = {t.fileno(): t for t in (bpf.Bpf(i, FILTER) for i in ifaces)}
+        taps = [bpf.Bpf(i, FILTER, bpf.D_IN) for i in ifaces] + [bpf.Bpf(i, OUT_FILTER, bpf.D_OUT) for i in ifaces]
+        fds = {t.fileno(): t for t in taps}
         while True:
             ready, _, _ = select.select(list(fds), [], [], 1.0)
             now = time.time()

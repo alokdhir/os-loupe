@@ -40,7 +40,10 @@ BIOCSETF = 0x80104267       # _IOW('B', 103, struct bpf_program)
 BIOCSETIF = 0x8020426C      # _IOW('B', 108, struct ifreq)
 BIOCSRTIMEOUT = 0x8010426D  # _IOW('B', 109, struct timeval)
 BIOCIMMEDIATE = 0x80044270  # _IOW('B', 112, u_int)
-BIOCSSEESENT = 0x80044277   # _IOW('B', 119, u_int)
+BIOCSDIRECTION = 0x80044277  # _IOW('B', 119, u_int) (also BIOCSSEESENT)
+
+# which packets a descriptor sees (enum bpf_direction)
+D_IN, D_INOUT, D_OUT = 0, 1, 2
 
 BUFSIZE = 4 * 1024 * 1024
 SNAPLEN = 2048
@@ -93,12 +96,12 @@ def compile_filter(expr, snaplen=SNAPLEN):
 
 
 class Bpf:
-    def __init__(self, iface, expr, bufsize=BUFSIZE, timeout=1.0):
+    def __init__(self, iface, expr, direction=D_IN, bufsize=BUFSIZE, timeout=1.0):
         self.iface = iface
         self.fd = self._open()
         fcntl.ioctl(self.fd, BIOCSBLEN, struct.pack("I", bufsize))  # must precede BIOCSETIF
         fcntl.ioctl(self.fd, BIOCSETIF, struct.pack("16s16x", iface.encode()))
-        fcntl.ioctl(self.fd, BIOCSSEESENT, struct.pack("I", 1))     # include the router's own replies (DNS)
+        fcntl.ioctl(self.fd, BIOCSDIRECTION, struct.pack("I", direction))
         sec = int(timeout)
         fcntl.ioctl(self.fd, BIOCSRTIMEOUT, struct.pack("qq", sec, int((timeout - sec) * 1e6)))
         self.bufsize = struct.unpack("I", fcntl.ioctl(self.fd, BIOCGBLEN, struct.pack("I", 0)))[0]
