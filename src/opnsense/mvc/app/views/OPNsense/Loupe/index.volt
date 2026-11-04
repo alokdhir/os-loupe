@@ -980,7 +980,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 if (!started.general) {
                     return dfObj.resolve();     /* General never loaded on this visit: nothing of it to save */
                 }
-                saveFormToEndpoint('/api/loupe/settings/set', 'frm_settings', function () { dfObj.resolve(); });
+                saveFormToEndpoint('/api/loupe/settings/set', 'frm_settings', function () { dfObj.resolve(); }, false, function () { dfObj.reject(); });
                 return dfObj;
             },
             onAction: function () {
