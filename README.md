@@ -260,9 +260,9 @@ The layout follows a plugin directory in [opnsense/plugins](https://github.com/o
 
 ## Transparent bridges
 
-Loupe works on a [transparent filtering bridge](https://docs.opnsense.org/manual/how-tos/transparent_bridge.html), where OPNsense sits inline with no address on the bridge and another router handles NAT, DHCP and DNS.
+Loupe works on a transparent filtering bridge, where OPNsense sits inline with no address on the bridge and another router handles NAT, DHCP and DNS.
 
-**Setup:** set up the bridge as the how-to describes, including its tunables (`net.link.bridge.pfil_bridge=1`, `net.link.bridge.pfil_member=0`). Loupe counts the states pf records on the interface you select, so pf has to filter on the bridge, not its members. The how-to's tunables do this. Then, under **Settings**, choose the *Bridge* interface and press *Apply*. If devices use anything other than private addresses, such as public addresses or global IPv6, list those networks in **Local networks**.
+**Setup:** set up the bridge as [OPNsense's how-to](https://docs.opnsense.org/manual/how-tos/transparent_bridge.html) describes, including its tunables (`net.link.bridge.pfil_bridge=1`, `net.link.bridge.pfil_member=0`). Loupe counts the states pf records on the interface you select, so pf has to filter on the bridge, not its members. Those tunables do this. Then, under **Settings**, choose the *Bridge* interface and press *Apply*. If devices use anything other than private addresses, such as public addresses or global IPv6, list those networks in **Local networks**.
 
 **How it differs from a router:**
 
@@ -272,7 +272,7 @@ Loupe works on a [transparent filtering bridge](https://docs.opnsense.org/manual
 - Names come from what Loupe captures: TLS and QUIC server names, plain DNS answers, DHCP and Bonjour. It can't read another router's leases or its DNS cache.
 - If your bridge has an address for some reason, Loupe treats it as a normal LAN: totals are right, but it misses most names and MAC addresses.
 
-**Tested so far:** one setup, a VM built from the how-to with one client over IPv4, where Loupe's totals came within about 1% of the client's own counters. Not tested yet: IPv6, VLAN-tagged trunks (Loupe's capture filters don't match tagged frames, so expect missing names and MAC addresses there), real hardware and many devices. Reports are welcome.
+**Tested so far:** one setup, a VM built from OPNsense's how-to with one client over IPv4, where Loupe's totals came within about 1% of the client's own counters. Not tested yet: IPv6, VLAN-tagged trunks (Loupe's capture filters don't match tagged frames, so expect missing names and MAC addresses there), real hardware and many devices. Reports are welcome.
 
 ## Tests
 
