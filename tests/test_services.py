@@ -313,6 +313,35 @@ class TestVpnLabels(unittest.TestCase):
         self.assertEqual(query.vendor_of("02:00:00:00:00:01", "", "Android device"), ("", "private MAC"))
 
 
+class TestNoAddressWarning(unittest.TestCase):
+    """An interface with no address counts for nothing, so loupd says so: once, and again if it happens again."""
+
+    def check(self, daemon, addresses):
+        import ipaddress
+        from unittest import mock
+
+        import loupd
+        found = [(name, ipaddress.ip_interface(a)) for name, a in addresses]
+        with mock.patch.object(loupd.netif, "addresses", return_value=found), \
+                mock.patch.object(loupd.syslog, "syslog") as log:
+            loupd.Loupe.check_addresses(daemon)
+        return [c.args[1].split(":")[1].split()[0] for c in log.call_args_list]
+
+    def test_warns_once_per_episode(self):
+        from types import SimpleNamespace
+        daemon = SimpleNamespace(ifaces={"bridge0", "vlan0"}, no_address=set())
+        good = ("vlan0", "192.0.2.1/24")
+        self.assertEqual(self.check(daemon, [good]), ["bridge0"])
+        self.assertEqual(self.check(daemon, [good]), [])
+        self.assertEqual(self.check(daemon, [good, ("bridge0", "198.51.100.1/24")]), [])
+        self.assertEqual(self.check(daemon, [good]), ["bridge0"])
+
+    def test_link_local_is_no_address(self):
+        from types import SimpleNamespace
+        daemon = SimpleNamespace(ifaces={"bridge0"}, no_address=set())
+        self.assertEqual(self.check(daemon, [("bridge0", "fe80::1/64")]), ["bridge0"])
+
+
 if __name__ == "__main__":
     unittest.main()
 

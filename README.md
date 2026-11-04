@@ -121,7 +121,7 @@ Those are broader tools — deep packet inspection, alerts, policies, live flows
 
 ### General
 
-- **Enable** and **Interfaces**: the LAN or VLAN interfaces your devices are on. With a bridge, choose the bridge (its member ports aren't listed, and neither is WAN).
+- **Enable** and **Interfaces**: the LAN or VLAN interfaces your devices are on. With a bridge, choose the bridge, not its member ports. Don't choose WAN. An interface needs an address of its own, because Loupe uses it to tell which devices are local; it counts nothing on an interface without one and says so in the system log.
 - **Keep 5-minute detail** (30 days), **hourly totals** (365 days) and **sites seen** (30 days): how long each kind of data is kept.
 - **Home Assistant (optional)**: its **Address** and an **Access token** (in Home Assistant: your profile → *Security* → *Long-lived access tokens* → *Create token*). Devices Home Assistant knows by MAC address take the name you gave them there, and their area shows on the device page. Most network integrations know the MAC; cloud ones (Tuya, for one) don't. Loupe only reads names and areas, every 10 minutes, and keeps the last ones if Home Assistant is down. Turn off **Check its certificate** for a self-signed certificate.
 

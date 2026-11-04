@@ -11,6 +11,11 @@ Reports live under Reporting, with a dashboard widget.
 Plugin Changelog
 ================
 
+1.0.2
+
+* Settings lists every enabled interface, not only those with a fixed address and no gateway
+* Log a warning when a selected interface has no address, since nothing on it can be counted
+
 1.0
 
 * Initial release

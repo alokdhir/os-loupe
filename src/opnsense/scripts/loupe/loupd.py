@@ -55,6 +55,7 @@ MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
 class Loupe:
     def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), service_map=None, hass_names=None):
         self.ifaces = set(ifaces)
+        self.no_address = set()
         self.is_local = pfstate.local_matcher(pfstate.interface_networks(ifaces))
         self.store = store.Store(db)
         self.names = names.Names()
@@ -237,6 +238,17 @@ class Loupe:
         nets = pfstate.interface_networks(self.ifaces)
         if nets:
             self.is_local = pfstate.local_matcher(nets)
+        self.check_addresses()
+
+    def check_addresses(self):
+        """An interface with no address gives no local networks, so its devices silently count for nothing: say so,
+        once each time it happens."""
+        addressed = {name for name, i in netif.addresses(self.ifaces) if not i.ip.is_link_local}
+        missing = self.ifaces - addressed
+        for name in sorted(missing - self.no_address):
+            syslog.syslog(syslog.LOG_WARNING, f"loupe: {name} has no address: Loupe can't tell which devices on it are "
+                                              "local, so their traffic isn't counted")
+        self.no_address = missing
 
     def classify(self, now):
         """Store what loupe detects. Names/types set in the GUI are layered on at report time
