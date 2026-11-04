@@ -247,7 +247,7 @@ fetch -o /usr/local/etc/pkg/repos/dhir-os-plugins.conf https://alokdhir.github.i
 pkg update
 ```
 
-Then install **os-loupe** from **System → Firmware → Plugins** (or `pkg install os-loupe`); OPNsense shows its standard *Third party software* notice first, as it does for any package not from OPNsense. Updates arrive with OPNsense's own, under **System → Firmware → Updates**. The repository is signed: `pkg` checks everything it installs from it against the public key fetched above. The same repository has [os-eero](https://github.com/alokdhir/os-eero), the eero mesh Wi-Fi plugin.
+Then install **os-loupe** from **System → Firmware → Plugins**; OPNsense shows its standard *Third party software* notice first, as it does for any package not from OPNsense. Updates arrive with OPNsense's own, under **System → Firmware → Updates**. The repository is signed: `pkg` checks everything it installs from it against the public key fetched above. The same repository has [os-eero](https://github.com/alokdhir/os-eero), the eero mesh Wi-Fi plugin.
 
 Once installed, open **Reporting → Loupe → Settings**, tick *Enable* on the *General* page, choose the LAN interface(s) and press *Apply*.
 
