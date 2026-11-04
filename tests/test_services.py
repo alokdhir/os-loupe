@@ -362,6 +362,15 @@ class TestUnnumberedInterface(unittest.TestCase):
         self.refresh(d, [("bridge0", "198.51.100.1/24")])
         self.assertTrue(d.is_local("203.0.113.5") and d.is_local("198.51.100.9"))
 
+    def test_unusable_local_networks_are_skipped(self):
+        from unittest import mock
+
+        import loupd
+        with mock.patch.object(loupd.syslog, "syslog") as log:
+            got = loupd.usable_networks(["192.0.2.0/24", "any", "172.30/16", "0.0.0.0/0", "::/0", "2001:db8::/32"])
+        self.assertEqual(got, ["192.0.2.0/24", "2001:db8::/32"])
+        self.assertEqual(log.call_count, 4)
+
     def local_networks(self, conf, addresses):
         import ipaddress
         import json

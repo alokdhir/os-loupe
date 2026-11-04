@@ -30,6 +30,7 @@ usage: loupd.py [--config /usr/local/etc/loupe.json] [--db PATH] [--poll S] [--f
 import argparse
 import collections
 import functools
+import ipaddress
 import json
 import os
 import signal
@@ -53,12 +54,27 @@ MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
 HEARD_FOR = 3600            # how long an address seen in a device's own frames still counts as that device's
 
 
+def usable_networks(networks):
+    """Local networks from the settings. The GUI checks them, but the file can say anything, and a bad one must not
+    stop the daemon. A /0 is skipped too: every address local means nothing is counted."""
+    usable = []
+    for n in networks:
+        try:
+            if ipaddress.ip_network(n, strict=False).prefixlen:
+                usable.append(n)
+                continue
+        except ValueError:
+            pass
+        syslog.syslog(syslog.LOG_WARNING, f"loupe: skipping local network {n!r}")
+    return usable
+
+
 class Loupe:
     def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), service_map=None, hass_names=None,
                  local_networks=()):
         self.ifaces = set(ifaces)
         self.no_address = set()
-        self.local_networks = list(local_networks)
+        self.local_networks = usable_networks(local_networks)
         self.is_local = pfstate.local_matcher([])
         self.refresh_networks()
         self.store = store.Store(db)
