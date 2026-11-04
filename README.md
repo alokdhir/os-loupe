@@ -122,7 +122,7 @@ Those are broader tools — deep packet inspection, alerts, policies, live flows
 ### General
 
 - **Enable** and **Interfaces**: the LAN or VLAN interfaces your devices are on. With a bridge, choose the bridge; WAN and a bridge's member ports aren't listed.
-- **Local networks**: usually empty, since your devices' networks come from the interfaces' addresses. A [transparent bridge](https://docs.opnsense.org/manual/how-tos/transparent_bridge.html) has no address, so Loupe then treats private addresses as local; list networks here if devices use others, such as public addresses or IPv6. If your transparent bridge does have an address for some reason, Loupe treats it as a normal LAN: totals are right, but it misses most names and MAC addresses.
+- **Local networks**: usually empty, since your devices' networks come from the interfaces' addresses. A transparent bridge has no address, so Loupe then treats private addresses as local; list networks here if devices use others, such as public addresses or IPv6. See [Transparent bridges](#transparent-bridges).
 - **Keep 5-minute detail** (30 days), **hourly totals** (365 days) and **sites seen** (30 days): how long each kind of data is kept.
 - **Home Assistant (optional)**: its **Address** and an **Access token** (in Home Assistant: your profile → *Security* → *Long-lived access tokens* → *Create token*). Devices Home Assistant knows by MAC address take the name you gave them there, and their area shows on the device page. Most network integrations know the MAC; cloud ones (Tuya, for one) don't. Loupe only reads names and areas, every 10 minutes, and keeps the last ones if Home Assistant is down. Turn off **Verify certificate** for a self-signed certificate.
 
@@ -256,6 +256,23 @@ Removing the plugin (or `pkg delete os-loupe`) keeps the traffic data in `/var/d
 For development, `ROUTER=user@router tools/deploy.sh` copies your working tree to a router over SSH and installs it there (`tools/install.sh`, without the package). Packages are built and published by `tools/publish.sh` in [os-plugins](https://github.com/alokdhir/os-plugins), the package repository; a changed plugin needs a new `PLUGIN_VERSION` or `PLUGIN_REVISION`.
 
 The layout follows a plugin directory in [opnsense/plugins](https://github.com/opnsense/plugins) (`Makefile`, `pkg-descr`, `src/` installed under `/usr/local`), and is built as a package with that tree's tooling.
+
+
+## Transparent bridges
+
+Loupe works on a [transparent filtering bridge](https://docs.opnsense.org/manual/how-tos/transparent_bridge.html), where OPNsense sits inline with no address on the bridge and another router handles NAT, DHCP and DNS.
+
+**Setup:** set up the bridge as the how-to describes, including its tunables (`net.link.bridge.pfil_bridge=1`, `net.link.bridge.pfil_member=0`). Loupe reads pf's states on the interface you select, so firewall rules have to match on the bridge, not its members. Then, under **Settings**, choose the *Bridge* interface and press *Apply*. If devices use anything other than private addresses, such as public addresses or global IPv6, list those networks in **Local networks**.
+
+**How it differs from a router:**
+
+- The box has to sit between the devices and their router. Between the modem and the router, it sees only the router's one NATed address.
+- Loupe sees only traffic that crosses the bridge, not traffic between two devices on the same side.
+- With Local networks empty, private addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`) count as local, so traffic between two of them isn't counted, even across the bridge: a device reaching a private server beyond the bridge won't show. Listing your LAN in Local networks fixes that.
+- Names come from what Loupe captures: TLS and QUIC server names, plain DNS answers, DHCP and Bonjour. It can't read another router's leases or its DNS cache.
+- If your bridge has an address for some reason, Loupe treats it as a normal LAN: totals are right, but it misses most names and MAC addresses.
+
+**Tested so far:** one setup, a VM built from the how-to with one client over IPv4, where Loupe's totals came within about 1% of the client's own counters. Not tested yet: IPv6, VLAN-tagged trunks (Loupe's capture filters don't match tagged frames, so expect missing names and MAC addresses there), real hardware and many devices. Reports are welcome.
 
 ## Tests
 

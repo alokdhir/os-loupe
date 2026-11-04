@@ -338,7 +338,7 @@ class TestUnnumberedInterface(unittest.TestCase):
     def test_private_fallback_said_once_per_episode(self):
         d = self.daemon(["bridge0"])
         self.assertEqual(self.refresh(d, []), ["bridge0"])
-        self.assertTrue(d.is_local("10.0.2.16") and d.is_local("192.168.4.1") and d.is_local("fd00::1"))
+        self.assertTrue(d.is_local("10.0.2.16") and d.is_local("192.168.100.1") and d.is_local("fd00::1"))
         self.assertFalse(d.is_local("172.66.0.218") or d.is_local("2001:db8::1"))
         self.assertEqual(self.refresh(d, []), [])
         self.assertEqual(self.refresh(d, [("bridge0", "198.51.100.1/24")]), [])
@@ -386,8 +386,8 @@ class TestUnnumberedInterface(unittest.TestCase):
                 return query.cmd_local_networks()
 
     def test_the_settings_line(self):
-        self.assertEqual(self.local_networks({"interfaces": ["bridge0"]}, [("bridge0", "192.168.0.1/16"), ("bridge0", "fe80::1/64")]),
-                         {"networks": ["192.168.0.0/16"], "private": False})
+        self.assertEqual(self.local_networks({"interfaces": ["bridge0"]}, [("bridge0", "198.51.100.1/24"), ("bridge0", "fe80::1/64")]),
+                         {"networks": ["198.51.100.0/24"], "private": False})
         self.assertEqual(self.local_networks({"interfaces": ["bridge0"]}, []), {"networks": [], "private": True})
         self.assertEqual(self.local_networks({"interfaces": ["bridge0"], "local_networks": ["203.0.113.0/24"]}, []),
                          {"networks": [], "private": False})
