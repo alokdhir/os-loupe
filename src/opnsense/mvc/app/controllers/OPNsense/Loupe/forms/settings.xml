@@ -9,7 +9,7 @@
         <id>loupe.general.interfaces</id>
         <label>Interfaces</label>
         <type>select_multiple</type>
-        <help>The LAN or VLAN interfaces your devices are on. With a bridge, choose the bridge, not its member ports. Don't choose WAN. An interface needs an address of its own: Loupe uses it to tell which devices are local, and counts nothing on an interface without one.</help>
+        <help>The LAN or VLAN interfaces your devices are on. With a bridge, choose the bridge; WAN and a bridge's member ports aren't listed. An interface needs an address of its own: Loupe uses it to tell which devices are local, and counts nothing on an interface without one.</help>
     </field>
     <field>
         <id>loupe.general.retention_5m</id>

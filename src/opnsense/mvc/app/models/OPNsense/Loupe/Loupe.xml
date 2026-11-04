@@ -8,7 +8,7 @@
                 <Default>0</Default>
                 <Required>Y</Required>
             </enabled>
-            <interfaces type="InterfaceField">
+            <interfaces type=".\LanInterfaceField">
                 <Multiple>Y</Multiple>
                 <Default>lan</Default>
                 <Required>Y</Required>
