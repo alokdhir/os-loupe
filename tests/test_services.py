@@ -362,6 +362,29 @@ class TestUnnumberedInterface(unittest.TestCase):
         self.refresh(d, [("bridge0", "198.51.100.1/24")])
         self.assertTrue(d.is_local("203.0.113.5") and d.is_local("198.51.100.9"))
 
+    def local_networks(self, conf, addresses):
+        import ipaddress
+        import json
+        from unittest import mock
+
+        import query
+        found = [(name, ipaddress.ip_interface(a)) for name, a in addresses]
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.json")
+            with open(path, "w") as f:
+                json.dump(conf, f)
+            with mock.patch.object(query, "CONF", path), mock.patch.object(query.netif, "addresses", return_value=found):
+                return query.cmd_local_networks()
+
+    def test_the_settings_line(self):
+        self.assertEqual(self.local_networks({"interfaces": ["bridge0"]}, [("bridge0", "192.168.0.1/16"), ("bridge0", "fe80::1/64")]),
+                         {"networks": ["192.168.0.0/16"], "private": False})
+        self.assertEqual(self.local_networks({"interfaces": ["bridge0"]}, []), {"networks": [], "private": True})
+        self.assertEqual(self.local_networks({"interfaces": ["bridge0"], "local_networks": ["203.0.113.0/24"]}, []),
+                         {"networks": [], "private": False})
+        self.assertEqual(self.local_networks({"interfaces": ["bridge0", "igc0"]}, [("igc0", "198.51.100.1/24")]),
+                         {"networks": ["198.51.100.0/24"], "private": True})
+
     def test_macs_from_frames_under_the_neighbour_table(self):
         import time
         from types import SimpleNamespace

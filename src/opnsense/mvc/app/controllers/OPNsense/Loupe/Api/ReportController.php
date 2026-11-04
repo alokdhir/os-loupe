@@ -77,6 +77,12 @@ class ReportController extends ApiControllerBase
         return $data;
     }
 
+    /* what the selected interfaces give as local networks, for Settings */
+    public function localNetworksAction()
+    {
+        return $this->query(['localnetworks']);
+    }
+
     public function widgetAction()
     {
         return $this->query(['widget']);

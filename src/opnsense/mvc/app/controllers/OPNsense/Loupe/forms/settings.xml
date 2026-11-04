@@ -17,7 +17,7 @@
         <type>select_multiple</type>
         <style>tokenize</style>
         <allownew>true</allownew>
-        <help>Usually leave this empty: your devices' networks come from the interfaces' addresses. A transparent bridge has no address, so Loupe then treats private addresses as local. List networks here (e.g. 192.0.2.0/24) if devices use others, such as public addresses or IPv6.</help>
+        <help>Leave empty unless your devices use addresses outside the selected interfaces' networks. A transparent bridge has no address, so private addresses count as local unless you list networks here.</help>
     </field>
     <field>
         <id>loupe.general.retention_5m</id>

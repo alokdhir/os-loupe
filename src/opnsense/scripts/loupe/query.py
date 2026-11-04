@@ -772,6 +772,27 @@ def cmd_networks():
     return {"networks": nets.shown()}
 
 
+def cmd_local_networks():
+    """What the selected interfaces' addresses give as local now, and whether private addresses stand in for an
+    interface with none (what loupd does; the settings page shows it). Applied settings, not the form's."""
+    try:
+        with open(CONF) as f:
+            conf = json.load(f)
+    except (OSError, ValueError):
+        conf = {}
+    ifaces = set(conf.get("interfaces", []))
+    found, addressed = [], set()
+    try:
+        for dev, i in netif.addresses(ifaces):
+            if not i.ip.is_link_local:
+                addressed.add(dev)
+                if str(i.network) not in found:
+                    found.append(str(i.network))
+    except OSError:
+        return {"error": "can't read the interfaces' addresses"}
+    return {"networks": found, "private": bool(ifaces - addressed) and not conf.get("local_networks")}
+
+
 def cmd_icons():
     """The icon each overridden device shows, for the Overrides grid."""
     db, _svc, ov = load()
@@ -1026,6 +1047,8 @@ def main(argv):
             out = cmd_service(argv[2], hours_arg(argv[3]), wanted(arg(4)), chart=True)
         elif cmd == "networks":
             out = cmd_networks()
+        elif cmd == "localnetworks":
+            out = cmd_local_networks()
         elif cmd == "icons":
             out = cmd_icons()
         elif cmd == "identities":

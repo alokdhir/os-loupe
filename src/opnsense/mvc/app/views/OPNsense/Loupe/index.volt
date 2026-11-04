@@ -357,6 +357,24 @@ POSSIBILITY OF SUCH DAMAGE.
             });
         }
 
+        /* under Local networks: what the interfaces provide already (as applied) */
+        function showLocalNetworks() {
+            ajaxGet('/api/loupe/report/local_networks', {}, function (data) {
+                if (data.error) {
+                    return;
+                }
+                const parts = (data.networks || []).slice();
+                if (data.private) {
+                    parts.push(parts.length ? '{{ lang._("private addresses") }}' : '{{ lang._("none (private addresses count as local)") }}');
+                }
+                if (!$('#loupe_provided').length) {
+                    $(document.getElementById('loupe.general.local_networks')).closest('td')
+                        .append('<div id="loupe_provided" class="text-muted" style="margin-top: 5px;"></div>');
+                }
+                $('#loupe_provided').text('{{ lang._("Your interfaces provide:") }} ' + (parts.join(', ') || '{{ lang._("none") }}'));
+            });
+        }
+
         /* Settings tabs */
         /* Settings tab: one page at a time; each starts the first time it is shown (grids need to be visible) */
         const started = {};
@@ -366,6 +384,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     formatTokenizersUI();
                     $('.selectpicker').selectpicker('refresh');
                     hassStatus();
+                    showLocalNetworks();
                 });
             },
             servicenames: function () {
@@ -967,6 +986,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 applyButton();
                 updateServiceControlUI('loupe');
                 loadNetworks();         /* the interfaces may have changed */
+                showLocalNetworks();
             }
         });
         updateServiceControlUI('loupe');
