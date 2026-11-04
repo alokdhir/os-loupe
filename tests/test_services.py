@@ -407,6 +407,8 @@ class TestUnnumberedInterface(unittest.TestCase):
             if pid == 0:
                 try:
                     rootfiles._sandbox = lambda: False
+                    if not hasattr(os, "O_SEARCH"):                     # Linux, where CI runs
+                        os.O_SEARCH = os.O_RDONLY
                     os.close(rd)
                     os.close(alive_wr)
                     rootfiles.serve([a, b, gone], wr, alive_rd, every=0.05)
