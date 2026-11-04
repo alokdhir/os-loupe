@@ -540,6 +540,8 @@ POSSIBILITY OF SUCH DAMAGE.
             window.location.hash = '#' + $(this).data('page');
         });
         $(window).on('hashchange', route);
+        /* the links OPNsense puts under a form's list fields (Clear All, Copy, ...) are href="#": without this, they empty the hash and route() leaves the page */
+        $(document).on('click', 'a[href="#"]', function (e) { e.preventDefault(); });
 
         $('.loupe-period .btn').click(function () {
             hours = parseFloat($(this).data('hours'));
