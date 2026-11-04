@@ -144,9 +144,14 @@ def is_group(addr):
 _client = None
 
 
+def open_client():
+    """Open pf's netlink socket (needs root; it keeps working after dropping it, a new one wouldn't)."""
+    global _client
+    _client = pfnl.Client()
+
+
 def snapshot(is_local, ifaces=None):
-    """Current states from pf over netlink. On an error the client is dropped and the error raised
-    (loupd logs it and tries again at the next poll with a fresh socket)."""
+    """Current states from pf over netlink. On an error the client is dropped and the error raised."""
     global _client
     try:
         if _client is None:

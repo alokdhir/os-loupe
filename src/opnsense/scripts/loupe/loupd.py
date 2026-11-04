@@ -35,6 +35,7 @@ import json
 import os
 import signal
 import ssl
+import struct
 import sys
 import syslog
 import threading
@@ -43,7 +44,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, hass, names, neighbours, netif, pfstate, report, services, store, unbound  # noqa: E402
+from lib import devid, hass, names, neighbours, netif, pfstate, privs, report, services, store, unbound  # noqa: E402
 from lib.report import local_day  # noqa: E402
 
 
@@ -71,7 +72,7 @@ def usable_networks(networks):
 
 class Loupe:
     def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), service_map=None, hass_names=None,
-                 local_networks=()):
+                 local_networks=(), unbound_cache=""):
         self.ifaces = set(ifaces)
         self.no_address = set()
         self.local_networks = usable_networks(local_networks)
@@ -105,14 +106,8 @@ class Loupe:
         self.devices = collections.defaultdict(dict)
         self.live = set()
         self.error_hour, self.errors_logged = None, 0
-        self.seed_names()
-
-    def seed_names(self):
-        try:
-            out = unbound.command("dump_cache", timeout=30)
-        except (OSError, ssl.SSLError):         # Unbound not running or not in use: no seed
-            return
-        self.names.seed_unbound(out, time.time())
+        if unbound_cache:
+            self.names.seed_unbound(unbound_cache, time.time())
 
     # ---- capture events -------------------------------------------------------------
     def emit(self, ev):
@@ -344,7 +339,13 @@ class Loupe:
             syslog.syslog(syslog.LOG_WARNING, f"loupe: can't read this router's MAC addresses: {e}")
 
     def poll(self, now):
-        states = pfstate.snapshot(self.is_local, self.ifaces)
+        try:
+            states = pfstate.snapshot(self.is_local, self.ifaces)
+        except (OSError, ValueError, KeyError, IndexError, struct.error) as e:
+            # only root can open a new socket: exit, and daemon(8) starts loupd again
+            syslog.syslog(syslog.LOG_ERR, f"loupe: reading pf's states failed, restarting: {e!r}")
+            self.stopping = True
+            return
         self.live = set(states)
         self.count(now, self.tracker.update(states))
 
@@ -422,16 +423,28 @@ def main():
     for rule, problem in devid.set_user_rules(conf.get("rules", [])):
         syslog.syslog(syslog.LOG_WARNING, f"loupe: skipping device rule {json.dumps(rule)}: {problem}")
     try:
-        os.chmod(args.config, 0o600)        # it may hold the Home Assistant token; only root (loupd, query.py) reads it
+        os.chmod(args.config, 0o600)        # it may hold the Home Assistant token; only root reads the file
     except (OSError, TypeError):
         pass
+    # what needs root: then everything that handles packets, or names from them, runs without it
+    cap = Capture(None)
+    cap.open(ifaces)
+    pfstate.open_client()
+    devid.hold_lease_dirs()
+    try:
+        cache = unbound.command("dump_cache", timeout=30)
+    except (OSError, ssl.SSLError):             # Unbound not running or not in use: no seed
+        cache = ""
+    why = privs.drop(os.path.dirname(args.db))
+    if why:
+        syslog.syslog(syslog.LOG_WARNING, f"loupe: still running as root: {why}")
     r = conf.get("retention", {})
     ha = conf.get("home_assistant") or {}
     ha_names = hass.Names(os.path.join(os.path.dirname(args.db), "hass.json"), ha.get("url") or "", ha.get("token") or "",
                           ha.get("verify", True))
     lp = Loupe(ifaces, args.db, args.poll, args.flush,
                (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_sites_seen", 30)), conf.get("services"), ha_names,
-               conf.get("local_networks", []))
+               conf.get("local_networks", []), cache)
     if ha_names.enabled:
         def refresh():
             while not lp.stopping:
@@ -443,14 +456,14 @@ def main():
                         return
                     time.sleep(1)
         threading.Thread(target=refresh, name="hass", daemon=True).start()
-    cap = Capture(lp.emit)
+    cap.emit = lp.emit
 
     def stop(*_):
         lp.stopping = True              # tick() does the final write and exits (within a second)
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     syslog.syslog(syslog.LOG_NOTICE, f"loupe: started on {' '.join(ifaces)}")
-    cap.run(ifaces, tick=lp.tick)
+    cap.run(tick=lp.tick)
 
 
 if __name__ == "__main__":

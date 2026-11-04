@@ -371,6 +371,66 @@ class TestUnnumberedInterface(unittest.TestCase):
         self.assertEqual(got, ["192.0.2.0/24", "2001:db8::/32"])
         self.assertEqual(log.call_count, 4)
 
+    def test_lease_files_through_a_held_directory(self):
+        from lib import devid
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "leases")
+            with open(path, "w") as f:
+                f.write("hello")
+            os.chmod(d, 0o755)
+            self.assertEqual(devid._read(path), "hello")
+            self.assertTrue(devid._exists(path))
+            self.assertFalse(devid._exists(path + ".gone"))
+            fd = os.open(d, os.O_RDONLY)
+            devid._held[d] = fd
+            try:
+                self.assertEqual(devid._read(path), "hello")
+                self.assertTrue(devid._exists(path))
+                self.assertFalse(devid._exists(path + ".gone"))
+                self.assertEqual(devid._read(path + ".gone"), "")
+            finally:
+                del devid._held[d]
+                os.close(fd)
+
+    def test_not_root_stays_as_is(self):
+        from unittest import mock
+
+        from lib import privs
+        with mock.patch.object(privs.os, "getuid", return_value=1000):
+            self.assertEqual(privs.drop("/tmp"), "not running as root")
+
+    def test_drop_needs_the_user_and_its_directory(self):
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from lib import privs
+        calls = []
+        with mock.patch.object(privs.os, "getuid", return_value=0), \
+                mock.patch.object(privs.os, "setuid", side_effect=lambda u: calls.append(("uid", u))), \
+                mock.patch.object(privs.os, "setgid", side_effect=lambda g: calls.append(("gid", g))), \
+                mock.patch.object(privs.os, "setgroups", side_effect=lambda g: calls.append(("groups", g))):
+            with mock.patch.object(privs.pwd, "getpwnam", side_effect=KeyError):
+                self.assertEqual(privs.drop("/x"), "no user loupe")
+            with mock.patch.object(privs.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=1787, pw_gid=1787)):
+                with mock.patch.object(privs.os, "stat", return_value=SimpleNamespace(st_uid=0)):
+                    self.assertIn("doesn't belong", privs.drop("/x"))
+                self.assertEqual(calls, [])
+                with mock.patch.object(privs.os, "stat", return_value=SimpleNamespace(st_uid=1787)), \
+                        mock.patch.dict(privs.os.environ):
+                    self.assertIsNone(privs.drop("/x"))
+        self.assertEqual(calls, [("groups", []), ("gid", 1787), ("uid", 1787)])     # the uid last: it ends the rest
+
+    def test_a_failed_pf_read_restarts(self):
+        from types import SimpleNamespace
+        from unittest import mock
+
+        import loupd
+        d = SimpleNamespace(is_local=None, ifaces=set(), stopping=False, count=None)
+        with mock.patch.object(loupd.pfstate, "snapshot", side_effect=OSError("gone")), \
+                mock.patch.object(loupd.syslog, "syslog"):
+            loupd.Loupe.poll(d, 100)
+        self.assertTrue(d.stopping)
+
     def local_networks(self, conf, addresses):
         import ipaddress
         import json

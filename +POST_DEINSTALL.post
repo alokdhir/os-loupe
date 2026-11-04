@@ -3,3 +3,6 @@
 # Python's byte-code caches are not in the package: remove them so the directory goes too
 rm -rf /usr/local/opnsense/scripts/loupe/__pycache__ /usr/local/opnsense/scripts/loupe/lib/__pycache__
 rmdir /usr/local/opnsense/scripts/loupe/lib /usr/local/opnsense/scripts/loupe 2>/dev/null || :
+
+# the data stays until you delete it; an upgrade's install creates the user again, with the same uid
+pw userdel loupe >/dev/null 2>&1 || :

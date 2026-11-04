@@ -243,7 +243,9 @@ class TestBpfCompile(unittest.TestCase):
         bpf.Bpf, capture.select.select = Fake, stop
         try:
             with self.assertRaises(StopIteration):
-                capture.Capture(lambda ev: None).run(["lan0", "lan1"])
+                cap = capture.Capture(lambda ev: None)
+                cap.open(["lan0", "lan1"])
+                cap.run()
         finally:
             bpf.Bpf, capture.select.select = real_bpf, real_select
         self.assertEqual(sorted(made), sorted([("lan0", capture.FILTER, bpf.D_IN), ("lan1", capture.FILTER, bpf.D_IN),

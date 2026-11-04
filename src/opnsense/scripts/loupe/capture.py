@@ -94,11 +94,15 @@ class Capture:
         self.stats = {"frames": 0, "tls": 0, "tls_joined": 0, "tls_nosni": 0, "quic": 0,
                       "dns": 0, "dhcp": 0, "mdns": 0}
 
-    def run(self, ifaces, tick=None):
-        """Capture forever. `tick(now)` runs about once a second, between reads."""
+    def open(self, ifaces):
+        """Open the packet taps (needs root; they keep working after dropping it)."""
         addressed = {name for name, a in netif.addresses(set(ifaces)) if not a.ip.is_link_local}
         taps = [bpf.Bpf(i, expr, direction) for i in ifaces for expr, direction in taps_for(i, i in addressed)]
-        fds = {t.fileno(): t for t in taps}
+        self.fds = {t.fileno(): t for t in taps}
+
+    def run(self, tick=None):
+        """Capture forever. `tick(now)` runs about once a second, between reads."""
+        fds = self.fds
         while True:
             ready, _, _ = select.select(list(fds), [], [], 1.0)
             now = time.time()
@@ -215,7 +219,8 @@ def main():
             sys.exit(0)
         signal.signal(signal.SIGALRM, stop)
         signal.setitimer(signal.ITIMER_REAL, args.seconds)
-    cap.run(args.ifaces)
+    cap.open(args.ifaces)
+    cap.run()
 
 
 if __name__ == "__main__":

@@ -11,6 +11,10 @@ Reports live under Reporting, with a dashboard widget.
 Plugin Changelog
 ================
 
+1.2
+
+* Packet parsing, the database and reports run as a dedicated loupe user: only opening the capture devices takes root
+
 1.1
 
 * Transparent bridges: works with no address on the bridge, counts each connection once, reads names and MAC addresses from forwarded traffic

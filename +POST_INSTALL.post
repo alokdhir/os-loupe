@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# the user Loupe runs as, and its data (reports use them even with the service off)
+/usr/local/opnsense/scripts/loupe/setup_user.sh
+
 # an upgrade leaves the old loupd running: restart it with the new code (only if it is enabled)
 if service loupe enabled; then
 	service loupe restart

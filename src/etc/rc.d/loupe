@@ -16,5 +16,6 @@ pidfile="/var/run/${name}.pid"
 procname="daemon"
 command="/usr/sbin/daemon"
 command_args="-f -r -R 5 -P ${pidfile} -T loupe /usr/local/opnsense/scripts/loupe/loupd.py --config ${loupe_config}"
+start_precmd="/usr/local/opnsense/scripts/loupe/setup_user.sh"
 
 run_rc_command "$1"

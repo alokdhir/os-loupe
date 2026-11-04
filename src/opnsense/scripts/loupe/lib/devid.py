@@ -474,11 +474,40 @@ KEA_LEASES = "/var/db/kea/kea-leases4.csv"
 KEA_CONF = "/usr/local/etc/kea/kea-dhcp4.conf"
 ISC_LEASES = "/var/dhcpd/var/db/dhcpd.leases"
 ISC_CONF = "/var/dhcpd/etc/dhcpd.conf"
+_held = {}      # directory -> a search handle opened as root: files in root-only directories stay reachable after dropping it
+
+
+def hold_lease_dirs():
+    """Call before dropping root. Kea keeps its leases and config in directories only root can enter; O_SEARCH handles
+    let the files in them be opened by name afterwards, and nothing else."""
+    if not hasattr(os, "O_SEARCH"):
+        return
+    for path in (KEA_LEASES, KEA_CONF, ISC_LEASES, ISC_CONF):
+        folder = os.path.dirname(path)
+        if folder not in _held:
+            try:
+                _held[folder] = os.open(folder, os.O_SEARCH | os.O_DIRECTORY | os.O_CLOEXEC)
+            except OSError:
+                pass
+
+
+def _opener(path, flags):
+    folder, name = os.path.split(path)
+    return os.open(name, flags, dir_fd=_held[folder]) if folder in _held else os.open(path, flags)
+
+
+def _exists(path):
+    folder, name = os.path.split(path)
+    try:
+        os.stat(name, dir_fd=_held[folder]) if folder in _held else os.stat(path)
+        return True
+    except OSError:
+        return False
 
 
 def _read(path):
     try:
-        with open(path, encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace", opener=_opener) as f:
             return f.read()
     except OSError:
         return ""
@@ -577,8 +606,8 @@ def static_hosts():
     out = {}
     # Kea ships installed with a sample config full of example reservations: only trust a server's
     # fixed entries while it is actually handing out leases here
-    kea = _kea_reservations(_read(KEA_CONF)) if os.path.exists(KEA_LEASES) else {}
-    isc = _isc_hosts(_read(ISC_CONF)) if os.path.exists(ISC_LEASES) else {}
+    kea = _kea_reservations(_read(KEA_CONF)) if _exists(KEA_LEASES) else {}
+    isc = _isc_hosts(_read(ISC_CONF)) if _exists(ISC_LEASES) else {}
     for found in (_dnsmasq_hosts(_read(DNSMASQ_HOSTS)), kea, isc):
         for ip, name in found.items():
             out.setdefault(ip, name)

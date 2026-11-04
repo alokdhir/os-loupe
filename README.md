@@ -237,6 +237,10 @@ The AI Rule Generator's prompt carries, for each device it asks about, what the 
 
 In a workplace, tell people that their devices' traffic is recorded this way. Per-person browsing records are regulated in many places (for example the GDPR in the EU, and notice requirements in some US states); check what applies to you before turning it on.
 
+## Security
+
+Loupe only reads packets: it never alters, blocks or injects them, and it listens on no network port. Its pages are behind OPNsense's login and privileges. The service and its reports run as a dedicated `loupe` user. Only opening the capture devices and reading what needs root happens as root, at the start, before anything from a packet is read.
+
 ## Install
 
 Loupe installs from a package repository, [os-plugins](https://alokdhir.github.io/os-plugins/) (it isn't in the official plugin list: [plugins there wrap FreeBSD ports](https://github.com/opnsense/plugins/issues/5854)). Add the repository once, on the OPNsense box itself — from the console (option 8, *Shell*) or SSH, as root:

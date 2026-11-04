@@ -45,7 +45,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib import airules, devid, netif  # noqa: E402
+from lib import airules, devid, netif, privs  # noqa: E402
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
 from lib.report import (WEB_PORTS, Namer, add, add_site, build_day, days, local_day, next_day, pieces, port_key,  # noqa: E402
                         recent_rows, site_rows)
@@ -54,6 +54,7 @@ from lib.services import HOSTING, ServiceMap  # noqa: E402
 DB = "/var/db/loupe/loupe.db"
 CONF = "/usr/local/etc/loupe.json"
 MAX_HOURS = 24 * 3650
+_conf = None        # the settings, once read as root
 
 
 class Networks:
@@ -97,14 +98,41 @@ def wanted(arg):
     return {x for x in (arg or "").split(",") if x} or None
 
 
-def load():
-    global nets
+def read_conf():
+    """The settings: read as root before dropping it (main), since only root can read the file."""
+    if _conf is not None:
+        return _conf
     try:
         with open(CONF) as f:
-            conf = json.load(f)
-        os.chmod(CONF, 0o600)           # it may hold the Home Assistant token (loupd does the same)
+            return json.load(f)
     except (OSError, ValueError):
-        conf = {}
+        return {}
+
+
+def start_as_user(cmd, path):
+    """configd runs this as root, but what it reads comes from packets: read the settings, hand over a reply file the
+    GUI left for this command, and drop root before touching the database."""
+    global _conf
+    if os.getuid() != 0:
+        return
+    _conf = read_conf()
+    try:
+        os.chmod(CONF, 0o600)           # it may hold the Home Assistant token (loupd does the same)
+    except OSError:
+        pass
+    devid.hold_lease_dirs()
+    pw = privs.user()
+    if pw and cmd in ("aipreview", "aimodelpreview") and AI_REPLY.match(path or ""):
+        try:
+            os.chown(path, pw.pw_uid, pw.pw_gid)
+        except OSError:
+            pass
+    privs.drop(os.path.dirname(DB))
+
+
+def load():
+    global nets
+    conf = read_conf()
     set_user_rules(conf.get("rules", []))          # their icons
     devid.set_model_names(conf.get("model_names", {}))
     nets = Networks(conf)
@@ -775,11 +803,7 @@ def cmd_networks():
 def cmd_local_networks():
     """What the selected interfaces' addresses give as local now, and whether private addresses stand in for an
     interface with none (what loupd does; the settings page shows it). Applied settings, not the form's."""
-    try:
-        with open(CONF) as f:
-            conf = json.load(f)
-    except (OSError, ValueError):
-        conf = {}
+    conf = read_conf()
     ifaces = set(conf.get("interfaces", []))
     found, addressed = [], set()
     try:
@@ -927,11 +951,7 @@ def cmd_aipreview(path):
         except OSError:
             pass
     suggested, unknown, problem, _models = airules.parse(data.get("reply") or "")
-    try:
-        with open(CONF) as f:
-            user = json.load(f).get("rules", [])
-    except (OSError, ValueError):
-        user = []
+    user = read_conf().get("rules", [])
     db, _, ov = load()
     devs = ai_devices(db, ov)
     ids = {}
@@ -1035,6 +1055,7 @@ def main(argv):
     try:
         cmd = argv[1] if len(argv) > 1 else ""
         arg = (lambda i: argv[i] if len(argv) > i else "")
+        start_as_user(cmd, arg(2))
         if cmd == "devices":
             out = cmd_devices(hours_arg(argv[2]), wanted(arg(3)))
         elif cmd == "device":
