@@ -120,7 +120,7 @@ def start_as_user(cmd, path):
         os.chmod(CONF, 0o600)           # it may hold the Home Assistant token (loupd does the same)
     except OSError:
         pass
-    devid.hold_lease_dirs()
+    devid.read_root_files()
     pw = privs.user()
     if pw and cmd in ("aipreview", "aimodelpreview") and AI_REPLY.match(path or ""):
         try:

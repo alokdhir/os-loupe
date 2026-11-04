@@ -13,7 +13,7 @@ Plugin Changelog
 
 1.2
 
-* Packet parsing, the database and reports run as a dedicated loupe user: only opening the capture devices takes root
+* Packet parsing, the database and reports run as a dedicated loupe user; the only part left as root is a small sandboxed process that passes on lease files
 
 1.1
 

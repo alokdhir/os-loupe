@@ -371,26 +371,78 @@ class TestUnnumberedInterface(unittest.TestCase):
         self.assertEqual(got, ["192.0.2.0/24", "2001:db8::/32"])
         self.assertEqual(log.call_count, 4)
 
-    def test_lease_files_through_a_held_directory(self):
+    def test_lease_files_from_root(self):
         from lib import devid
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "leases")
             with open(path, "w") as f:
-                f.write("hello")
-            os.chmod(d, 0o755)
-            self.assertEqual(devid._read(path), "hello")
+                f.write("on disk")
+            self.assertEqual(devid._read(path), "on disk")
             self.assertTrue(devid._exists(path))
-            self.assertFalse(devid._exists(path + ".gone"))
-            fd = os.open(d, os.O_RDONLY)
-            devid._held[d] = fd
+            devid.set_root_file(path, "from root")
             try:
-                self.assertEqual(devid._read(path), "hello")
+                self.assertEqual(devid._read(path), "from root")
                 self.assertTrue(devid._exists(path))
-                self.assertFalse(devid._exists(path + ".gone"))
-                self.assertEqual(devid._read(path + ".gone"), "")
+                devid.set_root_file(path, None)
+                self.assertEqual(devid._read(path), "")
+                self.assertFalse(devid._exists(path))
             finally:
-                del devid._held[d]
-                os.close(fd)
+                del devid._from_root[path]
+
+    def test_root_files_process(self):
+        import select
+        import time
+
+        from lib import rootfiles
+        with tempfile.TemporaryDirectory() as d:
+            a, b, gone = os.path.join(d, "a"), os.path.join(d, "b"), os.path.join(d, "gone")
+            with open(a, "w") as f:
+                f.write("alpha")
+            with open(b, "w") as f:
+                f.write("")
+            got = {}
+            rd, wr = os.pipe()
+            alive_rd, alive_wr = os.pipe()
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    rootfiles._sandbox = lambda: False
+                    os.close(rd)
+                    os.close(alive_wr)
+                    rootfiles.serve([a, b, gone], wr, alive_rd, every=0.05)
+                finally:
+                    os._exit(0)
+            os.close(wr)
+            os.close(alive_rd)
+            for _ in range(3):
+                head = rootfiles._exactly(rd, rootfiles._FRAME.size)
+                i, n = rootfiles._FRAME.unpack(head)
+                got[i] = None if n == rootfiles.MISSING else (rootfiles._exactly(rd, n) if n else b"")
+            self.assertEqual(got, {0: b"alpha", 1: b"", 2: None})
+            self.assertEqual(select.select([rd], [], [], 0.15)[0], [])         # unchanged: nothing more is sent
+            with open(a, "w") as f:
+                f.write("changed")
+            self.assertTrue(select.select([rd], [], [], 2)[0])
+            head = rootfiles._exactly(rd, rootfiles._FRAME.size)
+            self.assertEqual(rootfiles._FRAME.unpack(head)[0], 0)
+            self.assertEqual(rootfiles._exactly(rd, 7), b"changed")
+            os.close(alive_wr)                                                  # the parent is gone: it exits
+            deadline = time.time() + 2
+            while os.waitpid(pid, os.WNOHANG)[0] == 0:
+                self.assertLess(time.time(), deadline)
+                time.sleep(0.01)
+            self.assertEqual(os.read(rd, 1), b"")
+            os.close(rd)
+
+    def test_feed_decodes_and_ends(self):
+        from lib import rootfiles
+        rd, wr = os.pipe()
+        os.write(wr, rootfiles._FRAME.pack(0, 2) + b"hi" + rootfiles._FRAME.pack(1, rootfiles.MISSING))
+        os.close(wr)
+        got = []
+        rootfiles.feed(rd, ["x", "y"], lambda p, t: got.append((p, t)))
+        os.close(rd)
+        self.assertEqual(got, [("x", "hi"), ("y", None)])
 
     def test_not_root_stays_as_is(self):
         from unittest import mock

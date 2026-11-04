@@ -44,7 +44,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, hass, names, neighbours, netif, pfstate, privs, report, services, store, unbound  # noqa: E402
+from lib import devid, hass, names, neighbours, netif, pfstate, privs, report, rootfiles, services, store, unbound  # noqa: E402
 from lib.report import local_day  # noqa: E402
 
 
@@ -427,10 +427,10 @@ def main():
     except (OSError, TypeError):
         pass
     # what needs root: then everything that handles packets, or names from them, runs without it
+    from_root = rootfiles.start(devid.ROOT_FILES) if os.getuid() == 0 else None      # first: it inherits nothing else
     cap = Capture(None)
     cap.open(ifaces)
     pfstate.open_client()
-    devid.hold_lease_dirs()
     try:
         cache = unbound.command("dump_cache", timeout=30)
     except (OSError, ssl.SSLError):             # Unbound not running or not in use: no seed
@@ -457,6 +457,12 @@ def main():
                     time.sleep(1)
         threading.Thread(target=refresh, name="hass", daemon=True).start()
     cap.emit = lp.emit
+    if from_root is not None:
+        def root_files():
+            rootfiles.feed(from_root, devid.ROOT_FILES, devid.set_root_file)
+            syslog.syslog(syslog.LOG_ERR, "loupe: the process reading lease files has gone, restarting")
+            lp.stopping = True
+        threading.Thread(target=root_files, name="root files", daemon=True).start()
 
     def stop(*_):
         lp.stopping = True              # tick() does the final write and exits (within a second)

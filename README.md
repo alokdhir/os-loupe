@@ -239,7 +239,7 @@ In a workplace, tell people that their devices' traffic is recorded this way. Pe
 
 ## Security
 
-Loupe only reads packets: it never alters, blocks or injects them, and it listens on no network port. Its pages are behind OPNsense's login and privileges. The service and its reports run as a dedicated `loupe` user. Only opening the capture devices and reading what needs root happens as root, at the start, before anything from a packet is read.
+Loupe only reads packets: it never alters, blocks or injects them, and it listens on no network port. Its pages are behind OPNsense's login and privileges. The service and its reports run as a dedicated `loupe` user. Root opens the capture devices at the start, before anything from a packet is read. After that, the only part left as root is a small sandboxed process that reads the DHCP servers' lease files and passes them on; it parses nothing and takes no input.
 
 ## Install
 

@@ -474,40 +474,34 @@ KEA_LEASES = "/var/db/kea/kea-leases4.csv"
 KEA_CONF = "/usr/local/etc/kea/kea-dhcp4.conf"
 ISC_LEASES = "/var/dhcpd/var/db/dhcpd.leases"
 ISC_CONF = "/var/dhcpd/etc/dhcpd.conf"
-_held = {}      # directory -> a search handle opened as root: files in root-only directories stay reachable after dropping it
+ROOT_FILES = (DNSMASQ_LEASES, DNSMASQ_HOSTS, KEA_LEASES, KEA_CONF, ISC_LEASES, ISC_CONF)
+_from_root = {}     # path -> what the root process read (None: no such file); others are read directly
 
 
-def hold_lease_dirs():
-    """Call before dropping root. Kea keeps its leases and config in directories only root can enter; O_SEARCH handles
-    let the files in them be opened by name afterwards, and nothing else."""
-    if not hasattr(os, "O_SEARCH"):
-        return
-    for path in (KEA_LEASES, KEA_CONF, ISC_LEASES, ISC_CONF):
-        folder = os.path.dirname(path)
-        if folder not in _held:
-            try:
-                _held[folder] = os.open(folder, os.O_SEARCH | os.O_DIRECTORY | os.O_CLOEXEC)
-            except OSError:
-                pass
+def set_root_file(path, text):
+    """What the root process (lib/rootfiles.py) read: text, or None when the file doesn't exist."""
+    _from_root[path] = text
 
 
-def _opener(path, flags):
-    folder, name = os.path.split(path)
-    return os.open(name, flags, dir_fd=_held[folder]) if folder in _held else os.open(path, flags)
+def read_root_files():
+    """Call as root, before dropping it, when there is no root process to ask (query.py)."""
+    for path in ROOT_FILES:
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                _from_root[path] = f.read()
+        except OSError:
+            _from_root[path] = None
 
 
 def _exists(path):
-    folder, name = os.path.split(path)
-    try:
-        os.stat(name, dir_fd=_held[folder]) if folder in _held else os.stat(path)
-        return True
-    except OSError:
-        return False
+    return _from_root[path] is not None if path in _from_root else os.path.exists(path)
 
 
 def _read(path):
+    if path in _from_root:
+        return _from_root[path] or ""
     try:
-        with open(path, encoding="utf-8", errors="replace", opener=_opener) as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             return f.read()
     except OSError:
         return ""
