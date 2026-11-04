@@ -45,7 +45,7 @@
     </field>
     <field>
         <id>loupe.general.hass_verify</id>
-        <label>Check its certificate</label>
+        <label>Verify certificate</label>
         <type>checkbox</type>
         <help>Turn off for a self-signed certificate (Home Assistant's default when it uses HTTPS without a domain).</help>
     </field>
