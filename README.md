@@ -262,7 +262,7 @@ The layout follows a plugin directory in [opnsense/plugins](https://github.com/o
 
 Loupe works on a [transparent filtering bridge](https://docs.opnsense.org/manual/how-tos/transparent_bridge.html), where OPNsense sits inline with no address on the bridge and another router handles NAT, DHCP and DNS.
 
-**Setup:** set up the bridge as the how-to describes, including its tunables (`net.link.bridge.pfil_bridge=1`, `net.link.bridge.pfil_member=0`). Loupe reads pf's states on the interface you select, so firewall rules have to match on the bridge, not its members. Then, under **Settings**, choose the *Bridge* interface and press *Apply*. If devices use anything other than private addresses, such as public addresses or global IPv6, list those networks in **Local networks**.
+**Setup:** set up the bridge as the how-to describes, including its tunables (`net.link.bridge.pfil_bridge=1`, `net.link.bridge.pfil_member=0`). Loupe counts the states pf records on the interface you select, so pf has to filter on the bridge, not its members. The how-to's tunables do this. Then, under **Settings**, choose the *Bridge* interface and press *Apply*. If devices use anything other than private addresses, such as public addresses or global IPv6, list those networks in **Local networks**.
 
 **How it differs from a router:**
 
