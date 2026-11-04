@@ -20,8 +20,9 @@
             <local_networks type=".\LocalNetworkField">
                 <NetMaskRequired>Y</NetMaskRequired>
                 <WildcardEnabled>N</WildcardEnabled>
+                <Strict>Y</Strict>
                 <AsList>Y</AsList>
-                <ValidationMessage>Enter networks as address/prefix, such as 192.0.2.0/24 or 2001:db8::/32.</ValidationMessage>
+                <ValidationMessage>Enter networks by their first address and prefix, such as 192.0.2.0/24 or 2001:db8::/32.</ValidationMessage>
             </local_networks>
             <retention_5m type="IntegerField">
                 <Default>30</Default>
