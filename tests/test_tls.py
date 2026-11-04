@@ -36,11 +36,14 @@ def pkt(payload, seq, ts=1.0, sport=50000):
 
 
 class TapTests(unittest.TestCase):
-    def test_only_a_bridge_reads_payload_going_out(self):
-        self.assertEqual(capture.taps_for("igc0"), [(capture.FILTER, capture.bpf.D_IN), (capture.OUT_FILTER, capture.bpf.D_OUT)])
-        self.assertEqual(capture.taps_for("bridge0"),
-                         [(capture.BRIDGE_FILTER, capture.bpf.D_IN), (capture.BRIDGE_FILTER, capture.bpf.D_OUT)])
-        self.assertEqual(capture.taps_for("bridged0")[1][0], capture.OUT_FILTER)
+    def test_only_a_bridge_with_no_address_reads_payload_going_out(self):
+        light = [(capture.FILTER, capture.bpf.D_IN), (capture.OUT_FILTER, capture.bpf.D_OUT)]
+        self.assertEqual(capture.taps_for("bridge0", False),
+                         [(capture.TRANSPARENT_FILTER, capture.bpf.D_IN), (capture.TRANSPARENT_FILTER, capture.bpf.D_OUT)])
+        self.assertEqual(capture.taps_for("bridge0", True), light)
+        self.assertEqual(capture.taps_for("igc0", False), light)
+        self.assertEqual(capture.taps_for("igc0", True), light)
+        self.assertEqual(capture.taps_for("bridged0", False), light)
 
     def test_arp_sender(self):
         mac = bytes.fromhex("020000000001")

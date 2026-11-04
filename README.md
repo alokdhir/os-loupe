@@ -122,7 +122,7 @@ Those are broader tools — deep packet inspection, alerts, policies, live flows
 ### General
 
 - **Enable** and **Interfaces**: the LAN or VLAN interfaces your devices are on. With a bridge, choose the bridge; WAN and a bridge's member ports aren't listed.
-- **Local networks**: usually empty, since your devices' networks come from the interfaces' addresses. A [transparent bridge](https://docs.opnsense.org/manual/how-tos/transparent_bridge.html) has no address, so Loupe then treats private addresses as local; list networks here if devices use others, such as public addresses or IPv6.
+- **Local networks**: usually empty, since your devices' networks come from the interfaces' addresses. A [transparent bridge](https://docs.opnsense.org/manual/how-tos/transparent_bridge.html) has no address, so Loupe then treats private addresses as local; list networks here if devices use others, such as public addresses or IPv6. Leave the bridge without an address: with one, Loupe treats it as a normal LAN and misses most names and MAC addresses.
 - **Keep 5-minute detail** (30 days), **hourly totals** (365 days) and **sites seen** (30 days): how long each kind of data is kept.
 - **Home Assistant (optional)**: its **Address** and an **Access token** (in Home Assistant: your profile → *Security* → *Long-lived access tokens* → *Create token*). Devices Home Assistant knows by MAC address take the name you gave them there, and their area shows on the device page. Most network integrations know the MAC; cloud ones (Tuya, for one) don't. Loupe only reads names and areas, every 10 minutes, and keeps the last ones if Home Assistant is down. Turn off **Verify certificate** for a self-signed certificate.
 

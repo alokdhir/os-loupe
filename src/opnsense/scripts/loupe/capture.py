@@ -36,7 +36,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib import bpf, dhcp, dns, mdns, packet, quic, tls  # noqa: E402
+from lib import bpf, dhcp, dns, mdns, netif, packet, quic, tls  # noqa: E402
 
 # Kernel filter: only the packets we parse ever reach userland.
 #  - TCP segments whose payload starts with a TLS handshake record holding a ClientHello
@@ -65,11 +65,12 @@ FILTER = f"{TLS4} or {TLS6} or {QUIC4} or {QUIC6} or {CONT4} or {CONT6} or {OTHE
 # e.g. the web GUI's lighttpd, on drivers with IFCAP_MEXTPG such as igc), and the kernel's bpf_filter() faults
 # reading payload from those: a filter that reads TCP payload must never see outgoing packets.
 OUT_FILTER = "udp src port 53"
-# A bridge is different. A frame it forwards from one member to another shows up on it going out, broadcasts and frames
-# for the router coming in, so on a transparent bridge the devices' packets are mostly "outgoing" and FILTER has to run
-# on both directions. That is safe: if_bridge leaves IFCAP_MEXTPG off, so a bridge never carries unmapped pages. The
-# router often isn't talking to the devices on one, so its neighbour table misses them: ARP tells who has which address.
-BRIDGE_FILTER = f"{FILTER} or arp"
+# A transparent bridge (a bridge with no address) is different. A frame it forwards from one member to another shows up
+# on it going out, broadcasts coming in, so the devices' packets are mostly "outgoing" and FILTER has to run on both
+# directions. That is safe: if_bridge leaves IFCAP_MEXTPG off, so a bridge never carries unmapped pages. The router isn't
+# talking to the devices on one, so its neighbour table misses them: ARP tells who has which address. Any other interface
+# keeps the lighter filters: on a busy bridged LAN every frame leaving the bridge would pay for the longer program.
+TRANSPARENT_FILTER = f"{FILTER} or arp"
 PARTIAL_TTL = 3.0
 MAX_PARTIAL = 4096
 
@@ -78,10 +79,10 @@ def is_bridge(iface):
     return re.fullmatch(r"bridge[0-9]+", iface) is not None
 
 
-def taps_for(iface):
+def taps_for(iface, has_address):
     """(filter, direction) of each packet tap an interface needs."""
-    if is_bridge(iface):
-        return [(BRIDGE_FILTER, bpf.D_IN), (BRIDGE_FILTER, bpf.D_OUT)]
+    if is_bridge(iface) and not has_address:
+        return [(TRANSPARENT_FILTER, bpf.D_IN), (TRANSPARENT_FILTER, bpf.D_OUT)]
     return [(FILTER, bpf.D_IN), (OUT_FILTER, bpf.D_OUT)]
 
 
@@ -95,7 +96,8 @@ class Capture:
 
     def run(self, ifaces, tick=None):
         """Capture forever. `tick(now)` runs about once a second, between reads."""
-        taps = [bpf.Bpf(i, expr, direction) for i in ifaces for expr, direction in taps_for(i)]
+        addressed = {name for name, a in netif.addresses(set(ifaces)) if not a.ip.is_link_local}
+        taps = [bpf.Bpf(i, expr, direction) for i in ifaces for expr, direction in taps_for(i, i in addressed)]
         fds = {t.fileno(): t for t in taps}
         while True:
             ready, _, _ = select.select(list(fds), [], [], 1.0)
