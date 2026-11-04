@@ -59,6 +59,31 @@ def states(msgs):
     return pfstate.from_netlink(pfnl.parse_states(msgs, {"bridge0"}), LOCAL, {"bridge0"})
 
 
+class TestBridgeTwins(unittest.TestCase):
+    """pf filters a bridged packet in and out on the bridge: two states with the same counters, one connection."""
+
+    @staticmethod
+    def st(sid, inbound, device=("10.9.1.10", 40000), remote=("198.51.100.7", 443)):
+        a0, a1 = (device, remote) if inbound else (remote, device)
+        return {"id": sid, "creatorid": 1, "origif": "bridge0", "proto": 6, "addr0": a0[0], "port0": a0[1],
+                "addr1": a1[0], "port1": a1[1], "inbound": inbound, "packets": (10, 20), "bytes": (1000, 2000), "age": 5}
+
+    def ids(self, states):
+        return sorted(int(k[0], 16) for k in pfstate.from_netlink(states, LOCAL, {"bridge0"}))
+
+    def test_one_of_a_pair_either_order(self):
+        self.assertEqual(self.ids([self.st(1, True), self.st(2, False)]), [1])
+        self.assertEqual(self.ids([self.st(2, False), self.st(1, True)]), [1])
+
+    def test_alone_either_direction(self):
+        self.assertEqual(self.ids([self.st(1, True)]), [1])
+        self.assertEqual(self.ids([self.st(2, False)]), [2])
+
+    def test_other_connections_stay(self):
+        other = self.st(3, True, device=("10.9.1.10", 40001))
+        self.assertEqual(self.ids([self.st(1, True), self.st(2, False), other]), [1, 3])
+
+
 class TestPfState(unittest.TestCase):
     def parse(self):
         return states(table())

@@ -50,13 +50,17 @@ CATCHUP_BUDGET = 5.0        # seconds of summary work per poll while days wait t
 SHARED_ADDRESS = 1800       # two MACs using one IPv4 address this long are one host (not an address handed over)
 SAME_CLAIM = 120            # two MACs announcing one Bonjour host name this close together are one host
 MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
+HEARD_FOR = 3600            # how long an address seen in a device's own frames still counts as that device's
 
 
 class Loupe:
-    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), service_map=None, hass_names=None):
+    def __init__(self, ifaces, db, poll=10, flush=60, retention=(30, 365, 30), service_map=None, hass_names=None,
+                 local_networks=()):
         self.ifaces = set(ifaces)
         self.no_address = set()
-        self.is_local = pfstate.local_matcher(pfstate.interface_networks(ifaces))
+        self.local_networks = list(local_networks)
+        self.is_local = pfstate.local_matcher([])
+        self.refresh_networks()
         self.store = store.Store(db)
         self.names = names.Names()
         self.tracker = pfstate.Tracker(fresh=poll)
@@ -72,6 +76,7 @@ class Loupe:
         self.hass = hass_names         # names from Home Assistant (optional), kept fresh by a thread
         self.oui = devid.load_oui()
         self.ip_mac = {}
+        self.heard = {}             # {ip: (mac, ts)} from the devices' own frames
         self.own_macs = set()
         self.claims = {}            # Bonjour host name -> {mac: when it last announced it with its own address}
         self.shared = {}            # (ip, mac, mac) -> [first, last] seen with the address at the same time
@@ -111,8 +116,12 @@ class Loupe:
             if ev["mac"] not in self.own_macs:
                 self.same_address(ev["client"], ev["mac"], ev["ts"])
                 self.ip_mac[ev["client"]] = ev["mac"]   # the frame's own source: who has the address now
+                self.heard[ev["client"]] = (ev["mac"], ev["ts"])
             if ev.get("sni"):
                 self.saw_site(ev["ts"], ev["client"], ev["sni"], kind if kind == "quic" else "sni")
+        elif kind == "arp":
+            if ev["mac"] not in self.own_macs and self.is_local(ev["ip"]):
+                self.heard[ev["ip"]] = (ev["mac"], ev["ts"])
         elif kind == "dns":
             if self.is_local(ev["client"]):
                 self.names.dns_answer(ev)
@@ -233,21 +242,22 @@ class Loupe:
             syslog.syslog(syslog.LOG_ERR, f"loupe: {what} failed: {e!r}")
 
     def refresh_networks(self):
-        """LAN networks can change while running (e.g. a delegated IPv6 prefix arrives). An interface
-        briefly without addresses (being reconfigured) keeps the networks it had."""
-        nets = pfstate.interface_networks(self.ifaces)
-        if nets:
-            self.is_local = pfstate.local_matcher(nets)
+        """LAN networks can change while running (e.g. a delegated IPv6 prefix arrives). An interface with no address
+        (a transparent bridge) has none to offer: Local networks from the settings, or else the private ranges."""
+        nets = pfstate.interface_networks(self.ifaces) + self.local_networks
         self.check_addresses()
+        if self.no_address and not self.local_networks:
+            nets += pfstate.PRIVATE_NETWORKS
+        self.is_local = pfstate.local_matcher(nets)
 
     def check_addresses(self):
-        """An interface with no address gives no local networks, so its devices silently count for nothing: say so,
-        once each time it happens."""
+        """Say which interfaces have no address, once each time it happens: what counts as local is then a guess."""
         addressed = {name for name, i in netif.addresses(self.ifaces) if not i.ip.is_link_local}
         missing = self.ifaces - addressed
-        for name in sorted(missing - self.no_address):
-            syslog.syslog(syslog.LOG_WARNING, f"loupe: {name} has no address: Loupe can't tell which devices on it are "
-                                              "local, so their traffic isn't counted")
+        if not self.local_networks:
+            for name in sorted(missing - self.no_address):
+                syslog.syslog(syslog.LOG_NOTICE, f"loupe: {name} has no address: treating private addresses as local "
+                                                 "(set Local networks if its devices use others)")
         self.no_address = missing
 
     def classify(self, now):
@@ -303,8 +313,12 @@ class Loupe:
 
     def refresh_macs(self):
         """The kernel's neighbour tables as they are now (not added to: rotating IPv6 privacy addresses would grow
-        it for good, and an address handed to another device would keep the old MAC)."""
-        self.ip_mac = {ip: mac for ip, mac in neighbours.table().items() if mac not in self.own_macs}
+        it for good, and an address handed to another device would keep the old MAC), over what the devices' own frames
+        said in the last hour (a transparent bridge's tables hardly know them)."""
+        cutoff = time.time() - HEARD_FOR
+        self.heard = {ip: seen for ip, seen in self.heard.items() if seen[1] >= cutoff}
+        self.ip_mac = {ip: seen[0] for ip, seen in self.heard.items() if seen[0] not in self.own_macs}
+        self.ip_mac.update((ip, mac) for ip, mac in neighbours.table().items() if mac not in self.own_macs)
 
     def refresh_own_macs(self):
         """The router's own MACs (interfaces come and go: VLANs, tunnels), never recorded as devices."""
@@ -400,7 +414,8 @@ def main():
     ha_names = hass.Names(os.path.join(os.path.dirname(args.db), "hass.json"), ha.get("url") or "", ha.get("token") or "",
                           ha.get("verify", True))
     lp = Loupe(ifaces, args.db, args.poll, args.flush,
-               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_sites_seen", 30)), conf.get("services"), ha_names)
+               (r.get("days_5m", 30), r.get("days_1h", 365), r.get("days_sites_seen", 30)), conf.get("services"), ha_names,
+               conf.get("local_networks", []))
     if ha_names.enabled:
         def refresh():
             while not lp.stopping:

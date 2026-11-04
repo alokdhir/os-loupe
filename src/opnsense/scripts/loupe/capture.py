@@ -29,6 +29,7 @@ usage: capture.py --print IFACE [IFACE ...]
 """
 import argparse
 import json
+import re
 import select
 import sys
 import time
@@ -64,8 +65,24 @@ FILTER = f"{TLS4} or {TLS6} or {QUIC4} or {QUIC6} or {CONT4} or {CONT6} or {OTHE
 # e.g. the web GUI's lighttpd, on drivers with IFCAP_MEXTPG such as igc), and the kernel's bpf_filter() faults
 # reading payload from those: a filter that reads TCP payload must never see outgoing packets.
 OUT_FILTER = "udp src port 53"
+# A bridge is different. A frame it forwards from one member to another shows up on it going out, broadcasts and frames
+# for the router coming in, so on a transparent bridge the devices' packets are mostly "outgoing" and FILTER has to run
+# on both directions. That is safe: if_bridge leaves IFCAP_MEXTPG off, so a bridge never carries unmapped pages. The
+# router often isn't talking to the devices on one, so its neighbour table misses them: ARP tells who has which address.
+BRIDGE_FILTER = f"{FILTER} or arp"
 PARTIAL_TTL = 3.0
 MAX_PARTIAL = 4096
+
+
+def is_bridge(iface):
+    return re.fullmatch(r"bridge[0-9]+", iface) is not None
+
+
+def taps_for(iface):
+    """(filter, direction) of each packet tap an interface needs."""
+    if is_bridge(iface):
+        return [(BRIDGE_FILTER, bpf.D_IN), (BRIDGE_FILTER, bpf.D_OUT)]
+    return [(FILTER, bpf.D_IN), (OUT_FILTER, bpf.D_OUT)]
 
 
 class Capture:
@@ -78,7 +95,7 @@ class Capture:
 
     def run(self, ifaces, tick=None):
         """Capture forever. `tick(now)` runs about once a second, between reads."""
-        taps = [bpf.Bpf(i, FILTER, bpf.D_IN) for i in ifaces] + [bpf.Bpf(i, OUT_FILTER, bpf.D_OUT) for i in ifaces]
+        taps = [bpf.Bpf(i, expr, direction) for i in ifaces for expr, direction in taps_for(i)]
         fds = {t.fileno(): t for t in taps}
         while True:
             ready, _, _ = select.select(list(fds), [], [], 1.0)
@@ -90,7 +107,11 @@ class Capture:
                 for ts, frame in fds[fd].read():
                     self.stats["frames"] += 1
                     p = packet.decode(ts, frame)
-                    if p is not None:
+                    if p is None:
+                        sender = packet.arp_sender(frame)
+                        if sender is not None:
+                            self.emit({"ev": "arp", "ts": ts, "ip": sender[0], "mac": sender[1]})
+                    else:
                         try:
                             self.handle(p)
                         except Exception as e:      # one bad packet from the LAN must never stop capture

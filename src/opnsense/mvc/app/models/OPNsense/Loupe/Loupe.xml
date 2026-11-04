@@ -17,6 +17,10 @@
                     <if>/^(?!lo[0-9]).*$/</if>
                 </filters>
             </interfaces>
+            <local_networks type="NetworkField">
+                <NetMaskRequired>Y</NetMaskRequired>
+                <AsList>Y</AsList>
+            </local_networks>
             <retention_5m type="IntegerField">
                 <Default>30</Default>
                 <Required>Y</Required>

@@ -86,8 +86,11 @@ def _state(key, origif, proto, left, right, inbound, counts, age, local, group):
 
 
 def from_netlink(states, is_local, ifaces=None):
-    """pfnl states -> {key: State}: those with exactly one local endpoint, on `ifaces` if given."""
+    """pfnl states -> {key: State}: those with exactly one local endpoint, on `ifaces` if given. pf filters a bridged
+    packet twice on the bridge, in and out, so a connection through a transparent bridge has two states with the same
+    counters: only one is kept, the inbound one when there are both."""
     out = {}
+    flows = {}
     local = _cached(is_local, {})
     group = _cached(is_group, {})
     names = protocol_names()
@@ -98,6 +101,13 @@ def from_netlink(states, is_local, ifaces=None):
         st = _state(key, s["origif"], names.get(s["proto"], str(s["proto"])), (s["addr1"], s["port1"]),
                     (s["addr0"], s["port0"]), s["inbound"], (*s["packets"], *s["bytes"]), s["age"], local, group)
         if st:
+            flow = (st.origif, st.proto, st.local, st.lport, st.remote, st.rport)
+            twin = flows.get(flow)
+            if twin is not None:
+                if not s["inbound"]:
+                    continue
+                del out[twin]
+            flows[flow] = key
             out[key] = st
     return out
 
@@ -147,6 +157,10 @@ def snapshot(is_local, ifaces=None):
             _client.close()
         _client = None
         raise
+
+
+# what counts as local on an interface with no address (a transparent bridge), unless Local networks says otherwise
+PRIVATE_NETWORKS = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"]
 
 
 def local_matcher(networks):

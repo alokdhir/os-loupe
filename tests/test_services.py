@@ -313,33 +313,71 @@ class TestVpnLabels(unittest.TestCase):
         self.assertEqual(query.vendor_of("02:00:00:00:00:01", "", "Android device"), ("", "private MAC"))
 
 
-class TestNoAddressWarning(unittest.TestCase):
-    """An interface with no address counts for nothing, so loupd says so: once, and again if it happens again."""
+class TestUnnumberedInterface(unittest.TestCase):
+    """An interface with no address: private addresses count as local unless Local networks says otherwise."""
 
-    def check(self, daemon, addresses):
+    def daemon(self, ifaces, local_networks=()):
+        from types import SimpleNamespace
+
+        import loupd
+        d = SimpleNamespace(ifaces=set(ifaces), no_address=set(), local_networks=list(local_networks))
+        d.check_addresses = lambda: loupd.Loupe.check_addresses(d)
+        return d
+
+    def refresh(self, d, addresses):
         import ipaddress
         from unittest import mock
 
         import loupd
         found = [(name, ipaddress.ip_interface(a)) for name, a in addresses]
-        with mock.patch.object(loupd.netif, "addresses", return_value=found), \
+        with mock.patch.object(loupd.netif, "addresses", side_effect=lambda ifs: [f for f in found if f[0] in ifs]), \
                 mock.patch.object(loupd.syslog, "syslog") as log:
-            loupd.Loupe.check_addresses(daemon)
+            loupd.Loupe.refresh_networks(d)
         return [c.args[1].split(":")[1].split()[0] for c in log.call_args_list]
 
-    def test_warns_once_per_episode(self):
-        from types import SimpleNamespace
-        daemon = SimpleNamespace(ifaces={"bridge0", "vlan0"}, no_address=set())
-        good = ("vlan0", "192.0.2.1/24")
-        self.assertEqual(self.check(daemon, [good]), ["bridge0"])
-        self.assertEqual(self.check(daemon, [good]), [])
-        self.assertEqual(self.check(daemon, [good, ("bridge0", "198.51.100.1/24")]), [])
-        self.assertEqual(self.check(daemon, [good]), ["bridge0"])
+    def test_private_fallback_said_once_per_episode(self):
+        d = self.daemon(["bridge0"])
+        self.assertEqual(self.refresh(d, []), ["bridge0"])
+        self.assertTrue(d.is_local("10.0.2.16") and d.is_local("192.168.4.1") and d.is_local("fd00::1"))
+        self.assertFalse(d.is_local("172.66.0.218") or d.is_local("2001:db8::1"))
+        self.assertEqual(self.refresh(d, []), [])
+        self.assertEqual(self.refresh(d, [("bridge0", "198.51.100.1/24")]), [])
+        self.assertTrue(d.is_local("198.51.100.9"))
+        self.assertFalse(d.is_local("10.0.2.16"))
+        self.assertEqual(self.refresh(d, []), ["bridge0"])
 
     def test_link_local_is_no_address(self):
+        d = self.daemon(["bridge0"])
+        self.assertEqual(self.refresh(d, [("bridge0", "fe80::1/64")]), ["bridge0"])
+        self.assertTrue(d.is_local("10.0.2.16"))
+
+    def test_local_networks_replace_the_guess(self):
+        d = self.daemon(["bridge0"], ["203.0.113.0/24"])
+        self.assertEqual(self.refresh(d, []), [])
+        self.assertTrue(d.is_local("203.0.113.5"))
+        self.assertFalse(d.is_local("10.0.2.16"))
+
+    def test_local_networks_add_to_addresses(self):
+        d = self.daemon(["bridge0"], ["203.0.113.0/24"])
+        self.refresh(d, [("bridge0", "198.51.100.1/24")])
+        self.assertTrue(d.is_local("203.0.113.5") and d.is_local("198.51.100.9"))
+
+    def test_macs_from_frames_under_the_neighbour_table(self):
+        import time
         from types import SimpleNamespace
-        daemon = SimpleNamespace(ifaces={"bridge0"}, no_address=set())
-        self.assertEqual(self.check(daemon, [("bridge0", "fe80::1/64")]), ["bridge0"])
+        from unittest import mock
+
+        import loupd
+        now = time.time()
+        d = SimpleNamespace(own_macs={"02:00:00:00:00:99"}, heard={
+            "192.0.2.1": ("02:00:00:00:00:01", now),
+            "192.0.2.2": ("02:00:00:00:00:02", now),
+            "192.0.2.3": ("02:00:00:00:00:03", now - loupd.HEARD_FOR - 1),
+            "192.0.2.4": ("02:00:00:00:00:99", now)})
+        with mock.patch.object(loupd.neighbours, "table", return_value={"192.0.2.2": "02:00:00:00:00:22"}):
+            loupd.Loupe.refresh_macs(d)
+        self.assertEqual(d.ip_mac, {"192.0.2.1": "02:00:00:00:00:01", "192.0.2.2": "02:00:00:00:00:22"})
+        self.assertNotIn("192.0.2.3", d.heard)
 
 
 if __name__ == "__main__":

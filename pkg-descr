@@ -11,6 +11,11 @@ Reports live under Reporting, with a dashboard widget.
 Plugin Changelog
 ================
 
+1.1
+
+* Transparent bridges: works with no address on the bridge, counts each connection once, reads names and MAC addresses from forwarded traffic
+* Local networks setting
+
 1.0.2
 
 * Settings lists every enabled interface except WAN and bridge members, not only those with a fixed address and no gateway

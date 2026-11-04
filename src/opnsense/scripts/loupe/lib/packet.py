@@ -53,6 +53,14 @@ def mac_str(b):
     return ":".join(f"{x:02x}" for x in b)
 
 
+def arp_sender(frame):
+    """(IPv4 address, MAC) an Ethernet/IPv4 ARP frame says its sender has, or None (not ARP, or a probe from 0.0.0.0)."""
+    if len(frame) < 42 or frame[12:14] != b"\x08\x06" or frame[14:20] != b"\x00\x01\x08\x00\x06\x04":
+        return None
+    ip = frame[28:32]
+    return None if ip == bytes(4) else (str(ipaddress.IPv4Address(ip)), mac_str(frame[22:28]))
+
+
 def decode(ts, frame) -> Optional[Packet]:
     if len(frame) < 14:
         return None

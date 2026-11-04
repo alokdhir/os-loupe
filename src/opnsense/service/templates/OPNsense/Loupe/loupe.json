@@ -1,6 +1,7 @@
 {
     "interfaces": [{% if not helpers.empty('OPNsense.Loupe.general.interfaces') %}{%
         for intf in OPNsense.Loupe.general.interfaces.split(',') %}{{ helpers.physical_interface(intf) | tojson }}{{ "," if not loop.last }}{% endfor %}{% endif %}],
+    "local_networks": {{ (helpers.getNodeByTag('OPNsense.Loupe.general.local_networks') or '').split(',') | select | list | tojson }},
     "networks": [{% if not helpers.empty('OPNsense.Loupe.general.interfaces') %}{%
         for intf in OPNsense.Loupe.general.interfaces.split(',') %}
         {"id": {{ intf | tojson }}, "device": {{ helpers.physical_interface(intf) | tojson }}, "name": {{ (helpers.getNodeByTag('interfaces.'+intf+'.descr') or intf | upper) | tojson }}}{{ "," if not loop.last }}{% endfor %}{% endif %}

@@ -35,6 +35,24 @@ def pkt(payload, seq, ts=1.0, sport=50000):
                          packet.PROTO_TCP, sport, 443, payload, seq, 0x18)
 
 
+class TapTests(unittest.TestCase):
+    def test_only_a_bridge_reads_payload_going_out(self):
+        self.assertEqual(capture.taps_for("igc0"), [(capture.FILTER, capture.bpf.D_IN), (capture.OUT_FILTER, capture.bpf.D_OUT)])
+        self.assertEqual(capture.taps_for("bridge0"),
+                         [(capture.BRIDGE_FILTER, capture.bpf.D_IN), (capture.BRIDGE_FILTER, capture.bpf.D_OUT)])
+        self.assertEqual(capture.taps_for("bridged0")[1][0], capture.OUT_FILTER)
+
+    def test_arp_sender(self):
+        mac = bytes.fromhex("020000000001")
+        arp = b"\x00\x01\x08\x00\x06\x04\x00\x01" + mac + bytes([192, 0, 2, 7]) + bytes(6) + bytes([192, 0, 2, 1])
+        frame = bytes(6) + mac + b"\x08\x06" + arp
+        self.assertEqual(packet.arp_sender(frame), ("192.0.2.7", "02:00:00:00:00:01"))
+        self.assertIsNone(packet.arp_sender(frame[:40]))
+        probe = frame[:28] + bytes(4) + frame[32:]
+        self.assertIsNone(packet.arp_sender(probe))
+        self.assertIsNone(packet.arp_sender(frame[:12] + b"\x08\x00" + frame[14:]))
+
+
 class TlsTests(unittest.TestCase):
     def test_single_segment(self):
         h = tls.parse_tcp_payload(tls_record(client_hello("example.com")))

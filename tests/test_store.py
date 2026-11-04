@@ -91,6 +91,7 @@ class TestLateHello(unittest.TestCase):
         import loupd
         self.lp = object.__new__(loupd.Loupe)
         self.lp.names, self.lp.flows, self.lp.held, self.lp.ip_mac, self.lp.stopping = names.Names(), {}, [], {}, False
+        self.lp.heard = {}
         self.lp.own_macs = {"02:00:00:00:00:99"}
         self.lp.names.dns_answer({"ts": 100, "client": "10.9.1.21", "name": "guess.example", "addrs": ["203.0.113.10"],
                                   "ttl": 60})
