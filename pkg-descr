@@ -13,7 +13,16 @@ Plugin Changelog
 
 1.2
 
-* Packet parsing, the database and reports run as a dedicated loupe user; the only part left as root is a small sandboxed process that passes on lease files
+Security release with substantial architectural security improvements, following
+https://github.com/alokdhir/os-loupe/issues/1
+
+* Packet parsing, the database and reports no longer run as root: they run as a dedicated, unprivileged loupe user
+* The daemon opens the capture devices and pf's socket as root, then drops root before it reads a packet
+* Reports, which configd starts as root, drop to the loupe user as well
+* The loupe user has no supplementary groups, so it can't read OPNsense's configuration
+* /var/db/loupe is owned by the loupe user and closed to everyone else
+* One small root process remains, to read DHCP lease and static host files that only root can read and pass them to the daemon over a pipe: it parses nothing, takes no input and runs in a Capsicum sandbox that limits it to those files' directories
+* Upgrades move existing data to the new user; removing the plugin removes the user and keeps the data
 
 1.1
 
