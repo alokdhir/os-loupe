@@ -28,6 +28,7 @@ import sqlite3
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import ipaddress
 import random
@@ -541,7 +542,11 @@ class TestDailySummary(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.path = os.path.join(self.dir.name, "loupe.db")
         self.store = store.Store(self.path)
-        now = int(time.time())
+        # always noon: in the first hours of a day, today's rows would fall on the same minute or before midnight
+        now = report.local_day(int(time.time())) + 12 * 3600
+        clock = mock.patch("time.time", return_value=float(now))
+        clock.start()
+        self.addCleanup(clock.stop)
         self.today = report.local_day(now)
         flows = {}
         a, b = "02:00:00:00:00:61", "02:00:00:00:00:62"
