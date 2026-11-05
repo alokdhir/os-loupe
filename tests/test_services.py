@@ -423,8 +423,9 @@ class TestUnnumberedInterface(unittest.TestCase):
                 got[i] = None if n == rootfiles.MISSING else (rootfiles._exactly(rd, n) if n else b"")
             self.assertEqual(got, {0: b"alpha", 1: b"", 2: None})
             self.assertEqual(select.select([rd], [], [], 0.15)[0], [])         # unchanged: nothing more is sent
-            with open(a, "w") as f:
+            with open(a + ".new", "w") as f:                                    # whole, or it may read the file empty
                 f.write("changed")
+            os.replace(a + ".new", a)
             self.assertTrue(select.select([rd], [], [], 2)[0])
             head = rootfiles._exactly(rd, rootfiles._FRAME.size)
             self.assertEqual(rootfiles._FRAME.unpack(head)[0], 0)
