@@ -12,7 +12,6 @@
         "verify": {{ 'false' if helpers.getNodeByTag('OPNsense.Loupe.general.hass_verify') == '0' else 'true' }}
     },
     "switch_map": {
-        "enabled": {{ 'true' if helpers.getNodeByTag('OPNsense.Loupe.switchmap.enabled') == '1' else 'false' }},
         "switches": [
 {% if helpers.exists('OPNsense.Loupe.switches.switch') %}
 {%   for sw in helpers.toList('OPNsense.Loupe.switches.switch') %}

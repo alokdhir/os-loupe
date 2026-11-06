@@ -661,7 +661,7 @@ def cmd_device(arg, hours, span=None):
             tl[1] += up
     now = int(time.time())
     slots = list(days(start, local_day(now))) if step >= 86400 else range(start - start % step, now + 1, step)
-    if dev and switch_map_on():
+    if dev and switch_list():
         _, found, _ = switch_map(info)
         dev["switch_port"] = next((found[m] for m in dev.get("macs") or [dev.get("mac")] if m in found), None)
     return {
@@ -1062,10 +1062,6 @@ def switch_state_path():
     return os.path.join(os.path.dirname(DB), "switches.json")
 
 
-def switch_map_on():
-    return bool((read_conf().get("switch_map") or {}).get("enabled"))
-
-
 def switch_list():
     return (read_conf().get("switch_map") or {}).get("switches") or []
 
@@ -1091,8 +1087,6 @@ def cmd_switchrefresh(path, target):
             os.unlink(path)
         except OSError:
             pass
-    if not switch_map_on():
-        return {"errors": {}}
     return {"errors": switches.refresh(switch_state_path(), switch_list(), target, eero)}
 
 
@@ -1109,8 +1103,10 @@ def cmd_switchmap():
         db.close()
     described, found, eero = switch_map(info)
     shown = sorted(described.values(), key=lambda s: ipaddress.ip_address(s["address"]).packed)
+    read = any(s["fetched"] for s in shown)     # until a switch has been read, every device would count as elsewhere
     return {"switches": [public_switch(s) for s in shown],
-            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - 86400)}
+            "names": switches.all_names(switch_list(), switches.load_state(switch_state_path())),
+            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - 86400) if read else []}
 
 
 def cmd_switch(sid):

@@ -371,7 +371,7 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /* names for model identifiers devices announce (Device rules > Model names) */
-    /* Switch map: saved at once, with nothing to Apply, and a saved switch is read right away so the tab has it */
+    /* Switches: saved at once, with nothing to Apply, and a saved switch is read right away so the tab has it */
     private function publishSettings()
     {
         /* as Apply: loupe.json carries every saved setting, so loupd reads it again too; otherwise the reports would
@@ -383,33 +383,17 @@ class SettingsController extends ApiMutableModelControllerBase
         }
     }
 
-    public function switchEnableAction()
-    {
-        $result = ['result' => 'failed'];
-        if (!$this->request->isPost()) {
-            return $result;
-        }
-        Config::getInstance()->lock();
-        $this->getModel()->switchmap->enabled = $this->request->getPost('enabled') === '1' ? '1' : '0';
-        $result = $this->save(false, true);
-        if (($result['result'] ?? '') === 'saved') {
-            $this->publishSettings();
-            if ((string)$this->getModel()->switchmap->enabled === '1') {
-                $this->getModel()->refreshSwitches();
-            }
-        }
-        return $result;
-    }
-
     public function searchSwitchAction()
     {
         $result = $this->searchBase('switches.switch', ['enabled', 'name', 'address', 'community'], 'address');
+        $data = $this->aiQuery(['switchmap']);
         $map = [];
-        foreach ($this->aiQuery(['switchmap'])['switches'] ?? [] as $s) {
+        foreach ($data['switches'] ?? [] as $s) {
             $map[$s['id']] = $s;
         }
         foreach ($result['rows'] as &$row) {
             $s = $map[$row['uuid']] ?? [];
+            $row['shown_name'] = $data['names'][$row['uuid']] ?? $row['address'];
             $row['error'] = $s['error'] ?? '';
             $row['note'] = $s['note'] ?? '';
             $row['fetched'] = $s['fetched'] ?? 0;

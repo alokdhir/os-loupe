@@ -36,6 +36,7 @@ import time
 from . import snmp
 
 SYS_DESCR = snmp.oid_tuple("1.3.6.1.2.1.1.1.0")
+SYS_NAME = snmp.oid_tuple("1.3.6.1.2.1.1.5.0")
 BRIDGE_ADDR = snmp.oid_tuple("1.3.6.1.2.1.17.1.1.0")
 BASE_PORT_IF = snmp.oid_tuple("1.3.6.1.2.1.17.1.4.1.2")
 FDB_BRIDGE = snmp.oid_tuple("1.3.6.1.2.1.17.4.3.1.2")       # BRIDGE-MIB: index is the MAC
@@ -83,8 +84,9 @@ def model_of(descr):
 
 
 def read_tables(client):
-    """{descr, mac, ports: {ifIndex: {name, up, speed}}, fdb: {ifIndex: [MACs]}, ignored}, MACs on down ports left out."""
+    """{descr, sysname, mac, ports: {ifIndex: {name, up, speed}}, fdb: {ifIndex: [MACs]}, ignored}, MACs on down ports left out."""
     descr = _text(client.get(SYS_DESCR))
+    sysname = _text(client.get(SYS_NAME))
     bridge = client.get(BRIDGE_ADDR)
     names = client.walk(IF_NAME) or client.walk(IF_DESCR)
     types = client.walk(IF_TYPE)
@@ -119,7 +121,7 @@ def read_tables(client):
                 fdb[str(i)] = sorted(macs)
         else:
             ignored += len(macs)    # switches can list stale entries on a port with nothing plugged in
-    return {"descr": descr, "mac": _mac(bridge) if isinstance(bridge, bytes) and len(bridge) == 6 else "",
+    return {"descr": descr, "sysname": sysname, "mac": _mac(bridge) if isinstance(bridge, bytes) and len(bridge) == 6 else "",
             "ports": ports, "fdb": fdb, "ignored": ignored}
 
 
@@ -328,7 +330,15 @@ def _port_devices(macs, eero, info, traffic):
 
 
 def display_name(switch, poll_result):
-    return switch.get("name") or model_of(poll_result.get("descr") or "") or switch.get("address") or ""
+    """What a switch is called: the name given in Loupe, the one set on the switch, its model, else its address."""
+    return (switch.get("name") or poll_result.get("sysname") or model_of(poll_result.get("descr") or "")
+            or switch.get("address") or "")
+
+
+def all_names(configured, state):
+    """{id: name} for every switch in the settings, enabled or not."""
+    polls = state.get("polls", {})
+    return {s["id"]: display_name(s, polls.get(s["id"], {})) for s in configured}
 
 
 def _order(port_id):

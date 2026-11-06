@@ -235,7 +235,7 @@ def device(mac, name, ip="", dtype="", last=1000):
 
 class TestReadTables(unittest.TestCase):
     def fake(self, fdb):
-        table = {switches.SYS_DESCR: tlv(snmp.OCTETS, b"SW-1, firmware 1"), switches.BRIDGE_ADDR: tlv(snmp.OCTETS, bytes.fromhex("0200000000a1"))}
+        table = {switches.SYS_DESCR: tlv(snmp.OCTETS, b"SW-1, firmware 1"), switches.SYS_NAME: tlv(snmp.OCTETS, b"rack-switch"), switches.BRIDGE_ADDR: tlv(snmp.OCTETS, bytes.fromhex("0200000000a1"))}
         ports = {1: (b"TenGigabitEthernet1", 6, 1, 10000), 2: (b"0/2", 6, 1, 1000), 3: (b"0/3", 6, 2, 0),
                  4: (b"vlan1", 53, 1, 0), 5: (b"CPU Interface", 6, 1, 0), 6: (b"0/6", 6, 6, 0)}
         for i, (name, kind, oper, speed) in ports.items():
@@ -258,6 +258,7 @@ class TestReadTables(unittest.TestCase):
         out = self.fake({switches.FDB_QBRIDGE + (1,) + mac: integer(1), switches.FDB_QBRIDGE + (1, 6) + other: integer(2)})
         self.assertEqual(out["fdb"], {"1": [PC], "2": [TV]})
         self.assertEqual(out["mac"], SW1)
+        self.assertEqual(out["sysname"], "rack-switch")
         self.assertEqual(out["ports"]["1"]["name"], "TE1")
         self.assertEqual(out["ports"]["1"]["speed"], 10000)
 
@@ -420,6 +421,21 @@ class TestRefresh(unittest.TestCase):
         with open(self.path, "w", encoding="utf-8") as f:
             f.write("{not json")
         self.assertEqual(switches.load_state(self.path)["polls"], {})
+
+
+class TestNames(unittest.TestCase):
+    def test_every_name_has_a_source(self):
+        polled = {"sysname": "rack-switch", "descr": "SW-1, firmware 1"}
+        name = switches.display_name
+        self.assertEqual(name({"name": "Mine", "address": "192.0.2.3"}, polled), "Mine")
+        self.assertEqual(name({"name": "", "address": "192.0.2.3"}, polled), "rack-switch")
+        self.assertEqual(name({"name": "", "address": "192.0.2.3"}, {"descr": "SW-1, firmware 1"}), "SW-1")
+        self.assertEqual(name({"name": "", "address": "192.0.2.3"}, {}), "192.0.2.3")
+
+    def test_disabled_switches_have_names_too(self):
+        conf = [{"id": "a", "name": "", "address": "192.0.2.3", "enabled": False}]
+        state = {"polls": {"a": {"sysname": "rack-switch"}}}
+        self.assertEqual(switches.all_names(conf, state), {"a": "rack-switch"})
 
 
 class TestText(unittest.TestCase):

@@ -70,8 +70,6 @@ POSSIBILITY OF SUCH DAMAGE.
             ? ' title="' + esc('{{ lang._("Name from Home Assistant") }}' + (d.area ? ' · ' + d.area : '')) + '"' : '';
         const modelShown = d => d.model_in_name ? '' : (d.model || '');
         /* Settings > General: how the Home Assistant link is doing (loupd fetches names every 10 minutes) */
-        let switchMapOn = {{ switchMapOn ? 'true' : 'false' }};
-        $('#maintabs a[href="#tab_switches"]').parent().toggle(switchMapOn);
         function hassStatus() {
             const $s = $('#hass-status');
             if (!$('[id="loupe.general.hass_url"]').val()) { $s.hide(); return; }
@@ -184,6 +182,9 @@ POSSIBILITY OF SUCH DAMAGE.
             },
             switchname: function (column, row) {
                 return '<a href="#switch=' + esc(row.id) + '">' + esc(row.name) + '</a>';
+            },
+            switchsetname: function (column, row) {     /* a name not given here is the one the switch goes by */
+                return row.name ? esc(row.name) : '<span class="text-muted">' + esc(row.shown_name) + '</span>';
             },
             switchlast: function (column, row) {        /* how the last read went (on the tab and in Settings) */
                 if (row.error) return '<span class="text-danger" title="' + esc(row.error) + '"><i class="fa fa-triangle-exclamation fa-fw"></i> ' + esc(row.error) + '</span>';
@@ -368,10 +369,12 @@ POSSIBILITY OF SUCH DAMAGE.
             switchShown = '';
             $('#switch_detail').hide();
             $('#switch_list').show();
-            grid('grid-switches', '/api/loupe/report/search_switches');
             ajaxGet('/api/loupe/report/switch_elsewhere', {}, function (data) {
                 const rows = (data || {}).elsewhere || [];
-                $('#switch_none').toggle(!((data || {}).switches || []).length);
+                const any = ((data || {}).switches || []).length > 0;
+                $('#switch_none').toggle(!any);
+                $('#switch_some').toggle(any);
+                if (any) grid('grid-switches', '/api/loupe/report/search_switches');
                 $('#switch_elsewhere').toggle(rows.length > 0);
                 $('#switch_elsewhere tbody').html(rows.map(r => deviceRow(r, '', '')).join(''));
             });
@@ -391,7 +394,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 }
                 const uplink = s.uplink ? '{{ lang._("Uplink to") }} ' + (s.uplink_id
                     ? '<a href="#switch=' + esc(s.uplink_id) + '">' + esc(s.uplink) + '</a>' : esc(s.uplink)) : '';
-                $('#switch_title').html(esc(s.name) + ' <small class="text-muted">' + [esc(s.model), esc(s.address), uplink,
+                $('#switch_title').html(esc(s.name) + ' <small class="text-muted">' + [s.model !== s.name ? esc(s.model) : '', esc(s.address), uplink,
                     s.fetched ? '{{ lang._("Read") }} ' + esc(ago(s.fetched)) : ''].filter(Boolean).join(' · ') + '</small>');
                 $('#switch_problem').text(s.error || s.note || '').toggle(!!(s.error || s.note));
                 $('#switch_ports tbody').html((s.rows || []).map(r => deviceRow(r, r.port, r.speed)).join(''));
@@ -497,16 +500,13 @@ POSSIBILITY OF SUCH DAMAGE.
                 });
             },
             switchmap: function () {
-                mapDataToFormUI({'frm_switchmap': '/api/loupe/settings/get'}).done(function () {
-                    $('#switchmap_grid').toggle(switchMapOn);
-                    $('#{{ formGridSwitches['table_id'] }}').UIBootgrid({
-                        search: '/api/loupe/settings/search_switch',
-                        get: '/api/loupe/settings/get_switch/',
-                        set: '/api/loupe/settings/set_switch/',
-                        add: '/api/loupe/settings/add_switch/',
-                        del: '/api/loupe/settings/del_switch/',
-                        options: {formatters: {switchlast: formatters.switchlast}}
-                    });
+                $('#{{ formGridSwitches['table_id'] }}').UIBootgrid({
+                    search: '/api/loupe/settings/search_switch',
+                    get: '/api/loupe/settings/get_switch/',
+                    set: '/api/loupe/settings/set_switch/',
+                    add: '/api/loupe/settings/add_switch/',
+                    del: '/api/loupe/settings/del_switch/',
+                    options: {formatters: {switchlast: formatters.switchlast, switchsetname: formatters.switchsetname}}
                 });
             },
             overrides: function () {
@@ -563,23 +563,13 @@ POSSIBILITY OF SUCH DAMAGE.
             const page = $('.loupe-page').filter(function () { return this.style.display !== 'none'; }).first();
             const source = page.find('.loupe-source .btn.active').data('source');
             /* Model names: its AI section saves and applies by itself; Apply appears once the list was edited.
-               Switch map: all of it takes effect when saved */
+               Switches: a saved switch is in use at once */
             $('.loupe-apply').toggle(currentTab === 'settings' && page.attr('id') !== 'page_switchmap'
                 && (pending || !['builtin', 'ai', 'models'].includes(source)));
         }
         $(document).on('settings-changed', function () {
             if (!$('#page_switchmap').is(':visible')) pending = true;
             applyButton();
-        });
-        $(document).on('change', '[id="loupe.switchmap.enabled"]', function () {
-            const on = this.checked;
-            if (on === switchMapOn) return;
-            ajaxCall('/api/loupe/settings/switch_enable', {enabled: on ? '1' : '0'}, function () {
-                switchMapOn = on;
-                $('#maintabs a[href="#tab_switches"]').parent().toggle(on);
-                $('#switchmap_grid').toggle(on);
-                if (on) $('#{{ formGridSwitches['table_id'] }}').bootgrid('reload');
-            });
         });
         function showSettings(page) {
             $('.loupe-pages .btn').removeClass('active').filter('[data-page="' + page + '"]').addClass('active');
@@ -597,7 +587,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         function tabOf(hash) {
             if (/^#device=/.test(hash)) return 'devices';
-            if (/^#switch(es$|=)/.test(hash)) return switchMapOn ? 'switches' : 'devices';
+            if (/^#switch(es$|=)/.test(hash)) return 'switches';
             if (/^#(q=|sites$)/.test(hash)) return 'services';
             const t = (hash.replace(/^#/, '') || '{{ activetab }}').replace(/^devicenames$/, 'overrides');
             return PAGES.indexOf(t) >= 0 ? 'settings' : (TABS[t] ? t : 'devices');
@@ -1229,10 +1219,11 @@ POSSIBILITY OF SUCH DAMAGE.
 
     <div id="tab_switches" class="tab-pane fade in">
         <div id="switch_list">
+            <p id="switch_none" class="loupe-bar" style="display: none">{{ lang._('See which device is on which port of your managed switches. Turn on SNMP (read-only, v2c) on each switch, then add it under') }} <a href="#switchmap">{{ lang._('Settings, Switches') }}</a>. {{ lang._('Some budget switches, such as Netgear Plus, don\'t have SNMP.') }}</p>
+            <div id="switch_some" style="display: none">
             <div class="loupe-bar">
                 <button type="button" class="btn btn-default btn-sm switch-refresh"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh all') }}</button>
             </div>
-            <p id="switch_none" class="loupe-bar text-muted" style="display: none">{{ lang._('No switches yet: add them under Settings, Switches.') }}</p>
             <table id="grid-switches" class="table table-condensed table-hover table-striped table-responsive">
                 <thead><tr>
                     <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
@@ -1246,6 +1237,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 </tr></thead>
                 <tbody></tbody>
             </table>
+            </div>
             <div id="switch_elsewhere" style="display: none">
                 <h4 class="loupe-bar">{{ lang._('Seen in the last day, on no port') }}</h4>
                 <p class="loupe-bar text-muted" style="padding-top: 0">{{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</p>
@@ -1416,10 +1408,7 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
         <div id="page_switchmap" class="loupe-page">
             <p class="loupe-bar">{{ lang._('Shows which device is on which port of your managed switches. Turn on SNMP (read-only, v2c) on each switch first. Some budget switches, such as Netgear Plus, don\'t have it.') }}</p>
-            {{ partial("layout_partials/base_form", ['fields': formSwitchMap, 'id': 'frm_switchmap']) }}
-            <div id="switchmap_grid" style="display: none">
-                {{ partial('layout_partials/base_bootgrid_table', formGridSwitches) }}
-            </div>
+            {{ partial('layout_partials/base_bootgrid_table', formGridSwitches) }}
         </div>
     </div>
 </div>

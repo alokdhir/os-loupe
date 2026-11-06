@@ -54,12 +54,6 @@
                 <Required>Y</Required>
             </hass_verify>
         </general>
-        <switchmap>
-            <enabled type="BooleanField">
-                <Default>0</Default>
-                <Required>Y</Required>
-            </enabled>
-        </switchmap>
         <switches>
             <switch type="ArrayField">
                 <enabled type="BooleanField">

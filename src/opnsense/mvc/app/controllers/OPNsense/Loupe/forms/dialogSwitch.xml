@@ -13,7 +13,10 @@
         <id>switch.name</id>
         <label>Name</label>
         <type>text</type>
-        <help>Optional. Without one, the model the switch reports is shown.</help>
+        <help>Optional. Without one, Loupe uses the name set on the switch, or else its model.</help>
+        <grid_view>
+            <formatter>switchsetname</formatter>
+        </grid_view>
     </field>
     <field>
         <id>switch.address</id>

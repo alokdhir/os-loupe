@@ -166,7 +166,7 @@ class ReportController extends ApiControllerBase
         return $this->grid($rows, 'settings_order', null, ['name', 'address', 'model', 'uplink']);
     }
 
-    /* the devices seen today on no port */
+    /* whether there are any switches, and the devices seen today on no port */
     public function switchElsewhereAction()
     {
         return $this->query(['switchmap']);

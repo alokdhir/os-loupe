@@ -1,7 +1,0 @@
-<form>
-    <field>
-        <id>loupe.switchmap.enabled</id>
-        <label>Enable switch map</label>
-        <type>checkbox</type>
-    </field>
-</form>

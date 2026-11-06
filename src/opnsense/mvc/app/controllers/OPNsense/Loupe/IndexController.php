@@ -31,7 +31,7 @@ namespace OPNsense\Loupe;
 class IndexController extends \OPNsense\Base\IndexController
 {
     /**
-     * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Switches when switched on, Settings (General,
+     * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Switches, Settings (General,
      * Service names, Device rules, Overrides, Switches). The old addresses open the matching tab.
      */
     private function page($activetab)
@@ -45,8 +45,6 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'gridOverrides');
         $this->view->formDialogModelName = $this->getForm('dialogModelName');
         $this->view->formGridModelNames = $this->getFormGrid('dialogModelName', 'gridModelNames');
-        $this->view->formSwitchMap = $this->getForm('switchmap');
-        $this->view->switchMapOn = (string)(new \OPNsense\Loupe\Loupe())->switchmap->enabled === '1';
         $this->view->formDialogSwitch = $this->getForm('dialogSwitch');
         // what the last read of a switch said: not a setting, so not in its form (search_switch adds it)
         $switchGrid = $this->getFormGrid('dialogSwitch', 'gridSwitches');
