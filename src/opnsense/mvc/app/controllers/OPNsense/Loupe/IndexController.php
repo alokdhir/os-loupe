@@ -39,6 +39,9 @@ class IndexController extends \OPNsense\Base\IndexController
     {
         // grid ids must not contain '-': mapDataToFormUI matches a dialog's form by the id before the first '-'
         $this->view->activetab = $activetab;
+        // the saved switch data can name an eero after the plugin is gone, and not every user may open its page
+        $this->view->eero_page = class_exists('\\OPNsense\\Eero\\IndexController')
+            && (new \OPNsense\Core\ACL())->isPageAccessible($this->getUserName(), '/ui/eero/');
         $this->view->has_switches = count(iterator_to_array((new Loupe())->switches->switch->iterateItems())) > 0;
         $this->view->formSettings = $this->getForm('settings');
         $this->view->formDialogService = $this->getForm('dialogService');

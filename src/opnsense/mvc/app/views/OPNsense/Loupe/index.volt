@@ -339,6 +339,7 @@ POSSIBILITY OF SUCH DAMAGE.
         }
         $(document).on('loaded.rs.jquery.bootgrid', DEVICE_GRIDS, function () { deviceColumns($(this)); });
 
+        const EERO_PAGE = {{ eero_page ? 'true' : 'false' }};    /* installed, and this user may open it */
         function showDevice(id) {
             current = id;
             deviceBack();
@@ -347,6 +348,7 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#loupe-detail').show();
             /* the header runs the report and configd keeps it: the lists ask once it has, and get that copy */
             ajaxGet('/api/loupe/report/device/' + id.replace(/[^0-9a-fA-F:.]/g, '') + '/' + hours, {}, function (data) {
+                if (id !== current) return;     /* another device was opened meanwhile */
                 chartSpan('loupe-chart', null);
                 grid('grid-devtraffic', '/api/loupe/report/search_device_traffic', () => Object.assign({device: current}, ZOOMED['loupe-chart'].range || {}), TREE);
                 if (!data || data.error) { $('#loupe-detail-title').text((data || {}).error || ''); return; }
@@ -361,7 +363,7 @@ POSSIBILITY OF SUCH DAMAGE.
                         + esc('{{ lang._('also') }} ' + d.macs.filter(m => m !== d.mac).join(', ')) + ')</span>' : '')
                     + ' ' + (data.networks || []).map(n => pill(n.id)).join('')
                     + (d.switch_port ? '<br>' + (d.switch_port.last_here ? '{{ lang._("Last on") }} ' : '') + '<a href="#switch=' + esc(d.switch_port.switch) + '">' + esc(d.switch_port.name + ' ' + d.switch_port.port) + '</a>'
-                        + (d.switch_port.via ? ' {{ lang._("via") }} ' + (d.switch_port.via_id && d.switch_port.via_unit
+                        + (d.switch_port.via ? ' {{ lang._("via") }} ' + (EERO_PAGE && d.switch_port.via_id && d.switch_port.via_unit
                             ? 'eero <a href="/ui/eero/#unit=' + esc(encodeURIComponent(d.switch_port.via_id)) + '">' + esc(d.switch_port.via_unit) + '</a>'
                             : esc(d.switch_port.via)) : '') : '') + '</small>');
                 drawChart('loupe-chart', data);
@@ -470,7 +472,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     + '<th>{{ lang._("Port") }}</th><th>{{ lang._("Speed") }}</th><th>{{ lang._("Device") }}</th><th>{{ lang._("Address") }}</th>'
                     + '<th>{{ lang._("Detail") }}</th><th>{{ lang._("Down") }}</th><th>{{ lang._("Up") }}</th></tr></thead><tbody>'
                     + portRows(s.rows) + '</tbody></table>' : '')
-                + (foot.length ? '<p class="loupe-bar text-muted">' + foot.join(' ') + '</p>' : '')
+                + (foot.length ? '<p class="loupe-bar text-muted">' + foot.join(' · ') + '</p>' : '')
                 + '</div></div>';
         }
         function renderSwitches() {
