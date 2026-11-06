@@ -1444,7 +1444,7 @@ POSSIBILITY OF SUCH DAMAGE.
             {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
         </div>
         <div id="page_switchmap" class="loupe-page">
-            <p class="loupe-bar">{{ lang._('Shows which device is on which port of your switches. This requires a managed switch with SNMP support.') }}</p>
+            <p class="loupe-bar">{{ lang._('Shows which device is on which port of your switches. This requires managed switches with SNMP support.') }}</p>
             {{ partial('layout_partials/base_bootgrid_table', formGridSwitches) }}
         </div>
     </div>
