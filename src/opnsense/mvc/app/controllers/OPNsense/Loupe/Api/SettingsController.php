@@ -371,6 +371,86 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /* names for model identifiers devices announce (Device rules > Model names) */
+    /* Switch map: saved at once, with nothing to Apply, and a saved switch is read right away so the tab has it */
+    private function publishSettings()
+    {
+        /* as Apply: loupe.json carries every saved setting, so loupd reads it again too; otherwise the reports would
+           use settings saved but not applied (a new service name) that loupd doesn't */
+        $backend = new Backend();
+        $backend->configdRun('template reload OPNsense/Loupe');
+        if ((string)$this->getModel()->general->enabled === '1') {
+            $backend->configdRun('loupe restart');
+        }
+    }
+
+    public function switchEnableAction()
+    {
+        $result = ['result' => 'failed'];
+        if (!$this->request->isPost()) {
+            return $result;
+        }
+        Config::getInstance()->lock();
+        $this->getModel()->switchmap->enabled = $this->request->getPost('enabled') === '1' ? '1' : '0';
+        $result = $this->save(false, true);
+        if (($result['result'] ?? '') === 'saved') {
+            $this->publishSettings();
+            if ((string)$this->getModel()->switchmap->enabled === '1') {
+                $this->getModel()->refreshSwitches();
+            }
+        }
+        return $result;
+    }
+
+    public function searchSwitchAction()
+    {
+        $result = $this->searchBase('switches.switch', ['enabled', 'name', 'address', 'community'], 'address');
+        $map = [];
+        foreach ($this->aiQuery(['switchmap'])['switches'] ?? [] as $s) {
+            $map[$s['id']] = $s;
+        }
+        foreach ($result['rows'] as &$row) {
+            $s = $map[$row['uuid']] ?? [];
+            $row['error'] = $s['error'] ?? '';
+            $row['note'] = $s['note'] ?? '';
+            $row['fetched'] = $s['fetched'] ?? 0;
+            $row['up'] = $s['up'] ?? 0;
+            $row['devices'] = $s['devices'] ?? 0;
+        }
+        return $result;
+    }
+
+    public function getSwitchAction($uuid = null)
+    {
+        return $this->getBase('switch', 'switches.switch', $uuid);
+    }
+
+    private function switchSaved(array $result, $uuid)
+    {
+        if (in_array($result['result'] ?? '', ['saved', 'deleted'], true)) {
+            $this->publishSettings();
+            if ($uuid !== null) {
+                $this->getModel()->refreshSwitches($uuid);
+            }
+        }
+        return $result;
+    }
+
+    public function addSwitchAction()
+    {
+        $result = $this->addBase('switch', 'switches.switch');
+        return $this->switchSaved($result, $result['uuid'] ?? null);
+    }
+
+    public function setSwitchAction($uuid)
+    {
+        return $this->switchSaved($this->setBase('switch', 'switches.switch', $uuid), $uuid);
+    }
+
+    public function delSwitchAction($uuid)
+    {
+        return $this->switchSaved($this->delBase('switches.switch', $uuid), null);
+    }
+
     public function searchModelNameAction()
     {
         return $this->searchBase('models.model', ['identifier', 'name'], 'identifier');
@@ -456,13 +536,7 @@ class SettingsController extends ApiMutableModelControllerBase
             $result = $this->validateAndSave($node, 'device');
         }
         if (($result['result'] ?? '') === 'saved') {
-            /* as Apply: loupe.json carries every saved setting, so loupd reads it again too; otherwise the reports
-               would use settings saved but not applied (a new service name) that loupd doesn't */
-            $backend = new Backend();
-            $backend->configdRun('template reload OPNsense/Loupe');
-            if ((string)$this->getModel()->general->enabled === '1') {
-                $backend->configdRun('loupe restart');
-            }
+            $this->publishSettings();
         }
         return $result;
     }

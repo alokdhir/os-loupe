@@ -33,6 +33,9 @@ usage:
   query.py servicechart TEXT HOURS [NETWORKS]
   query.py widget
   query.py summary
+  query.py switchmap
+  query.py switch ID
+  query.py switchrefresh FILE|- all|ID
 """
 import collections
 import ipaddress
@@ -45,7 +48,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib import airules, devid, netif, privs  # noqa: E402
+from lib import airules, devid, netif, privs, switches  # noqa: E402
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
 from lib.report import (WEB_PORTS, Namer, add, add_site, build_day, days, local_day, next_day, pieces, port_key,  # noqa: E402
                         recent_rows, site_rows)
@@ -122,7 +125,7 @@ def start_as_user(cmd, path):
         pass
     devid.read_root_files()
     pw = privs.user()
-    if pw and cmd in ("aipreview", "aimodelpreview") and AI_REPLY.match(path or ""):
+    if pw and cmd in ("aipreview", "aimodelpreview", "switchrefresh") and AI_REPLY.match(path or ""):
         try:
             os.chown(path, pw.pw_uid, pw.pw_gid)
         except OSError:
@@ -658,6 +661,9 @@ def cmd_device(arg, hours, span=None):
             tl[1] += up
     now = int(time.time())
     slots = list(days(start, local_day(now))) if step >= 86400 else range(start - start % step, now + 1, step)
+    if dev and switch_map_on():
+        _, found, _ = switch_map(info)
+        dev["switch_port"] = next((found[m] for m in dev.get("macs") or [dev.get("mac")] if m in found), None)
     return {
         "hours": hours, "device": dev or {"ip": val if col == "ip" else "", "mac": val if col == "mac" else ""},
         "networks": [n for n in nets.shown() if n["id"] in on],
@@ -1051,6 +1057,76 @@ def cmd_hass():
             "error": st.get("error")}
 
 
+# ---- Switch map (lib/switches.py) -----------------------------------------------------------------------------------
+def switch_state_path():
+    return os.path.join(os.path.dirname(DB), "switches.json")
+
+
+def switch_map_on():
+    return bool((read_conf().get("switch_map") or {}).get("enabled"))
+
+
+def switch_list():
+    return (read_conf().get("switch_map") or {}).get("switches") or []
+
+
+def switch_map(info, traffic=None):
+    """(the switches as described, {MAC: where}, os-eero's view), from the last refresh: no switch is asked anything."""
+    return switches.describe(switch_list(), switches.load_state(switch_state_path()), info, netif.link_macs(), traffic)
+
+
+def cmd_switchrefresh(path, target):
+    """Read the switches now (all, or one) and keep what they say. `path`: a file the GUI left with os-eero's units and
+    Wi-Fi clients, removed once read, or - without that plugin."""
+    if target != "all" and not switches.SWITCH_ID.match(target or ""):
+        raise ValueError("expected a switch")
+    eero = {}
+    if AI_REPLY.match(path or ""):
+        try:
+            with open(path, encoding="utf-8") as f:
+                eero = json.load(f)
+        except (OSError, ValueError):
+            pass
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    if not switch_map_on():
+        return {"errors": {}}
+    return {"errors": switches.refresh(switch_state_path(), switch_list(), target, eero)}
+
+
+def public_switch(s):
+    return {k: v for k, v in s.items() if k != "rows"}
+
+
+def cmd_switchmap():
+    """The switches for the tab's list and the settings' grid, and the devices seen today on none of their ports."""
+    db, _, ov = load()
+    try:
+        info = devices_info(db, ov)
+    finally:
+        db.close()
+    described, found, eero = switch_map(info)
+    shown = sorted(described.values(), key=lambda s: ipaddress.ip_address(s["address"]).packed)
+    return {"switches": [public_switch(s) for s in shown],
+            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - 86400)}
+
+
+def cmd_switch(sid):
+    """One switch's page: every port that is up and what is on it, with each device's traffic over the last day."""
+    if not switches.SWITCH_ID.match(sid or ""):
+        raise ValueError("expected a switch")
+    traffic = {r["mac"]: (r["down"], r["up"]) for r in cmd_devices(24)["rows"] if r.get("mac")}
+    db, _, ov = load()
+    try:
+        info = devices_info(db, ov)
+    finally:
+        db.close()
+    described, _, _ = switch_map(info, traffic)
+    return {"switch": described[sid]} if sid in described else {"error": "no such switch"}
+
+
 def main(argv):
     try:
         cmd = argv[1] if len(argv) > 1 else ""
@@ -1088,6 +1164,12 @@ def main(argv):
             out = cmd_aimodelpreview(arg(2))
         elif cmd == "hass":
             out = cmd_hass()
+        elif cmd == "switchmap":
+            out = cmd_switchmap()
+        elif cmd == "switch":
+            out = cmd_switch(arg(2))
+        elif cmd == "switchrefresh":
+            out = cmd_switchrefresh(arg(2), arg(3))
         else:
             out = {"error": "unknown command"}
     except (IndexError, ValueError) as e:

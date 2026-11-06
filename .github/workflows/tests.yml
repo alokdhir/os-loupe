@@ -15,4 +15,4 @@ jobs:
         run: python tools/fmtjson.py src/opnsense/scripts/loupe/data/*.json && git diff --exit-code
       - name: unit tests (incl. every rule's example)
         working-directory: tests
-        run: python -m unittest test_tls test_quic test_pfstate test_store test_devid test_services test_rules
+        run: python -m unittest test_tls test_quic test_pfstate test_store test_devid test_services test_rules test_switches

@@ -1,0 +1,33 @@
+<form>
+    <field>
+        <id>switch.enabled</id>
+        <label>Enabled</label>
+        <type>checkbox</type>
+        <grid_view>
+            <type>boolean</type>
+            <formatter>boolean</formatter>
+            <width>7em</width>
+        </grid_view>
+    </field>
+    <field>
+        <id>switch.name</id>
+        <label>Name</label>
+        <type>text</type>
+        <help>Optional. Without one, the model the switch reports is shown.</help>
+    </field>
+    <field>
+        <id>switch.address</id>
+        <label>Address</label>
+        <type>text</type>
+        <help>The switch's management IP address.</help>
+    </field>
+    <field>
+        <id>switch.community</id>
+        <label>Community</label>
+        <type>text</type>
+        <help>Its read-only SNMP v2c community, often public. Loupe only reads from the switch, when you save it here or press Refresh.</help>
+        <grid_view>
+            <visible>false</visible>
+        </grid_view>
+    </field>
+</form>

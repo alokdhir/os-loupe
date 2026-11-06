@@ -24,6 +24,7 @@ When possible, devices are identified and named automatically. A layered, eviden
 - **Your own names, types and icons**: rename a device, correct its type or pick its icon from any report page. Overrides follow the device by MAC address, and an icon picked for one device applies to every device of that type. Rules type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*; a compound rule combines clues (MAC vendor Espressif *and* a host name starting `shelly`).
 - **AI Rule Generator**: for the devices Loupe can only guess at, *Settings → Device rules → AI Rule Generator* builds a prompt to paste into any AI chat (Claude, ChatGPT, Gemini…), reads the rules out of its answer, shows what each would change on your network (flagging rules that reach other devices, change nothing or make a type vaguer), and saves the ones you tick. Loupe itself sends nothing anywhere.
 - **Your own service names**: add domains (including patterns like `cdn-*.example.com`), addresses, ports or VPN app domains. *Settings → Service names / Device rules → Built-in* shows what Loupe ships with.
+- **Switch map (optional)**: which device is on which port of your managed switches, under the names Loupe gives them, with each device's last day of traffic. Read over SNMP when you ask (see [Switch map](#switch-map)).
 - **Dashboard widget**: the last 24 hours at a glance, with totals, an hourly chart and the top devices.
 
 ## Screenshots
@@ -117,7 +118,7 @@ Those are broader tools — deep packet inspection, alerts, policies, live flows
 
 ## Settings
 
-*Reporting → Loupe → Settings* has four pages: **General**, **Service names**, **Device rules** and **Overrides**. As elsewhere in OPNsense, changes to the lists are saved at once and used after *Apply*.
+*Reporting → Loupe → Settings* has five pages: **General**, **Service names**, **Device rules**, **Overrides** and **Switch map**. As elsewhere in OPNsense, changes to the lists are saved at once and used after *Apply*; the Switch map page has nothing to apply.
 
 ### General
 
@@ -171,6 +172,14 @@ For the devices Loupe can only guess at (no type, or a generic one such as *IoT 
 | VPN app domain | `nordvpn.com` | a device that looks it up has its VPN tunnel labelled with this name |
 
 Traffic named only for its CDN (Fastly, Akamai, CloudFront…), or with no name at all, takes the service the same device was using on the same server, marked *(same server)*.
+
+### Switch map
+
+Turn on SNMP on each switch (read-only, v2c), tick **Enable switch map** and add the switches: an **Address**, the **Community** (often `public`) and, if you like, a **Name**. Saving a switch reads it right away, and **Last result** says how that went. A *Switches* tab appears before Settings, listing the switches. Open one to see each port that is up: its speed, the devices on it, their addresses and their traffic over the last 24 hours. A device's page says which switch and port it is on.
+
+Loupe asks a switch only when you save it or press **Refresh**, so the tab shows the last read and when it was. It reads the switch's standard MAC table and port list (BRIDGE-MIB, Q-BRIDGE-MIB, IF-MIB) and changes nothing on it. The port that sees the router is the uplink, a port that sees another listed switch is the link to it, and any other device goes on the nearest port. Below the list, *Seen in the last day, on no port* names what no switch accounts for: devices on the router's own ports, on a switch that isn't listed, or that have since left.
+
+This is best effort, because switches differ. Tested on an EdgeSwitch 24 Lite and RealHD SW8-10GSFP-MG and SW5-10G-RJ45. Some budget lines, such as Netgear Plus, have no SNMP at all. A switch forgets a device that has been silent for a few minutes (often 5), so a quiet device can be missing from a read. Entries listed on a port that is down are ignored and counted under the table. A Wi-Fi client shows on its access point's port: Loupe says so when it recognizes the access point, and with the [os-eero](https://github.com/alokdhir/os-eero) plugin installed it lists each client under its eero.
 
 ## Rule files (for contributors)
 
@@ -239,7 +248,7 @@ In a workplace, tell people that their devices' traffic is recorded this way. Pe
 
 ## Security
 
-Loupe only reads packets: it never alters, blocks or injects them, and it listens on no network port. Its pages are behind OPNsense's login and privileges. The service and its reports run as a dedicated `loupe` user. Root opens the capture devices at the start, before anything from a packet is read. After that, the only part left as root is a small sandboxed process that reads the DHCP servers' lease files and passes them on; it parses nothing, takes no input and runs in a Capsicum sandbox.
+Loupe only reads packets: it never alters, blocks or injects them, and it listens on no network port. If you use the optional Switch map, it also sends read-only SNMP requests to the switches you list, when you save one or press Refresh; SNMP v2c isn't encrypted, so its community crosses your LAN in the clear. Its pages are behind OPNsense's login and privileges. The service and its reports run as a dedicated `loupe` user. Root opens the capture devices at the start, before anything from a packet is read. After that, the only part left as root is a small sandboxed process that reads the DHCP servers' lease files and passes them on; it parses nothing, takes no input and runs in a Capsicum sandbox.
 
 This design dates from 1.2, a security release that followed [an outside security assessment](https://github.com/alokdhir/os-loupe/issues/1). Before it, all of Loupe ran as root.
 
@@ -283,7 +292,7 @@ Loupe works on a transparent filtering bridge, where OPNsense sits inline with n
 ## Tests
 
 ```sh
-cd tests && python3 -m unittest test_tls test_quic test_pfstate test_store test_devid test_services test_rules test_airules test_hass
+cd tests && python3 -m unittest test_tls test_quic test_pfstate test_store test_devid test_services test_rules test_airules test_hass test_switches
 ```
 
 All test data is synthetic.

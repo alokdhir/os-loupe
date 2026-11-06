@@ -31,8 +31,8 @@ namespace OPNsense\Loupe;
 class IndexController extends \OPNsense\Base\IndexController
 {
     /**
-     * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Settings (General, Service names,
-     * Device rules, Overrides). The old addresses open the matching tab.
+     * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Switches when switched on, Settings (General,
+     * Service names, Device rules, Overrides, Switch map). The old addresses open the matching tab.
      */
     private function page($activetab)
     {
@@ -45,6 +45,16 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->view->formGridOverrides = $this->getFormGrid('dialogDevice', 'gridOverrides');
         $this->view->formDialogModelName = $this->getForm('dialogModelName');
         $this->view->formGridModelNames = $this->getFormGrid('dialogModelName', 'gridModelNames');
+        $this->view->formSwitchMap = $this->getForm('switchmap');
+        $this->view->switchMapOn = (string)(new \OPNsense\Loupe\Loupe())->switchmap->enabled === '1';
+        $this->view->formDialogSwitch = $this->getForm('dialogSwitch');
+        // what the last read of a switch said: not a setting, so not in its form (search_switch adds it)
+        $switchGrid = $this->getFormGrid('dialogSwitch', 'gridSwitches');
+        array_splice($switchGrid['fields'], -1, 0, [[
+            'column-id' => 'last', 'label' => gettext('Last result'), 'visible' => 'true', 'sortable' => 'false',
+            'identifier' => 'false', 'type' => 'string', 'formatter' => 'switchlast',
+        ]]);
+        $this->view->formGridSwitches = $switchGrid;
         $this->view->formDialogRule = $this->getForm('dialogRule');
         // a rule's clues are hidden columns; one column says what it matches (built by search_rule)
         $grid = $this->getFormGrid('dialogRule', 'gridRules');

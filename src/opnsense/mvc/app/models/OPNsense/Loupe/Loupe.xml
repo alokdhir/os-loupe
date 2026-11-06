@@ -54,6 +54,38 @@
                 <Required>Y</Required>
             </hass_verify>
         </general>
+        <switchmap>
+            <enabled type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+            </enabled>
+        </switchmap>
+        <switches>
+            <switch type="ArrayField">
+                <enabled type="BooleanField">
+                    <Default>1</Default>
+                    <Required>Y</Required>
+                </enabled>
+                <name type="TextField"/>
+                <address type="NetworkField">
+                    <Required>Y</Required>
+                    <NetMaskAllowed>N</NetMaskAllowed>
+                    <ValidationMessage>Enter the switch's IP address.</ValidationMessage>
+                    <Constraints>
+                        <check001>
+                            <ValidationMessage>This switch is already listed.</ValidationMessage>
+                            <type>UniqueConstraint</type>
+                        </check001>
+                    </Constraints>
+                </address>
+                <community type="TextField">
+                    <Default>public</Default>
+                    <Required>Y</Required>
+                    <Mask>/^[!-~]{1,64}$/</Mask>
+                    <ValidationMessage>Enter the read-only community, without spaces.</ValidationMessage>
+                </community>
+            </switch>
+        </switches>
         <services>
             <service type="ArrayField">
                 <kind type="OptionField">

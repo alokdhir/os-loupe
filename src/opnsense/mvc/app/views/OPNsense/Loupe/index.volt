@@ -44,6 +44,8 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-netpick { display: inline-block; margin-left: 10px; vertical-align: middle; }
     .loupe-net + .loupe-net { margin-left: 3px; }
     .loupe-rebuild { margin-top: 6px; }
+    #switch_ports td { white-space: nowrap; }
+    #switch_ports td.loupe-wrap { white-space: normal; }
 </style>
 <script>
     $(document).ready(function () {
@@ -68,6 +70,8 @@ POSSIBILITY OF SUCH DAMAGE.
             ? ' title="' + esc('{{ lang._("Name from Home Assistant") }}' + (d.area ? ' · ' + d.area : '')) + '"' : '';
         const modelShown = d => d.model_in_name ? '' : (d.model || '');
         /* Settings > General: how the Home Assistant link is doing (loupd fetches names every 10 minutes) */
+        let switchMapOn = {{ switchMapOn ? 'true' : 'false' }};
+        $('#maintabs a[href="#tab_switches"]').parent().toggle(switchMapOn);
         function hassStatus() {
             const $s = $('#hass-status');
             if (!$('[id="loupe.general.hass_url"]').val()) { $s.hide(); return; }
@@ -177,6 +181,14 @@ POSSIBILITY OF SUCH DAMAGE.
                 return '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>'
                     + ((row.matched || []).length ? ' <span class="text-muted">' + esc(row.matched.join(', '))
                         + (row.sites > row.matched.length ? ', …' : '') + '</span>' : '');
+            },
+            switchname: function (column, row) {
+                return '<a href="#switch=' + esc(row.id) + '">' + esc(row.name) + '</a>';
+            },
+            switchlast: function (column, row) {        /* how the last read went (on the tab and in Settings) */
+                if (row.error) return '<span class="text-danger" title="' + esc(row.error) + '"><i class="fa fa-triangle-exclamation fa-fw"></i> ' + esc(row.error) + '</span>';
+                if (!row.fetched) return dash;
+                return esc(ago(row.fetched)) + (row.note ? ' <span class="text-warning">' + esc(row.note) + '</span>' : '');
             },
             housedevices: function (column, row) {
                 return esc(row.devices) + ' <span class="text-muted">' + esc((row.names || []).join(', '))
@@ -330,10 +342,75 @@ POSSIBILITY OF SUCH DAMAGE.
                     /* one device seen with several MACs (a bridge and its NIC, wired and Wi-Fi): the others too */
                     + ((d.macs || []).length > 1 ? ' <span title="{{ lang._('Loupe saw these MACs as one device') }}">('
                         + esc('{{ lang._('also') }} ' + d.macs.filter(m => m !== d.mac).join(', ')) + ')</span>' : '')
-                    + ' ' + (data.networks || []).map(n => pill(n.id)).join('') + '</small>');
+                    + ' ' + (data.networks || []).map(n => pill(n.id)).join('')
+                    + (d.switch_port ? '<br><a href="#switch=' + esc(d.switch_port.switch) + '">' + esc(d.switch_port.name + ' ' + d.switch_port.port) + '</a>'
+                        + (d.switch_port.via ? ' {{ lang._("via") }} ' + esc(d.switch_port.via) : '') : '') + '</small>');
                 drawChart('loupe-chart', data);
             });
         }
+
+        /* Switches tab: the list, or one switch's ports. What it shows is the last refresh: nothing asks the switches
+           but Refresh and saving a switch in Settings */
+        let switchShown = '';
+        function deviceCell(r) {
+            const name = r.id && r.kind !== 'ap'
+                ? '<a href="' + (r.switch ? '#switch=' : '#device=') + esc(r.id) + '">' + esc(r.name) + '</a>' : esc(r.name);
+            return '<span style="padding-left: ' + (r.depth || 0) * 20 + 'px">'
+                + (r.icon ? '<i class="' + esc(r.icon) + ' fa-fw text-muted"></i> ' : '') + name + '</span>';
+        }
+        function deviceRow(r, port, speed) {
+            const used = (r.down || r.up) ? byteFormat((r.down || 0) + (r.up || 0), 1) : '';
+            const what = [r.detail, r.port_note].filter(Boolean).map(esc).join(' · ');
+            return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r) + '</td><td>' + esc(r.ip)
+                + '</td><td class="loupe-wrap">' + what + '</td><td>' + used + '</td></tr>';
+        }
+        function showSwitches() {
+            switchShown = '';
+            $('#switch_detail').hide();
+            $('#switch_list').show();
+            grid('grid-switches', '/api/loupe/report/search_switches');
+            ajaxGet('/api/loupe/report/switch_elsewhere', {}, function (data) {
+                const rows = (data || {}).elsewhere || [];
+                $('#switch_none').toggle(!((data || {}).switches || []).length);
+                $('#switch_elsewhere').toggle(rows.length > 0);
+                $('#switch_elsewhere tbody').html(rows.map(r => deviceRow(r, '', '')).join(''));
+            });
+        }
+        function showSwitch(id) {
+            switchShown = id;
+            $('#switch_list').hide();
+            $('#switch_detail').show();
+            ajaxGet('/api/loupe/report/switch/' + encodeURIComponent(id), {}, function (data) {
+                if (switchShown !== id) return;
+                const s = (data || {}).switch;
+                if (!s) {
+                    $('#switch_title').text((data || {}).error || '');
+                    $('#switch_problem, #switch_foot').hide();
+                    $('#switch_ports tbody').empty();
+                    return;
+                }
+                const uplink = s.uplink ? '{{ lang._("Uplink to") }} ' + (s.uplink_id
+                    ? '<a href="#switch=' + esc(s.uplink_id) + '">' + esc(s.uplink) + '</a>' : esc(s.uplink)) : '';
+                $('#switch_title').html(esc(s.name) + ' <small class="text-muted">' + [esc(s.model), esc(s.address), uplink,
+                    s.fetched ? '{{ lang._("Read") }} ' + esc(ago(s.fetched)) : ''].filter(Boolean).join(' · ') + '</small>');
+                $('#switch_problem').text(s.error || s.note || '').toggle(!!(s.error || s.note));
+                $('#switch_ports tbody').html((s.rows || []).map(r => deviceRow(r, r.port, r.speed)).join(''));
+                const foot = [];
+                if (s.down) foot.push('{{ lang._("Down:") }} ' + s.down);
+                if (s.ignored) foot.push('{{ lang._("Ignored %s MACs listed on ports that are down.") }}'.replace('%s', s.ignored));
+                $('#switch_foot').text(foot.join(' ')).toggle(foot.length > 0);
+            });
+        }
+        $('.switch-refresh').click(function () {
+            const $b = $(this), $i = $b.find('i').addClass('fa-spin');
+            $b.prop('disabled', true);
+            ajaxCall('/api/loupe/report/refresh_switches', {target: switchShown || 'all'}, function () {
+                if (switchShown) { showSwitch(switchShown); } else { showSwitches(); }
+            }).always(function () {
+                $i.removeClass('fa-spin');
+                $b.prop('disabled', false);
+            });
+        });
 
         /* Services tab: every service the house used, or what matches the search */
         function showServices() {
@@ -419,6 +496,19 @@ POSSIBILITY OF SUCH DAMAGE.
                     $('#' + id).bootgrid('reload');
                 });
             },
+            switchmap: function () {
+                mapDataToFormUI({'frm_switchmap': '/api/loupe/settings/get'}).done(function () {
+                    $('#switchmap_grid').toggle(switchMapOn);
+                    $('#{{ formGridSwitches['table_id'] }}').UIBootgrid({
+                        search: '/api/loupe/settings/search_switch',
+                        get: '/api/loupe/settings/get_switch/',
+                        set: '/api/loupe/settings/set_switch/',
+                        add: '/api/loupe/settings/add_switch/',
+                        del: '/api/loupe/settings/del_switch/',
+                        options: {formatters: {switchlast: formatters.switchlast}}
+                    });
+                });
+            },
             overrides: function () {
                 $('#{{ formGridOverrides['table_id'] }}').UIBootgrid({
                     search: '/api/loupe/settings/search_device',
@@ -472,10 +562,25 @@ POSSIBILITY OF SUCH DAMAGE.
         function applyButton() {
             const page = $('.loupe-page').filter(function () { return this.style.display !== 'none'; }).first();
             const source = page.find('.loupe-source .btn.active').data('source');
-            /* Model names: its AI section saves and applies by itself; Apply appears once the list was edited */
-            $('.loupe-apply').toggle(currentTab === 'settings' && (pending || !['builtin', 'ai', 'models'].includes(source)));
+            /* Model names: its AI section saves and applies by itself; Apply appears once the list was edited.
+               Switch map: all of it takes effect when saved */
+            $('.loupe-apply').toggle(currentTab === 'settings' && page.attr('id') !== 'page_switchmap'
+                && (pending || !['builtin', 'ai', 'models'].includes(source)));
         }
-        $(document).on('settings-changed', function () { pending = true; applyButton(); });
+        $(document).on('settings-changed', function () {
+            if (!$('#page_switchmap').is(':visible')) pending = true;
+            applyButton();
+        });
+        $(document).on('change', '[id="loupe.switchmap.enabled"]', function () {
+            const on = this.checked;
+            if (on === switchMapOn) return;
+            ajaxCall('/api/loupe/settings/switch_enable', {enabled: on ? '1' : '0'}, function () {
+                switchMapOn = on;
+                $('#maintabs a[href="#tab_switches"]').parent().toggle(on);
+                $('#switchmap_grid').toggle(on);
+                if (on) $('#{{ formGridSwitches['table_id'] }}').bootgrid('reload');
+            });
+        });
         function showSettings(page) {
             $('.loupe-pages .btn').removeClass('active').filter('[data-page="' + page + '"]').addClass('active');
             $('.loupe-page').hide().filter('#page_' + page).show();
@@ -487,11 +592,12 @@ POSSIBILITY OF SUCH DAMAGE.
         }
 
         /* tabs <-> address: #device=…, #q=…, #services, and the settings pages #general, #servicenames, #overrides */
-        const TABS = {devices: '#tab_devices', services: '#tab_services', settings: '#tab_settings'};
-        const PAGES = ['general', 'servicenames', 'rules', 'overrides'];
+        const TABS = {devices: '#tab_devices', services: '#tab_services', switches: '#tab_switches', settings: '#tab_settings'};
+        const PAGES = ['general', 'servicenames', 'rules', 'overrides', 'switchmap'];
 
         function tabOf(hash) {
             if (/^#device=/.test(hash)) return 'devices';
+            if (/^#switch(es$|=)/.test(hash)) return switchMapOn ? 'switches' : 'devices';
             if (/^#(q=|sites$)/.test(hash)) return 'services';
             const t = (hash.replace(/^#/, '') || '{{ activetab }}').replace(/^devicenames$/, 'overrides');
             return PAGES.indexOf(t) >= 0 ? 'settings' : (TABS[t] ? t : 'devices');
@@ -524,6 +630,9 @@ POSSIBILITY OF SUCH DAMAGE.
                 const m = hash.match(/q=([^&]+)/);
                 q = m ? decode(m[1]) : '';
                 showServices();
+            } else if (tab === 'switches') {
+                const m = hash.match(/switch=([^&]+)/);
+                if (m) { showSwitch(decode(m[1])); } else { showSwitches(); }
             } else {
                 const page = (hash.replace(/^#/, '') || '{{ activetab }}').replace(/^devicenames$/, 'overrides');
                 showSettings(PAGES.indexOf(page) >= 0 ? page : PAGES[0]);
@@ -1004,6 +1113,7 @@ POSSIBILITY OF SUCH DAMAGE.
         'tabs': [
             ['tab_id': 'devices', 'tab_descr': lang._('Devices')],
             ['tab_id': 'services', 'tab_descr': lang._('Services')],
+            ['tab_id': 'switches', 'tab_descr': lang._('Switches')],
             ['tab_id': 'settings', 'tab_descr': lang._('Settings')]
         ]
     ]]) }}
@@ -1117,6 +1227,52 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
     </div>
 
+    <div id="tab_switches" class="tab-pane fade in">
+        <div id="switch_list">
+            <div class="loupe-bar">
+                <button type="button" class="btn btn-default btn-sm switch-refresh"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh all') }}</button>
+            </div>
+            <p id="switch_none" class="loupe-bar text-muted" style="display: none">{{ lang._('No switches yet: add them under Settings, Switch map.') }}</p>
+            <table id="grid-switches" class="table table-condensed table-hover table-striped table-responsive">
+                <thead><tr>
+                    <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
+                    <th data-column-id="name" data-formatter="switchname">{{ lang._('Switch') }}</th>
+                    <th data-column-id="address" data-formatter="copy">{{ lang._('Address') }}</th>
+                    <th data-column-id="model">{{ lang._('Model') }}</th>
+                    <th data-column-id="uplink">{{ lang._('Uplink') }}</th>
+                    <th data-column-id="up" data-type="numeric" data-width="7em">{{ lang._('Ports up') }}</th>
+                    <th data-column-id="devices" data-type="numeric" data-width="7em">{{ lang._('Devices') }}</th>
+                    <th data-column-id="fetched" data-formatter="switchlast">{{ lang._('Last read') }}</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>
+            <div id="switch_elsewhere" style="display: none">
+                <h4 class="loupe-bar">{{ lang._('Seen in the last day, on no port') }}</h4>
+                <p class="loupe-bar text-muted" style="padding-top: 0">{{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</p>
+                <table class="table table-condensed table-striped">
+                    <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div id="switch_detail" style="display: none">
+            <div class="loupe-bar">
+                <a href="#switches"><i class="fa fa-chevron-left fa-fw"></i> {{ lang._('All switches') }}</a>
+                <button type="button" class="btn btn-default btn-sm switch-refresh" style="margin-left: 12px"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh') }}</button>
+                <h2 id="switch_title" class="loupe-detail-title"></h2>
+            </div>
+            <p id="switch_problem" class="loupe-bar text-danger" style="display: none"></p>
+            <table id="switch_ports" class="table table-condensed table-striped">
+                <thead><tr>
+                    <th>{{ lang._('Port') }}</th><th>{{ lang._('Speed') }}</th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th>
+                    <th>{{ lang._('Detail') }}</th><th>{{ lang._('Last 24 hours') }}</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>
+            <p id="switch_foot" class="loupe-bar text-muted" style="display: none"></p>
+        </div>
+    </div>
+
     <div id="tab_settings" class="tab-pane fade in">
         <div class="loupe-bar">
             <div class="btn-group loupe-pages">
@@ -1124,6 +1280,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <button type="button" class="btn btn-default btn-sm" data-page="servicenames">{{ lang._('Service names') }}</button>
                 <button type="button" class="btn btn-default btn-sm" data-page="rules">{{ lang._('Device rules') }}</button>
                 <button type="button" class="btn btn-default btn-sm" data-page="overrides">{{ lang._('Overrides') }}</button>
+                <button type="button" class="btn btn-default btn-sm" data-page="switchmap">{{ lang._('Switch map') }}</button>
             </div>
         </div>
         <div id="page_general" class="loupe-page">
@@ -1257,6 +1414,12 @@ POSSIBILITY OF SUCH DAMAGE.
             <p class="loupe-bar">{{ lang._('Your name or type for one device, matched by its MAC address. They win over everything Loupe detects. The pencil next to a device on the main Devices tab does the same.') }}</p>
             {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
         </div>
+        <div id="page_switchmap" class="loupe-page">
+            {{ partial("layout_partials/base_form", ['fields': formSwitchMap, 'id': 'frm_switchmap']) }}
+            <div id="switchmap_grid" style="display: none">
+                {{ partial('layout_partials/base_bootgrid_table', formGridSwitches) }}
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1267,4 +1430,5 @@ POSSIBILITY OF SUCH DAMAGE.
 {{ partial("layout_partials/base_dialog", ['fields': formDialogService, 'id': formGridServices['edit_dialog_id'], 'label': lang._('Service name')]) }}
 {{ partial("layout_partials/base_dialog", ['fields': formDialogDevice, 'id': formGridOverrides['edit_dialog_id'], 'label': lang._('Device')]) }}
 {{ partial("layout_partials/base_dialog", ['fields': formDialogRule, 'id': formGridRules['edit_dialog_id'], 'label': lang._('Device rule')]) }}
+{{ partial("layout_partials/base_dialog", ['fields': formDialogSwitch, 'id': formGridSwitches['edit_dialog_id'], 'label': lang._('Switch')]) }}
 {{ partial("layout_partials/base_dialog", ['fields': formDialogModelName, 'id': formGridModelNames['edit_dialog_id'], 'label': lang._('Model name')]) }}

@@ -29,7 +29,33 @@
 namespace OPNsense\Loupe;
 
 use OPNsense\Base\BaseModel;
+use OPNsense\Core\Backend;
 
 class Loupe extends BaseModel
 {
+    /**
+     * Read the switches now ('all', or one's id) and keep what they say. os-eero's units and Wi-Fi clients go along,
+     * when that plugin is there (configd answers an unknown action with text, which isn't JSON), in a file for
+     * query.py, since they are too long for an argument.
+     */
+    public function refreshSwitches($target = 'all')
+    {
+        $backend = new Backend();
+        $units = json_decode($backend->configdpRun('eero query', ['units']) ?? '', true);
+        $clients = json_decode($backend->configdpRun('eero query', ['clients', 'all']) ?? '', true);
+        $path = '-';
+        if (is_array($units) && is_array($clients)) {
+            $file = '/tmp/loupe-ai-' . bin2hex(random_bytes(8)) . '.json';
+            $json = json_encode(['units' => $units, 'clients' => $clients], JSON_INVALID_UTF8_SUBSTITUTE);
+            if ($json !== false && @file_put_contents($file, $json) !== false) {
+                @chmod($file, 0600);
+                $path = $file;
+            }
+        }
+        $out = json_decode($backend->configdpRun('loupe query', ['switchrefresh', $path, $target]) ?? '', true);
+        if ($path !== '-') {
+            @unlink($path);
+        }
+        return is_array($out) ? $out : ['error' => gettext('No answer from Loupe.')];
+    }
 }

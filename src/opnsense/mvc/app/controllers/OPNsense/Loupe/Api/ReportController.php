@@ -159,6 +159,37 @@ class ReportController extends ApiControllerBase
         return $this->searchRecordsetBase($rows, $fields, null, null, SORT_NATURAL | SORT_FLAG_CASE, $searchClauses);
     }
 
+    /* the Switches tab's list, in the settings' order, from the last refresh */
+    public function searchSwitchesAction()
+    {
+        $rows = $this->query(['switchmap'])['switches'] ?? [];
+        return $this->grid($rows, 'settings_order', null, ['name', 'address', 'model', 'uplink']);
+    }
+
+    /* the devices seen today on no port */
+    public function switchElsewhereAction()
+    {
+        return $this->query(['switchmap']);
+    }
+
+    public function switchAction($id = '')
+    {
+        return $this->query(['switch', preg_replace('/[^0-9a-fA-F-]/', '', (string)$id)]);
+    }
+
+    /* Refresh: ask the switches now, all or one */
+    public function refreshSwitchesAction()
+    {
+        if (!$this->request->isPost()) {
+            return ['error' => 'POST only'];
+        }
+        $target = (string)$this->request->getPost('target', null, 'all');
+        if ($target !== 'all' && !preg_match('/^[0-9a-fA-F-]{36}$/', $target)) {
+            return ['error' => 'invalid switch'];
+        }
+        return (new \OPNsense\Loupe\Loupe())->refreshSwitches($target);
+    }
+
     public function searchDevicesAction()
     {
         $data = $this->cachedList('devices');
