@@ -118,7 +118,7 @@ Those are broader tools — deep packet inspection, alerts, policies, live flows
 
 ## Settings
 
-*Reporting → Loupe → Settings* has five pages: **General**, **Service names**, **Device rules**, **Overrides** and **Switch map**. As elsewhere in OPNsense, changes to the lists are saved at once and used after *Apply*; the Switch map page has nothing to apply.
+*Reporting → Loupe → Settings* has five pages: **General**, **Service names**, **Device rules**, **Overrides** and **Switches**. As elsewhere in OPNsense, changes to the lists are saved at once and used after *Apply*; the Switches page has nothing to apply.
 
 ### General
 
@@ -175,7 +175,7 @@ Traffic named only for its CDN (Fastly, Akamai, CloudFront…), or with no name 
 
 ### Switch map
 
-Turn on SNMP on each switch (read-only, v2c), tick **Enable switch map** and add the switches: an **Address**, the **Community** (often `public`) and, if you like, a **Name**. Saving a switch reads it right away, and **Last result** says how that went. A *Switches* tab appears before Settings, listing the switches. Open one to see each port that is up: its speed, the devices on it, their addresses and their traffic over the last 24 hours. A device's page says which switch and port it is on.
+Turn on SNMP on each switch (read-only, v2c). Then, under *Settings → Switches*, tick **Enable switch map** and add the switches: an **Address**, the **Community** (often `public`) and, if you like, a **Name**. Saving a switch reads it right away, and **Last result** says how that went. A *Switches* tab appears before Settings, listing the switches. Open one to see each port that is up: its speed, the devices on it, their addresses and their traffic over the last 24 hours. A device's page says which switch and port it is on.
 
 Loupe asks a switch only when you save it or press **Refresh**, so the tab shows the last read and when it was. It reads the switch's standard MAC table and port list (BRIDGE-MIB, Q-BRIDGE-MIB, IF-MIB) and changes nothing on it. The port that sees the router is the uplink, a port that sees another listed switch is the link to it, and any other device goes on the nearest port. Below the list, *Seen in the last day, on no port* names what no switch accounts for: devices on the router's own ports, on a switch that isn't listed, or that have since left.
 

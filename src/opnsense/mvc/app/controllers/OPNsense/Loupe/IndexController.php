@@ -32,7 +32,7 @@ class IndexController extends \OPNsense\Base\IndexController
 {
     /**
      * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Switches when switched on, Settings (General,
-     * Service names, Device rules, Overrides, Switch map). The old addresses open the matching tab.
+     * Service names, Device rules, Overrides, Switches). The old addresses open the matching tab.
      */
     private function page($activetab)
     {

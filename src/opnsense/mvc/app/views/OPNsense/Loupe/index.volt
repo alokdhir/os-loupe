@@ -1232,7 +1232,7 @@ POSSIBILITY OF SUCH DAMAGE.
             <div class="loupe-bar">
                 <button type="button" class="btn btn-default btn-sm switch-refresh"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh all') }}</button>
             </div>
-            <p id="switch_none" class="loupe-bar text-muted" style="display: none">{{ lang._('No switches yet: add them under Settings, Switch map.') }}</p>
+            <p id="switch_none" class="loupe-bar text-muted" style="display: none">{{ lang._('No switches yet: add them under Settings, Switches.') }}</p>
             <table id="grid-switches" class="table table-condensed table-hover table-striped table-responsive">
                 <thead><tr>
                     <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
@@ -1280,7 +1280,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <button type="button" class="btn btn-default btn-sm" data-page="servicenames">{{ lang._('Service names') }}</button>
                 <button type="button" class="btn btn-default btn-sm" data-page="rules">{{ lang._('Device rules') }}</button>
                 <button type="button" class="btn btn-default btn-sm" data-page="overrides">{{ lang._('Overrides') }}</button>
-                <button type="button" class="btn btn-default btn-sm" data-page="switchmap">{{ lang._('Switch map') }}</button>
+                <button type="button" class="btn btn-default btn-sm" data-page="switchmap">{{ lang._('Switches') }}</button>
             </div>
         </div>
         <div id="page_general" class="loupe-page">
