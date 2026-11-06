@@ -42,6 +42,9 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-bar { padding: 10px 15px; }
     .loupe-switch { margin-bottom: 20px; }
+    .loupe-switch h2 { cursor: pointer; }
+    .loupe-switch h2 small { cursor: auto; }
+    .loupe-collapsed .loupe-section-body { display: none; }
     .loupe-ports { table-layout: fixed; }
     .loupe-ports th:nth-child(1) { width: 9em; }
     .loupe-ports th:nth-child(2) { width: 6em; }
@@ -369,8 +372,14 @@ POSSIBILITY OF SUCH DAMAGE.
                 + '</td><td class="loupe-wrap">' + what + '</td><td>' + used + '</td></tr>';
         }
         const deviceCount = n => n === 1 ? '{{ lang._("1 device") }}' : '{{ lang._("%s devices") }}'.replace('%s', n);
+        /* a heading folds its section. All open when the page loads: the browser's find doesn't look in a closed one */
+        function sectionOpen($section, open) {
+            $section.toggleClass('loupe-collapsed', !open).find('.loupe-toggle')
+                .toggleClass('fa-square-minus', open).toggleClass('fa-square-plus', !open);
+        }
         function scrollToSwitch(id) {
             const el = document.getElementById('switch_' + id);
+            if (el) sectionOpen($(el), true);
             if (el) $('html, body').animate({scrollTop: $(el).offset().top - 70}, 400);
         }
         function switchSection(s) {
@@ -385,14 +394,15 @@ POSSIBILITY OF SUCH DAMAGE.
             if (s.ignored) foot.push('{{ lang._("Ignored %s MACs listed on ports that are down.") }}'.replace('%s', s.ignored));
             const problem = s.error || s.note;
             return '<div id="switch_' + esc(s.id) + '" class="loupe-switch"><div class="loupe-bar">'
-                + '<h2 class="loupe-detail-title">' + esc(s.name) + ' <small class="text-muted">' + said + '</small></h2></div>'
+                + '<h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> ' + esc(s.name) + ' <small class="text-muted">' + said + '</small></h2></div>'
                 + (problem ? '<p class="loupe-bar text-danger">' + esc(problem) + '</p>' : '')
+                + '<div class="loupe-section-body">'
                 + ((s.rows || []).length ? '<table class="table table-condensed table-striped loupe-ports"><thead><tr>'
                     + '<th>{{ lang._("Port") }}</th><th>{{ lang._("Speed") }}</th><th>{{ lang._("Device") }}</th><th>{{ lang._("Address") }}</th>'
                     + '<th>{{ lang._("Detail") }}</th><th>{{ lang._("Last 24 hours") }}</th></tr></thead><tbody>'
                     + s.rows.map(r => deviceRow(r, r.port, r.speed)).join('') + '</tbody></table>' : '')
                 + (foot.length ? '<p class="loupe-bar text-muted">' + foot.join(' ') + '</p>' : '')
-                + '</div>';
+                + '</div></div>';
         }
         function showSwitches(target) {
             const wanted = ++switchesWanted;
@@ -401,7 +411,10 @@ POSSIBILITY OF SUCH DAMAGE.
                 const list = (data || {}).switches || [], rows = (data || {}).elsewhere || [];
                 $('#switch_none').toggle(!list.length);
                 $('#switch_some').toggle(list.length > 0);
+                /* read again, or back from another tab: what was closed stays closed */
+                const closed = $('#switch_sections .loupe-collapsed').map((i, el) => el.id).get();
                 $('#switch_sections').html(list.map(switchSection).join(''));
+                closed.forEach(id => { const el = document.getElementById(id); if (el) sectionOpen($(el), false); });
                 $('#switch_elsewhere').toggle(rows.length > 0);
                 $('#switch_elsewhere_count').text(deviceCount(rows.length));
                 $('#switch_elsewhere tbody').html(rows.map(r => deviceRow(r, '', '')).join(''));
@@ -412,6 +425,11 @@ POSSIBILITY OF SUCH DAMAGE.
         $('#tab_switches').on('click', 'a[href^="#switch="]', function (e) {
             e.preventDefault();
             scrollToSwitch(decode($(this).attr('href').slice(8)));
+        });
+        $('#tab_switches').on('click', '.loupe-switch h2', function (e) {
+            if ($(e.target).closest('a').length || String(window.getSelection())) return;   /* a link, or copying an address */
+            const $section = $(this).closest('.loupe-switch');
+            sectionOpen($section, $section.hasClass('loupe-collapsed'));
         });
         $('#tab_switches').on('click', '.switch-refresh', function () {
             const $b = $(this), $i = $b.find('i').addClass('fa-spin');
@@ -1242,11 +1260,11 @@ POSSIBILITY OF SUCH DAMAGE.
             </div>
             <div id="switch_sections"></div>
         </div>
-        <div id="switch_elsewhere" style="display: none">
+        <div id="switch_elsewhere" class="loupe-switch" style="display: none">
             <div class="loupe-bar">
-                <h2 class="loupe-detail-title">{{ lang._('Seen in the last day, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
+                <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in the last day, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
             </div>
-            <table class="table table-condensed table-striped loupe-ports">
+            <table class="table table-condensed table-striped loupe-ports loupe-section-body">
                 <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Last 24 hours') }}</th></tr></thead>
                 <tbody></tbody>
             </table>
