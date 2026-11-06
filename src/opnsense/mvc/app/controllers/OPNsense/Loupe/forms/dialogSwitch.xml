@@ -28,7 +28,7 @@
         <id>switch.community</id>
         <label>Community</label>
         <type>text</type>
-        <help>Its read-only SNMP v2c community, often public. Loupe only reads from the switch, when you save it here or press Refresh.</help>
+        <help>Its read-only SNMP v2c community, often public. Loupe only reads from the switch.</help>
         <grid_view>
             <visible>false</visible>
         </grid_view>

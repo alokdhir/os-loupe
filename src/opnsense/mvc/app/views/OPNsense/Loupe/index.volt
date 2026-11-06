@@ -366,8 +366,10 @@ POSSIBILITY OF SUCH DAMAGE.
             });
         }
 
-        /* Switches tab: a section per switch, then what no switch accounts for. What it shows is the last refresh:
-           nothing asks the switches but Refresh and saving a switch in Settings */
+        /* Switches tab: a section per switch, then what no switch accounts for. Nothing polls the switches: they are
+           read by Refresh, by saving one in Settings, and on opening this tab if the last read is old enough for
+           devices in use to be missing from it. Switches forget a silent device after about this long */
+        const SWITCHES_STALE_SECONDS = 300;
         let switchesWanted = 0, switchJumped = '';
         function deviceCell(r) {
             const name = r.id && r.kind !== 'ap'
@@ -437,6 +439,11 @@ POSSIBILITY OF SUCH DAMAGE.
                     scrollToSwitch(target);
                 }
                 switchJumped = target;
+                /* a switch that can't be read counts as tried, so this asks once, not on every answer */
+                const read = list.filter(s => s.id !== 'router').map(s => Math.max(s.fetched || 0, s.tried || 0));
+                if (read.length && Date.now() / 1000 - Math.min(...read) > SWITCHES_STALE_SECONDS) {
+                    $('#switch_some .switch-refresh:not(:disabled)').click();
+                }
             });
         }
         /* a link to another section of this page: there already, so nothing to fetch */
@@ -453,7 +460,7 @@ POSSIBILITY OF SUCH DAMAGE.
             const $b = $(this), $i = $b.find('i').addClass('fa-spin');
             $b.prop('disabled', true);
             ajaxCall('/api/loupe/report/refresh_switches', {}, function () {
-                showSwitches('');
+                if (currentTab === 'switches') showSwitches('');
             }).always(function () {
                 $i.removeClass('fa-spin');
                 $b.prop('disabled', false);
