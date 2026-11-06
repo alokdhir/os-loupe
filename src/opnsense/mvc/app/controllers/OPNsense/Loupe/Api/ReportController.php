@@ -160,10 +160,10 @@ class ReportController extends ApiControllerBase
     }
 
     /* the Switches tab's list, in the settings' order, from the last refresh */
-    /* the Switches tab: every switch with its ports, and the devices seen today on no port */
-    public function switchesAction()
+    /* the Switches tab: every switch with its ports, and the devices seen in the period on no port */
+    public function switchesAction($hours = 24)
     {
-        return $this->query(['switches']);
+        return $this->query(['switches', $this->hours($hours)]);
     }
 
     /* Refresh: ask the switches now */

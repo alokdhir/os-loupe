@@ -34,7 +34,7 @@ usage:
   query.py widget
   query.py summary
   query.py switchmap
-  query.py switches
+  query.py switches HOURS
   query.py switchrefresh FILE|- all|ID
 """
 import collections
@@ -1112,10 +1112,10 @@ def sorted_switches(described):
     return sorted(described.values(), key=lambda s: ipaddress.ip_address(s["address"]).packed if s["address"] else b"")
 
 
-def cmd_switches():
-    """The Switches tab: every port that is up on each switch and what is on it, with each device's traffic over the
-    last day, and the devices seen in that day on no port."""
-    traffic = {r["mac"]: (r["down"], r["up"]) for r in cmd_devices(24)["rows"] if r.get("mac")}
+def cmd_switches(hours):
+    """The Switches tab: every port that is up on each switch and what is on it, with each device's traffic in the
+    period, and the devices seen in it on no port."""
+    traffic = {r["mac"]: (r["down"], r["up"]) for r in cmd_devices(hours)["rows"] if r.get("mac")}
     db, _, ov = load()
     try:
         info = devices_info(db, ov)
@@ -1125,7 +1125,7 @@ def cmd_switches():
     shown = sorted_switches(described)
     read = any(s["fetched"] for s in shown if s["id"] != switches.ROUTER_ID)     # until a switch has been read, every device would count as elsewhere
     return {"switches": shown,
-            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - 86400, traffic) if read else []}
+            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - hours * 3600, traffic) if read else []}
 
 
 def main(argv):
@@ -1168,7 +1168,7 @@ def main(argv):
         elif cmd == "switchmap":
             out = cmd_switchmap()
         elif cmd == "switches":
-            out = cmd_switches()
+            out = cmd_switches(hours_arg(argv[2]))
         elif cmd == "switchrefresh":
             out = cmd_switchrefresh(arg(2), arg(3))
         else:

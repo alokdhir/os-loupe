@@ -311,6 +311,15 @@ POSSIBILITY OF SUCH DAMAGE.
         }
 
         /* Devices tab: the list, or one device */
+        /* a device's page leads back to where it was opened from: this list, or Services or Switches */
+        let cameFrom = null;
+        $('#tab_services, #tab_switches').on('click', 'a[href^="#device="]', function () {
+            cameFrom = {hash: window.location.hash, scroll: $(window).scrollTop(), label: $('#maintabs li.active a').text().trim()};
+        });
+        function deviceBack() {
+            $('#loupe-detail-back').attr('href', cameFrom ? cameFrom.hash : '#devices')
+                .html('&larr; ' + esc(cameFrom ? cameFrom.label : '{{ lang._('All devices') }}'));
+        }
         function showDevices() {
             $('#loupe-detail').hide();
             $('#loupe-list').show();
@@ -332,6 +341,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         function showDevice(id) {
             current = id;
+            deviceBack();
             $('#tab_devices .loupe-netpick').hide();       /* a device's page shows all its traffic: no filter */
             $('#loupe-list').hide();
             $('#loupe-detail').show();
@@ -358,7 +368,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* Switches tab: a section per switch, then what no switch accounts for. What it shows is the last refresh:
            nothing asks the switches but Refresh and saving a switch in Settings */
-        let switchesWanted = 0;
+        let switchesWanted = 0, switchJumped = '';
         function deviceCell(r) {
             const name = r.id && r.kind !== 'ap'
                 ? '<a href="' + (r.switch ? '#switch=' : '#device=') + esc(r.id) + '">' + esc(r.name) + '</a>' : esc(r.name);
@@ -401,14 +411,14 @@ POSSIBILITY OF SUCH DAMAGE.
                 + '<div class="loupe-section-body">'
                 + ((s.rows || []).length ? '<table class="table table-condensed table-striped loupe-ports"><thead><tr>'
                     + '<th>{{ lang._("Port") }}</th><th>{{ lang._("Speed") }}</th><th>{{ lang._("Device") }}</th><th>{{ lang._("Address") }}</th>'
-                    + '<th>{{ lang._("Detail") }}</th><th>{{ lang._("Down, 24 hours") }}</th><th>{{ lang._("Up, 24 hours") }}</th></tr></thead><tbody>'
+                    + '<th>{{ lang._("Detail") }}</th><th>{{ lang._("Down") }}</th><th>{{ lang._("Up") }}</th></tr></thead><tbody>'
                     + s.rows.map(r => deviceRow(r, r.port, r.speed)).join('') + '</tbody></table>' : '')
                 + (foot.length ? '<p class="loupe-bar text-muted">' + foot.join(' ') + '</p>' : '')
                 + '</div></div>';
         }
         function showSwitches(target) {
             const wanted = ++switchesWanted;
-            ajaxGet('/api/loupe/report/switches', {}, function (data) {
+            ajaxGet('/api/loupe/report/switches/' + hours, {}, function (data) {
                 if (wanted !== switchesWanted) return;
                 const list = (data || {}).switches || [], rows = (data || {}).elsewhere || [];
                 $('#switch_none').toggle(!list.length);
@@ -420,7 +430,13 @@ POSSIBILITY OF SUCH DAMAGE.
                 $('#switch_elsewhere').toggle(rows.length > 0);
                 $('#switch_elsewhere_count').text(deviceCount(rows.length));
                 $('#switch_elsewhere tbody').html(rows.map(r => deviceRow(r, '', '')).join(''));
-                if (target) scrollToSwitch(target);
+                if (cameFrom) {     /* back from a device's page: where it was */
+                    $(window).scrollTop(cameFrom.scroll);
+                    cameFrom = null;
+                } else if (target && target !== switchJumped) {
+                    scrollToSwitch(target);
+                }
+                switchJumped = target;
             });
         }
         /* a link to another section of this page: there already, so nothing to fetch */
@@ -650,6 +666,7 @@ POSSIBILITY OF SUCH DAMAGE.
             $('#maintabs a[href="' + TABS[tab] + '"]').tab('show');
             currentTab = tab;
             applyButton();
+            if (tab !== 'switches' && !/^#device=/.test(hash)) cameFrom = null;
             if (tab === 'devices') {
                 const m = hash.match(/device=([^&]+)/);
                 if (m) { showDevice(decode(m[1])); } else { showDevices(); }
@@ -1182,7 +1199,7 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
         <div id="loupe-detail" style="display: none">
             <div style="padding: 0 15px">
-                <a href="#devices">&larr; {{ lang._('All devices') }}</a>
+                <a id="loupe-detail-back" href="#devices">&larr; {{ lang._('All devices') }}</a>
                 <h2 id="loupe-detail-title" class="loupe-detail-title"></h2>
             </div>
             <div style="height: 220px; padding: 0 15px 10px"><canvas id="loupe-chart"></canvas></div>
@@ -1258,16 +1275,20 @@ POSSIBILITY OF SUCH DAMAGE.
         <p id="switch_none" class="loupe-bar" style="display: none">{{ lang._('No switches to show. Add one, or turn one on, under') }} <a href="#switchmap">{{ lang._('Settings, Switches') }}</a>.</p>
         <div id="switch_some" style="display: none">
             <div class="loupe-bar">
-                <button type="button" class="btn btn-default btn-sm switch-refresh"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh') }}</button>
+                <button type="button" class="btn btn-default btn-sm switch-refresh pull-right"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh') }}</button>
+                <div class="btn-group loupe-period">
+                    {% for p in periods %}<button type="button" class="btn btn-default btn-sm" data-hours="{{ p[0] }}">{{ p[1] }}</button>{% endfor %}
+                </div>
+                <div class="loupe-rebuild text-muted" style="display: none"></div>
             </div>
             <div id="switch_sections"></div>
         </div>
         <div id="switch_elsewhere" class="loupe-switch" style="display: none">
             <div class="loupe-bar">
-                <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in the last day, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On a port of the router outside a bridge, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
+                <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in this period, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On a port of the router outside a bridge, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
             </div>
             <table class="table table-condensed table-striped loupe-ports loupe-section-body">
-                <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Down, 24 hours') }}</th><th>{{ lang._('Up, 24 hours') }}</th></tr></thead>
+                <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Down') }}</th><th>{{ lang._('Up') }}</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
