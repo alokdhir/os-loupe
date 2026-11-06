@@ -368,6 +368,7 @@ POSSIBILITY OF SUCH DAMAGE.
             return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r) + '</td><td>' + esc(r.ip)
                 + '</td><td class="loupe-wrap">' + what + '</td><td>' + used + '</td></tr>';
         }
+        const deviceCount = n => n === 1 ? '{{ lang._("1 device") }}' : '{{ lang._("%s devices") }}'.replace('%s', n);
         function scrollToSwitch(id) {
             const el = document.getElementById('switch_' + id);
             if (el) $('html, body').animate({scrollTop: $(el).offset().top - 70}, 400);
@@ -377,6 +378,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 ? '<a href="#switch=' + esc(s.uplink_id) + '">' + esc(s.uplink) + '</a>' : esc(s.uplink)) : '';
             const said = [s.model !== s.name ? esc(s.model) : '', esc(s.address), uplink,
                 s.total ? '{{ lang._("%s of %s ports up") }}'.replace('%s', s.up).replace('%s', s.total) : '',
+                s.fetched ? deviceCount(s.devices) : '',
                 s.fetched ? '{{ lang._("Read") }} ' + esc(ago(s.fetched)) : ''].filter(Boolean).join(' · ');
             const foot = [];
             if (s.down) foot.push('{{ lang._("Down:") }} ' + esc(s.down));
@@ -401,6 +403,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 $('#switch_some').toggle(list.length > 0);
                 $('#switch_sections').html(list.map(switchSection).join(''));
                 $('#switch_elsewhere').toggle(rows.length > 0);
+                $('#switch_elsewhere_count').text(deviceCount(rows.length));
                 $('#switch_elsewhere tbody').html(rows.map(r => deviceRow(r, '', '')).join(''));
                 if (target) scrollToSwitch(target);
             });
@@ -1241,7 +1244,7 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
         <div id="switch_elsewhere" style="display: none">
             <div class="loupe-bar">
-                <h2 class="loupe-detail-title">{{ lang._('Seen in the last day, on no port') }} <small class="text-muted">{{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
+                <h2 class="loupe-detail-title">{{ lang._('Seen in the last day, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
             </div>
             <table class="table table-condensed table-striped loupe-ports">
                 <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Last 24 hours') }}</th></tr></thead>
