@@ -112,5 +112,21 @@ class QuicTests(unittest.TestCase):
         self.assertIsNone(quic.Reassembler().feed("10.0.0.5", b"\xc0\x00\x00\x00\x01" + os.urandom(1200), now=1.0))
 
 
+class TestWithoutCryptography(unittest.TestCase):
+    def test_quic_turns_off_and_nothing_else_breaks(self):
+        import importlib
+        import sys
+        from unittest import mock
+        hidden = {m: None for m in ("cryptography", "cryptography.hazmat.primitives.ciphers", "cryptography.hazmat.primitives.ciphers.aead")}
+        try:
+            with mock.patch.dict(sys.modules, hidden):
+                importlib.reload(quic)
+                self.assertFalse(quic.AVAILABLE)
+                self.assertIsNone(quic.Reassembler().feed("192.0.2.1", b"\xc0\x00\x00\x00\x01" + bytes(1200), 1.0))
+        finally:
+            importlib.reload(quic)
+        self.assertTrue(quic.AVAILABLE)
+
+
 if __name__ == "__main__":
     unittest.main()

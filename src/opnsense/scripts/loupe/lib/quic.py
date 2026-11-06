@@ -35,8 +35,12 @@ import hmac
 import struct
 import time
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+try:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    AVAILABLE = True
+except ImportError:         # OPNsense brings it, but only because something else of its needs it: Loupe can do without
+    AVAILABLE = False
 
 from . import tls
 
@@ -167,6 +171,8 @@ class Reassembler:
 
     def feed(self, client, payload, now=None):
         """Feed one UDP payload from a client. Returns tls.Hello once complete, else None."""
+        if not AVAILABLE:
+            return None
         now = now or time.time()
         try:
             res = _decrypt_initial(payload)

@@ -44,7 +44,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, hass, names, neighbours, netif, pfstate, privs, report, rootfiles, services, store, unbound  # noqa: E402
+from lib import devid, hass, names, neighbours, netif, pfstate, privs, quic, report, rootfiles, services, store, unbound  # noqa: E402
 from lib.report import local_day  # noqa: E402
 
 
@@ -420,6 +420,9 @@ def main():
     ap.add_argument("ifaces", nargs="*")
     args = ap.parse_args()
     syslog.openlog("loupe", syslog.LOG_PID, syslog.LOG_DAEMON)
+    if not quic.AVAILABLE:
+        syslog.syslog(syslog.LOG_WARNING, "loupe: Python's cryptography module is missing: traffic over QUIC (HTTP/3) "
+                                          "is named from DNS answers only, not from its ClientHello")
     conf = {}
     if args.config:
         with open(args.config) as f:

@@ -272,7 +272,7 @@ Then install **os-loupe** from **System → Firmware → Plugins**; OPNsense sho
 
 Once installed, open **Reporting → Loupe → Settings**, tick *Enable* on the *General* page, choose the LAN interface(s) and press *Apply*.
 
-Removing the plugin (or `pkg delete os-loupe`) keeps the traffic data in `/var/db/loupe` until you delete it. Requires OPNsense 26.x, on any architecture (the package holds no compiled code; it uses Python 3 with `cryptography` and `sqlite3`, both part of OPNsense).
+Removing the plugin (or `pkg delete os-loupe`) keeps the traffic data in `/var/db/loupe` until you delete it. Requires OPNsense 26.x, on any architecture (the package holds no compiled code; it uses OPNsense's own Python 3, with `cryptography` and `sqlite3`, so it declares no dependencies of its own, and they follow OPNsense's upgrades). Without `cryptography`, Loupe logs a warning and names QUIC traffic from DNS answers alone.
 
 For development, `ROUTER=user@router tools/deploy.sh` copies your working tree to a router over SSH and installs it there (`tools/install.sh`, without the package). Packages are built and published by `tools/publish.sh` in [os-plugins](https://github.com/alokdhir/os-plugins), the package repository; a changed plugin needs a new `PLUGIN_VERSION` or `PLUGIN_REVISION`.
 
