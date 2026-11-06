@@ -99,7 +99,7 @@ Device names, types and icons are applied **when a report is built**, so editing
 
 ## GUI
 
-Standard OPNsense MVC: one page with tabs (Devices, Services, Settings, and Switches once a switch is listed), UIBootgrid grids fed by `searchRecordsetBase`, the standard dialog and form partials, a dashboard widget, configd actions for the service and for queries, templates for `rc.conf.d` and `loupe.json`, and `rc.d` running the daemon under `daemon -r`.
+Standard OPNsense MVC: one page with tabs (Devices, Services, Settings, and Switch map once a switch is listed), UIBootgrid grids fed by `searchRecordsetBase`, the standard dialog and form partials, a dashboard widget, configd actions for the service and for queries, templates for `rc.conf.d` and `loupe.json`, and `rc.d` running the daemon under `daemon -r`.
 
 ## Performance
 

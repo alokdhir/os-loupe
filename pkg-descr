@@ -13,7 +13,7 @@ Plugin Changelog
 
 1.3
 
-* Switch map (optional): a Switches tab showing which device is on which port of your managed switches, read over SNMP when you ask, with Loupe's names and each device's traffic. A device's page says which switch and port it is on
+* Switch map (optional): a tab showing which device is on which port of your managed switches, read over SNMP when you ask, with Loupe's names and each device's traffic. A device's page says which switch and port it is on
 
 1.2
 

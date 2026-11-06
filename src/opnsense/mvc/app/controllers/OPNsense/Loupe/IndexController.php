@@ -31,8 +31,8 @@ namespace OPNsense\Loupe;
 class IndexController extends \OPNsense\Base\IndexController
 {
     /**
-     * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Switches, Settings (General,
-     * Service names, Device rules, Overrides, Switches). The old addresses open the matching tab. The Switches
+     * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Switch map, Settings (General,
+     * Service names, Device rules, Overrides, Switches). The old addresses open the matching tab. The Switch map
      * tab is hidden until a switch is listed.
      */
     private function page($activetab)

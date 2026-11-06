@@ -1165,7 +1165,7 @@ POSSIBILITY OF SUCH DAMAGE.
         'tabs': [
             ['tab_id': 'devices', 'tab_descr': lang._('Devices')],
             ['tab_id': 'services', 'tab_descr': lang._('Services')],
-            ['tab_id': 'switches', 'tab_descr': lang._('Switches')],
+            ['tab_id': 'switches', 'tab_descr': lang._('Switch map')],
             ['tab_id': 'settings', 'tab_descr': lang._('Settings')]
         ]
     ]]) }}
