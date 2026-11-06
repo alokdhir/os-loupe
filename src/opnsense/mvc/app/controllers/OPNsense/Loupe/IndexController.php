@@ -50,10 +50,12 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->view->formDialogSwitch = $this->getForm('dialogSwitch');
         // what the last read of a switch said: not a setting, so not in its form (search_switch adds it)
         $switchGrid = $this->getFormGrid('dialogSwitch', 'gridSwitches');
-        array_splice($switchGrid['fields'], -1, 0, [[
+        $address = array_search('address', array_column($switchGrid['fields'], 'column-id'));
+        array_splice($switchGrid['fields'], $address, 0, [[
             'column-id' => 'ports', 'label' => gettext('Ports'), 'visible' => 'true', 'sortable' => 'false',
             'identifier' => 'false', 'type' => 'string', 'width' => '6em',
-        ], [
+        ]]);
+        array_splice($switchGrid['fields'], -1, 0, [[
             'column-id' => 'last', 'label' => gettext('Last result'), 'visible' => 'true', 'sortable' => 'false',
             'identifier' => 'false', 'type' => 'string', 'formatter' => 'switchlast',
         ]]);
