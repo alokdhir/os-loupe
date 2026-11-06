@@ -388,15 +388,48 @@ POSSIBILITY OF SUCH DAMAGE.
             const seen = r.down || r.up;
             const what = [r.detail, r.port_note, r.last_here ? '{{ lang._("Last here") }} ' + ago(r.last_here) : '']
                 .filter(Boolean).map(esc).join(' · ');
-            return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r, unit) + '</td><td>' + esc(r.ip)
+            return '<tr data-depth="' + (r.depth || 0) + '"><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r, unit) + '</td><td>' + esc(r.ip)
                 + '</td><td class="loupe-wrap">' + what + '</td><td>' + (seen ? byteFormat(r.down || 0, 1) : '') + '</td><td>' + (seen ? byteFormat(r.up || 0, 1) : '') + '</td></tr>';
         }
         const portCount = n => n === 1 ? '{{ lang._("1 port") }}' : '{{ lang._("%s ports") }}'.replace('%s', n);
         const deviceCount = n => n === 1 ? '{{ lang._("1 device") }}' : '{{ lang._("%s devices") }}'.replace('%s', n);
         /* a heading folds its section. All open when the page loads: the browser's find doesn't look in a closed one */
-        function sectionOpen($section, open) {
-            $section.toggleClass('loupe-collapsed', !open).find('.loupe-toggle')
-                .toggleClass('fa-square-minus', open).toggleClass('fa-square-plus', !open);
+        const FOLD_MS = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180;
+        function sectionOpen($section, open, animated) {
+            $section.find('.loupe-toggle').toggleClass('fa-square-minus', open).toggleClass('fa-square-plus', !open);
+            if (!animated) {
+                $section.toggleClass('loupe-collapsed', !open);
+                return;
+            }
+            const $body = $section.children('.loupe-section-body').stop(true, true);
+            if (open) {
+                $body.hide();
+                $section.removeClass('loupe-collapsed');
+                $body.slideDown(FOLD_MS, () => $body.css('display', ''));
+            } else {
+                $body.slideUp(FOLD_MS, () => {
+                    $section.addClass('loupe-collapsed');
+                    $body.css('display', '');
+                });
+            }
+        }
+        /* table rows don't slide: what is in their cells does, while the cells' padding closes up */
+        function slideRows($rows, open, done) {
+            const $cells = $rows.children('td');
+            const pad = $cells.css('padding-top');
+            const $inner = $cells.wrapInner('<div style="overflow: hidden"></div>').children('div');
+            if (open) {
+                $inner.hide();
+                $cells.css({paddingTop: 0, paddingBottom: 0});
+            }
+            $inner[open ? 'slideDown' : 'slideUp'](FOLD_MS);
+            $cells.animate(open ? {paddingTop: pad, paddingBottom: pad} : {paddingTop: 0, paddingBottom: 0}, FOLD_MS);
+            $.when($inner, $cells).done(done);
+        }
+        function rowsUnder($row) {
+            const depth = +$row.attr('data-depth'), rows = [];
+            for (let n = $row.next(); n.length && +n.attr('data-depth') > depth; n = n.next()) rows.push(n[0]);
+            return $(rows);
         }
         function scrollToSwitch(id) {
             const el = document.getElementById('switch_' + id);
@@ -478,15 +511,30 @@ POSSIBILITY OF SUCH DAMAGE.
             e.preventDefault();
             scrollToSwitch(decode($(this).attr('href').slice(8)));
         });
+        let folding = false;
         $('#tab_switches').on('click', '.loupe-unit-toggle', function () {
+            if (folding) return;
+            folding = true;
             const unit = String($(this).attr('data-unit'));
-            if (!closedUnits.delete(unit)) closedUnits.add(unit);
-            renderSwitches();
+            const finish = () => {
+                renderSwitches();
+                folding = false;
+            };
+            if (closedUnits.delete(unit)) {
+                renderSwitches();
+                const icon = $('#switch_sections .loupe-unit-toggle').filter((i, el) => el.getAttribute('data-unit') === unit);
+                slideRows(rowsUnder(icon.closest('tr')), true, finish);
+            } else {
+                slideRows(rowsUnder($(this).closest('tr')), false, () => {
+                    closedUnits.add(unit);
+                    finish();
+                });
+            }
         });
         $('#tab_switches').on('click', '.loupe-switch h2', function (e) {
             if ($(e.target).closest('a').length || String(window.getSelection())) return;   /* a link, or copying an address */
             const $section = $(this).closest('.loupe-switch');
-            sectionOpen($section, $section.hasClass('loupe-collapsed'));
+            sectionOpen($section, $section.find('.loupe-toggle').hasClass('fa-square-plus'), true);
         });
         $('#tab_switches').on('click', '.switch-refresh', function () {
             const $b = $(this), $i = $b.find('i').addClass('fa-spin');
@@ -1329,10 +1377,12 @@ POSSIBILITY OF SUCH DAMAGE.
             <div class="loupe-bar">
                 <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in this period, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On Wi-Fi, on a switch that isn\'t listed, or no longer on the network.') }}</small></h2>
             </div>
-            <table class="table table-condensed table-striped loupe-ports loupe-section-body">
+            <div class="loupe-section-body">
+            <table class="table table-condensed table-striped loupe-ports">
                 <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Down') }}</th><th>{{ lang._('Up') }}</th></tr></thead>
                 <tbody></tbody>
             </table>
+            </div>
         </div>
     </div>
 
