@@ -397,6 +397,7 @@ class SettingsController extends ApiMutableModelControllerBase
             $row['error'] = $s['error'] ?? '';
             $row['note'] = $s['note'] ?? '';
             $row['fetched'] = $s['fetched'] ?? 0;
+            $row['ports'] = ($s['total'] ?? 0) ?: '';
             $row['up'] = $s['up'] ?? 0;
             $row['devices'] = $s['devices'] ?? 0;
         }
