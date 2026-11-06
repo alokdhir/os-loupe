@@ -455,6 +455,7 @@ class TestDescribe(unittest.TestCase):
                           ("device", "TV", 0)])
         self.assertIn("last seen on Wi-Fi", rows[-1]["detail"])
         self.assertEqual(found[PHONE]["via"], "eero attic")
+        self.assertEqual(found[PHONE]["via_unit"], "attic")
         self.assertEqual(found[PC]["port"], "1")
 
     def test_elsewhere_lists_only_what_no_port_accounts_for(self):

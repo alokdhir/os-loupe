@@ -361,7 +361,9 @@ POSSIBILITY OF SUCH DAMAGE.
                         + esc('{{ lang._('also') }} ' + d.macs.filter(m => m !== d.mac).join(', ')) + ')</span>' : '')
                     + ' ' + (data.networks || []).map(n => pill(n.id)).join('')
                     + (d.switch_port ? '<br>' + (d.switch_port.last_here ? '{{ lang._("Last on") }} ' : '') + '<a href="#switch=' + esc(d.switch_port.switch) + '">' + esc(d.switch_port.name + ' ' + d.switch_port.port) + '</a>'
-                        + (d.switch_port.via ? ' {{ lang._("via") }} ' + esc(d.switch_port.via) : '') : '') + '</small>');
+                        + (d.switch_port.via ? ' {{ lang._("via") }} ' + (d.switch_port.via_id && d.switch_port.via_unit
+                            ? 'eero <a href="/ui/eero/#unit=' + esc(encodeURIComponent(d.switch_port.via_id)) + '">' + esc(d.switch_port.via_unit) + '</a>'
+                            : esc(d.switch_port.via)) : '') : '') + '</small>');
                 drawChart('loupe-chart', data);
             });
         }

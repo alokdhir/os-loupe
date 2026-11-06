@@ -323,7 +323,7 @@ def _unit_rows(unit, eero, info, traffic, depth=0):
     backhaul = unit.get("backhaul") or ""
     count = f"{len(clients)} Wi-Fi client{'' if len(clients) == 1 else 's'}"
     rows = [{"kind": "ap", "name": f"eero {unit.get('name') or ''}".strip(), "ip": unit["ip"], "icon": "fa-solid fa-wifi",
-             "detail": f"{backhaul} · {count}" if backhaul else count, "depth": depth, "id": "", "unit": unit.get("name") or ""}]
+             "detail": f"{backhaul} · {count}" if backhaul else count, "depth": depth, "id": "", "unit": unit.get("name") or "", "unit_id": str(unit.get("id") or "")}]
     listed = [_client_row(info, c, traffic, depth + 1) for c in clients]
     rows.extend(sorted(listed, key=lambda r: r["name"].lower()))
     for other in eero.under(unit):
@@ -460,7 +460,8 @@ def describe(configured, state, info, router_macs, traffic=None, router=None, si
                              "port_note": note if n == 0 else ""})
                 if row["kind"] == "ap":     # who a Wi-Fi client is on: this eero, on this port
                     for c in eero.clients.get(row["unit"], []):
-                        found[c["mac"]] = {"switch": sid, "name": names[sid], "port": head["port"], "via": row["name"]}
+                        found[c["mac"]] = {"switch": sid, "name": names[sid], "port": head["port"], "via": row["name"],
+                                            "via_unit": row["unit"], "via_id": row["unit_id"]}
         down = [ports[i].get("name") or i for i in sorted(ports, key=_order) if not ports[i].get("up")]
         out[sid] = {"id": sid, "name": names[sid], "address": s.get("address") or "", "model": model_of(p.get("descr") or ""),
                     "fetched": p.get("fetched") or 0, "tried": p.get("tried") or 0, "error": p.get("error") or "",
