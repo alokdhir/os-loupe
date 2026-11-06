@@ -51,7 +51,7 @@ sed 's#/[^/]*$##' "$MANIFEST" | sort -ru | while read -r d; do
     rmdir -p "$PREFIX/$d" 2>/dev/null || true          # directories left empty
 done
 rm -rf $PREFIX/opnsense/scripts/loupe
-rm -f "$MANIFEST" /etc/rc.conf.d/loupe $PREFIX/etc/loupe.json
+rm -f "$MANIFEST" /etc/rc.conf.d/loupe $PREFIX/etc/loupe.json $PREFIX/etc/loupe-reports.json
 pw userdel loupe >/dev/null 2>&1 || :
 
 rm -f /var/lib/php/tmp/opnsense_menu_cache.xml /var/lib/php/tmp/opnsense_acl_cache.json

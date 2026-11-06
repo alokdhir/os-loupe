@@ -87,7 +87,7 @@ $PREFIX/opnsense/scripts/loupe/setup_user.sh
 refresh_gui
 $PREFIX/opnsense/mvc/script/run_migrations.php OPNsense/Loupe >/dev/null    # settings from an older version
 for i in 1 2 3 4 5 6 7 8 9 10; do        # configd takes a moment to come back
-    configctl template reload OPNsense/Loupe >/dev/null 2>&1 && break
+    configctl template reload OPNsense/Loupe >/dev/null 2>&1 && configctl template reload OPNsense/LoupeReports >/dev/null 2>&1 && break
     sleep 1
 done
 if $PREFIX/etc/rc.d/loupe status >/dev/null 2>&1; then

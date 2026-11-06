@@ -370,17 +370,6 @@ class SettingsController extends ApiMutableModelControllerBase
         return $out;
     }
 
-    private function publishSettings()
-    {
-        /* as Apply: loupe.json carries every saved setting, so loupd reads it again too; otherwise the reports would
-           use settings saved but not applied (a new service name) that loupd doesn't */
-        $backend = new Backend();
-        $backend->configdRun('template reload OPNsense/Loupe');
-        if ((string)$this->getModel()->general->enabled === '1') {
-            $backend->configdRun('loupe restart');
-        }
-    }
-
     public function searchSwitchAction()
     {
         $result = $this->searchBase('switches.switch', ['enabled', 'name', 'address', 'community'], 'address');
@@ -410,7 +399,7 @@ class SettingsController extends ApiMutableModelControllerBase
     private function switchSaved(array $result, $uuid)
     {
         if (in_array($result['result'] ?? '', ['saved', 'deleted'], true)) {
-            $this->publishSettings();
+            $this->getModel()->publishReportSettings();
             if ($uuid !== null) {
                 $this->getModel()->refreshSwitches($uuid);
             }
@@ -519,7 +508,7 @@ class SettingsController extends ApiMutableModelControllerBase
             $result = $this->validateAndSave($node, 'device');
         }
         if (($result['result'] ?? '') === 'saved') {
-            $this->publishSettings();
+            $this->getModel()->publishReportSettings();
         }
         return $result;
     }

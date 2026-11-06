@@ -19,6 +19,9 @@ Plugin Changelog
 * Fold a switch's section, or an access point's clients
 * A device's page says which switch and port it is on
 * A device's page opened from Services or the Switch map leads back there
+* An eero's name on a device's page links to the eero plugin
+* Renaming a device or saving a switch no longer restarts the service
+* Fixes: a service with & in its name opens, a linked device shows once on a service's page, zooming a daily chart to its right edge, an interface that briefly loses its address keeps its networks, Home Assistant fetching survives a bad reply
 
 1.2
 

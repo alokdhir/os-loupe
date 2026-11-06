@@ -56,6 +56,7 @@ from lib.services import HOSTING, ServiceMap  # noqa: E402
 
 DB = "/var/db/loupe/loupe.db"
 CONF = "/usr/local/etc/loupe.json"
+REPORT_CONF = "/usr/local/etc/loupe-reports.json"       # what only reports use: saving it needs no restart of loupd
 MAX_HOURS = 24 * 3650
 _conf = None        # the settings, once read as root
 
@@ -105,11 +106,14 @@ def read_conf():
     """The settings: read as root before dropping it (main), since only root can read the file."""
     if _conf is not None:
         return _conf
-    try:
-        with open(CONF) as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return {}
+    conf = {}
+    for path in (CONF, REPORT_CONF):
+        try:
+            with open(path) as f:
+                conf.update(json.load(f))
+        except (OSError, ValueError):
+            pass
+    return conf
 
 
 def start_as_user(cmd, path):
@@ -119,10 +123,11 @@ def start_as_user(cmd, path):
     if os.getuid() != 0:
         return
     _conf = read_conf()
-    try:
-        os.chmod(CONF, 0o600)           # it may hold the Home Assistant token (loupd does the same)
-    except OSError:
-        pass
+    for path in (CONF, REPORT_CONF):
+        try:
+            os.chmod(path, 0o600)       # the Home Assistant token, the switches' communities (loupd does the same)
+        except OSError:
+            pass
     devid.read_root_files()
     pw = privs.user()
     if pw and cmd in ("aipreview", "aimodelpreview", "switchrefresh") and AI_REPLY.match(path or ""):

@@ -36,4 +36,11 @@ class ServiceController extends ApiMutableServiceControllerBase
     protected static $internalServiceEnabled = 'general.enabled';
     protected static $internalServiceTemplate = 'OPNsense/Loupe';
     protected static $internalServiceName = 'loupe';
+
+    /* Apply also publishes what only reports use (a template of its own: see Loupe::publishReportSettings) */
+    public function reconfigureAction()
+    {
+        (new \OPNsense\Loupe\Loupe())->publishReportSettings();
+        return parent::reconfigureAction();
+    }
 }

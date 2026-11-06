@@ -11,15 +11,6 @@
         "token": {{ helpers.getNodeByTag('OPNsense.Loupe.general.hass_token') | default('') | tojson }},
         "verify": {{ 'false' if helpers.getNodeByTag('OPNsense.Loupe.general.hass_verify') == '0' else 'true' }}
     },
-    "switch_map": {
-        "switches": [
-{% if helpers.exists('OPNsense.Loupe.switches.switch') %}
-{%   for sw in helpers.toList('OPNsense.Loupe.switches.switch') %}
-            {"id": {{ sw['@uuid'] | tojson }}, "name": {{ sw.name | default('') | tojson }}, "address": {{ sw.address | tojson }}, "community": {{ sw.community | default('public') | tojson }}, "enabled": {{ 'false' if sw.enabled == '0' else 'true' }}}{{ "," if not loop.last }}
-{%   endfor %}
-{% endif %}
-        ]
-    },
     "retention": {
         "days_5m": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_5m') or '30' }},
         "days_1h": {{ helpers.getNodeByTag('OPNsense.Loupe.general.retention_1h') or '365' }},
@@ -48,13 +39,6 @@
 {% if helpers.exists('OPNsense.Loupe.models.model') %}
 {%   for m in helpers.toList('OPNsense.Loupe.models.model') %}
         {{ m.identifier | tojson }}: {{ m.name | tojson }}{{ "," if not loop.last }}
-{%   endfor %}
-{% endif %}
-    },
-    "devices": {
-{% if helpers.exists('OPNsense.Loupe.devices.device') %}
-{%   for dev in helpers.toList('OPNsense.Loupe.devices.device') %}
-        {{ dev.mac | lower | replace('-', ':') | tojson }}: {"name": {{ dev.name | default('') | tojson }}, "type": {{ dev.type | default('') | tojson }}, "icon": {{ dev.icon | default('') | tojson }}}{{ "," if not loop.last }}
 {%   endfor %}
 {% endif %}
     }

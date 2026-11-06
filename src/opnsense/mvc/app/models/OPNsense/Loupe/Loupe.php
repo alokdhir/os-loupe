@@ -34,6 +34,16 @@ use OPNsense\Core\Backend;
 class Loupe extends BaseModel
 {
     /**
+     * What only reports use (overrides, switches) has a template of its own: saving it needs no restart of loupd, and
+     * doesn't publish other settings saved but not applied.
+     */
+    public function publishReportSettings()
+    {
+        (new Backend())->configdRun('template reload OPNsense/LoupeReports');
+        @chmod('/usr/local/etc/loupe-reports.json', 0600);      // it holds the switches' communities
+    }
+
+    /**
      * Read the switches now ('all', or one's id) and keep what they say. os-eero's units and Wi-Fi clients go along,
      * when that plugin is there (configd answers an unknown action with text, which isn't JSON), in a file for
      * query.py, since they are too long for an argument.

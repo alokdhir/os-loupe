@@ -314,6 +314,52 @@ class TestVpnLabels(unittest.TestCase):
         self.assertEqual(query.vendor_of("02:00:00:00:00:01", "", "Android device"), ("", "private MAC"))
 
 
+class TestReports(unittest.TestCase):
+    def test_a_zoom_past_now_is_cut_at_now(self):
+        import time
+
+        import query
+        now = int(time.time())
+        self.assertLessEqual(query.span_arg(now - 3600, now + 40000)[1], now + 1)
+        self.assertEqual(query.span_arg(now - 7200, now - 3600), (now - 7200, now - 3600))
+        start, end = query.span_arg(now + 100, now + 200)      # today's point alone, still ahead of us
+        self.assertLess(start, end)
+        with self.assertRaises(ValueError):
+            query.span_arg(now, now - 1)
+
+    def test_a_linked_group_merges_when_its_first_mac_has_no_record(self):
+        import sqlite3
+        from unittest import mock
+
+        import query
+        macs = ["ac:00:00:00:00:01", "ac:00:00:00:00:02", "ac:00:00:00:00:03"]
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE devices (mac, ip, name, name_source, area, hostname, vendor, type, type_source, model, first_seen, last_seen)")
+        for mac, last in ((macs[1], 10), (macs[2], 20)):
+            db.execute("INSERT INTO devices VALUES (?, '192.0.2.1', 'n', '', '', '', '', '', '', '', 1, ?)", (mac, last))
+        with mock.patch.object(query, "device_groups", return_value={m: macs for m in macs}):
+            info = query.devices_info(db, {})
+        db.close()
+        self.assertEqual(info[macs[1]]["mac"], macs[2])
+        self.assertEqual(info[macs[1]]["macs"], [macs[2], macs[1]])
+
+    def test_settings_come_from_both_files_and_either_can_be_missing(self):
+        import json
+        from unittest import mock
+
+        import query
+        with tempfile.TemporaryDirectory() as d:
+            main, reports = os.path.join(d, "a.json"), os.path.join(d, "b.json")
+            with open(main, "w") as f:
+                json.dump({"rules": [1], "devices": {"old": {}}}, f)
+            with mock.patch.object(query, "CONF", main), mock.patch.object(query, "REPORT_CONF", reports), mock.patch.object(query, "_conf", None):
+                self.assertEqual(query.read_conf(), {"rules": [1], "devices": {"old": {}}})
+                with open(reports, "w") as f:
+                    json.dump({"devices": {"new": {}}, "switch_map": {"switches": []}}, f)
+                self.assertEqual(query.read_conf()["devices"], {"new": {}})
+                self.assertEqual(query.read_conf()["rules"], [1])
+
+
 class TestUnnumberedInterface(unittest.TestCase):
     """An interface with no address: private addresses count as local unless Local networks says otherwise."""
 

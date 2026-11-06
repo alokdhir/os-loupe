@@ -49,7 +49,7 @@ Everything Loupe knows comes from these. Required ones stop Loupe from working i
 | Unbound cache (`dump_cache` over Unbound's TLS control port) | names for connections opened before Loupe started | at start | optional (Unbound) |
 | DHCP leases and fixed entries: dnsmasq (`/var/db/dnsmasq.leases`, `/var/etc/dnsmasq-hosts`), Kea (`/var/db/kea/kea-leases4.csv`, reservations in `kea-dhcp4.conf`), ISC dhcpd (`dhcpd.leases`, `host` entries in `dhcpd.conf`) | device names | every minute | optional; a server's fixed entries are read only while it has a lease file (Kea is installed with a sample config) |
 | IEEE vendor list (`/usr/local/opnsense/contrib/ieee/oui.csv`, shipped with OPNsense) | MAC maker | at start | optional |
-| Settings (`/usr/local/etc/loupe.json`, from the OPNsense config via a template) | interfaces, retention, your service and device names | daemon: at start (Apply restarts it); reports: every query | required |
+| Settings (`/usr/local/etc/loupe.json`, and `loupe-reports.json` for overrides and switches, which only reports read so saving them restarts nothing; both from the OPNsense config via templates) | interfaces, retention, your service and device names | daemon: at start (Apply restarts it); reports: every query | required |
 | Shipped rules (`data/devices.json`, `data/services.json`) | device types, icons, makers; service names, address ranges, ports, VPN providers | at start / every query | required |
 
 ## Bytes: pf state counters
