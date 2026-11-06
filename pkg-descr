@@ -16,6 +16,7 @@ Plugin Changelog
 * Switch map (optional): a tab showing which device is on which port of your managed switches and of the router itself, with Loupe's names and each device's traffic in the period you pick. Needs managed switches with SNMP v2c; the tab appears once one is listed under Settings, Switches
 * Switches are read over SNMP when you save one, press Refresh, or open the tab more than 5 minutes after the last read; nothing polls in the background and nothing on a switch is changed
 * A quiet device stays on the port it was last found on, marked as such
+* Fold a switch's section, or an access point's clients
 * A device's page says which switch and port it is on
 * A device's page opened from Services or the Switch map leads back there
 

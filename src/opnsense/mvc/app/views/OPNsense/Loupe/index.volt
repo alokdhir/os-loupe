@@ -370,22 +370,25 @@ POSSIBILITY OF SUCH DAMAGE.
            read by Refresh, by saving one in Settings, and on opening this tab if the last read is old enough for
            devices in use to be missing from it. Switches forget a silent device after about this long */
         const SWITCHES_STALE_SECONDS = 300;
-        let switchesWanted = 0, switchJumped = '', switchesRead = 0;
+        let switchesWanted = 0, switchJumped = '', switchesRead = 0, switchList = [];
+        const closedUnits = new Set();      /* access points folded, by name: open when the page loads, like the sections */
         function switchesAge() {
             $('#switch_age').text(switchesRead ? '{{ lang._("Read") }} ' + ago(switchesRead) : '');
         }
         setInterval(switchesAge, 30000);
-        function deviceCell(r) {
+        function deviceCell(r, unit) {
             const name = r.id && r.kind !== 'ap'
                 ? '<a href="' + (r.switch ? '#switch=' : '#device=') + esc(r.id) + '">' + esc(r.name) + '</a>' : esc(r.name);
             return '<span style="padding-left: ' + (r.depth || 0) * 20 + 'px">'
+                + (unit ? '<i class="fa-regular ' + (closedUnits.has(unit) ? 'fa-square-plus' : 'fa-square-minus')
+                    + ' fa-fw loupe-unit-toggle" style="cursor: pointer" data-unit="' + esc(unit) + '"></i> ' : '')
                 + (r.icon ? '<i class="' + esc(r.icon) + ' fa-fw text-muted"></i> ' : '') + name + '</span>';
         }
-        function deviceRow(r, port, speed) {
+        function deviceRow(r, port, speed, unit) {
             const seen = r.down || r.up;
             const what = [r.detail, r.port_note, r.last_here ? '{{ lang._("Last here") }} ' + ago(r.last_here) : '']
                 .filter(Boolean).map(esc).join(' · ');
-            return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r) + '</td><td>' + esc(r.ip)
+            return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r, unit) + '</td><td>' + esc(r.ip)
                 + '</td><td class="loupe-wrap">' + what + '</td><td>' + (seen ? byteFormat(r.down || 0, 1) : '') + '</td><td>' + (seen ? byteFormat(r.up || 0, 1) : '') + '</td></tr>';
         }
         const portCount = n => n === 1 ? '{{ lang._("1 port") }}' : '{{ lang._("%s ports") }}'.replace('%s', n);
@@ -399,6 +402,18 @@ POSSIBILITY OF SUCH DAMAGE.
             const el = document.getElementById('switch_' + id);
             if (el) sectionOpen($(el), true);
             if (el) $('html, body').animate({scrollTop: $(el).offset().top - 70}, 400);
+        }
+        /* a port's rows, without what is under a folded access point */
+        function portRows(rows) {
+            let foldedAt = null;
+            return rows.map((r, n) => {
+                if (foldedAt !== null && r.depth > foldedAt) return '';
+                foldedAt = null;
+                const next = rows[n + 1];
+                const unit = r.kind === 'ap' && next && next.depth > r.depth ? String(r.unit || r.name) : '';
+                if (unit && closedUnits.has(unit)) foldedAt = r.depth;
+                return deviceRow(r, r.port, r.speed, unit);
+            }).join('');
         }
         function switchSection(s) {
             const uplink = s.uplink ? '{{ lang._("Uplink to") }} ' + (s.uplink_id
@@ -418,9 +433,15 @@ POSSIBILITY OF SUCH DAMAGE.
                 + ((s.rows || []).length ? '<table class="table table-condensed table-striped loupe-ports"><thead><tr>'
                     + '<th>{{ lang._("Port") }}</th><th>{{ lang._("Speed") }}</th><th>{{ lang._("Device") }}</th><th>{{ lang._("Address") }}</th>'
                     + '<th>{{ lang._("Detail") }}</th><th>{{ lang._("Down") }}</th><th>{{ lang._("Up") }}</th></tr></thead><tbody>'
-                    + s.rows.map(r => deviceRow(r, r.port, r.speed)).join('') + '</tbody></table>' : '')
+                    + portRows(s.rows) + '</tbody></table>' : '')
                 + (foot.length ? '<p class="loupe-bar text-muted">' + foot.join(' ') + '</p>' : '')
                 + '</div></div>';
+        }
+        function renderSwitches() {
+            /* read again, or back from another tab: what was closed stays closed */
+            const closed = $('#switch_sections .loupe-collapsed').map((i, el) => el.id).get();
+            $('#switch_sections').html(switchList.map(switchSection).join(''));
+            closed.forEach(id => { const el = document.getElementById(id); if (el) sectionOpen($(el), false); });
         }
         function showSwitches(target) {
             const wanted = ++switchesWanted;
@@ -429,10 +450,8 @@ POSSIBILITY OF SUCH DAMAGE.
                 const list = (data || {}).switches || [], rows = (data || {}).elsewhere || [];
                 $('#switch_none').toggle(!list.length);
                 $('#switch_some').toggle(list.length > 0);
-                /* read again, or back from another tab: what was closed stays closed */
-                const closed = $('#switch_sections .loupe-collapsed').map((i, el) => el.id).get();
-                $('#switch_sections').html(list.map(switchSection).join(''));
-                closed.forEach(id => { const el = document.getElementById(id); if (el) sectionOpen($(el), false); });
+                switchList = list;
+                renderSwitches();
                 $('#switch_elsewhere').toggle(rows.length > 0);
                 $('#switch_elsewhere_count').text(deviceCount(rows.length));
                 $('#switch_elsewhere tbody').html(rows.map(r => deviceRow(r, '', '')).join(''));
@@ -458,6 +477,11 @@ POSSIBILITY OF SUCH DAMAGE.
         $('#tab_switches').on('click', 'a[href^="#switch="]', function (e) {
             e.preventDefault();
             scrollToSwitch(decode($(this).attr('href').slice(8)));
+        });
+        $('#tab_switches').on('click', '.loupe-unit-toggle', function () {
+            const unit = String($(this).attr('data-unit'));
+            if (!closedUnits.delete(unit)) closedUnits.add(unit);
+            renderSwitches();
         });
         $('#tab_switches').on('click', '.loupe-switch h2', function (e) {
             if ($(e.target).closest('a').length || String(window.getSelection())) return;   /* a link, or copying an address */
