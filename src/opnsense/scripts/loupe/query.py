@@ -34,7 +34,7 @@ usage:
   query.py widget
   query.py summary
   query.py switchmap
-  query.py switch ID
+  query.py switches
   query.py switchrefresh FILE|- all|ID
 """
 import collections
@@ -1095,32 +1095,35 @@ def public_switch(s):
 
 
 def cmd_switchmap():
-    """The switches for the tab's list and the settings' grid, and the devices seen today on none of their ports."""
+    """The switches for the settings' grid."""
     db, _, ov = load()
     try:
         info = devices_info(db, ov)
     finally:
         db.close()
-    described, found, eero = switch_map(info)
-    shown = sorted(described.values(), key=lambda s: ipaddress.ip_address(s["address"]).packed)
-    read = any(s["fetched"] for s in shown)     # until a switch has been read, every device would count as elsewhere
-    return {"switches": [public_switch(s) for s in shown],
-            "names": switches.all_names(switch_list(), switches.load_state(switch_state_path())),
-            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - 86400) if read else []}
+    described, _, _ = switch_map(info)
+    return {"switches": [public_switch(s) for s in sorted_switches(described)],
+            "names": switches.all_names(switch_list(), switches.load_state(switch_state_path()))}
 
 
-def cmd_switch(sid):
-    """One switch's page: every port that is up and what is on it, with each device's traffic over the last day."""
-    if not switches.SWITCH_ID.match(sid or ""):
-        raise ValueError("expected a switch")
+def sorted_switches(described):
+    return sorted(described.values(), key=lambda s: ipaddress.ip_address(s["address"]).packed)
+
+
+def cmd_switches():
+    """The Switches tab: every port that is up on each switch and what is on it, with each device's traffic over the
+    last day, and the devices seen in that day on no port."""
     traffic = {r["mac"]: (r["down"], r["up"]) for r in cmd_devices(24)["rows"] if r.get("mac")}
     db, _, ov = load()
     try:
         info = devices_info(db, ov)
     finally:
         db.close()
-    described, _, _ = switch_map(info, traffic)
-    return {"switch": described[sid]} if sid in described else {"error": "no such switch"}
+    described, found, eero = switch_map(info, traffic)
+    shown = sorted_switches(described)
+    read = any(s["fetched"] for s in shown)     # until a switch has been read, every device would count as elsewhere
+    return {"switches": shown,
+            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - 86400, traffic) if read else []}
 
 
 def main(argv):
@@ -1162,8 +1165,8 @@ def main(argv):
             out = cmd_hass()
         elif cmd == "switchmap":
             out = cmd_switchmap()
-        elif cmd == "switch":
-            out = cmd_switch(arg(2))
+        elif cmd == "switches":
+            out = cmd_switches()
         elif cmd == "switchrefresh":
             out = cmd_switchrefresh(arg(2), arg(3))
         else:

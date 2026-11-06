@@ -160,21 +160,10 @@ class ReportController extends ApiControllerBase
     }
 
     /* the Switches tab's list, in the settings' order, from the last refresh */
-    public function searchSwitchesAction()
+    /* the Switches tab: every switch with its ports, and the devices seen today on no port */
+    public function switchesAction()
     {
-        $rows = $this->query(['switchmap'])['switches'] ?? [];
-        return $this->grid($rows, 'settings_order', null, ['name', 'address', 'model', 'uplink']);
-    }
-
-    /* whether there are any switches, and the devices seen today on no port */
-    public function switchElsewhereAction()
-    {
-        return $this->query(['switchmap']);
-    }
-
-    public function switchAction($id = '')
-    {
-        return $this->query(['switch', preg_replace('/[^0-9a-fA-F-]/', '', (string)$id)]);
+        return $this->query(['switches']);
     }
 
     /* Refresh: ask the switches now, all or one */

@@ -337,6 +337,16 @@ class TestDescribe(unittest.TestCase):
         out, _, _ = switches.describe(self.CONF[:1], state, {}, [ROUTER])
         self.assertEqual([(r["port"], r["kind"]) for r in out["a"]["rows"]], [("1", "none")])
 
+    def test_without_eero_an_access_points_clients_are_listed_flat_on_its_port(self):
+        state = {"polls": {"a": tables(SW1, [("1", True, 1000, [RADIO, PC, TV])])}, "eero": {}}
+        out, found, _ = switches.describe(self.CONF[:1], state, self.INFO, [ROUTER])
+        rows = out["a"]["rows"]
+        self.assertEqual({r["depth"] for r in rows}, {0})
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(out["a"]["devices"], 3)
+        self.assertIn("may be on its Wi-Fi or wired", rows[0]["port_note"])
+        self.assertEqual(found[PC]["port"], "1")
+
     def test_unknown_mac_shows_as_itself(self):
         state = {"polls": {"a": tables(SW1, [("1", True, 1000, [PHONE])])}, "eero": {}}
         out, _, _ = switches.describe(self.CONF[:1], state, {}, [ROUTER])

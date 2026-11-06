@@ -32,12 +32,14 @@ class IndexController extends \OPNsense\Base\IndexController
 {
     /**
      * One page with tabs (like Reporting: Unbound DNS): Devices, Services, Switches, Settings (General,
-     * Service names, Device rules, Overrides, Switches). The old addresses open the matching tab.
+     * Service names, Device rules, Overrides, Switches). The old addresses open the matching tab. The Switches
+     * tab is hidden until a switch is listed.
      */
     private function page($activetab)
     {
         // grid ids must not contain '-': mapDataToFormUI matches a dialog's form by the id before the first '-'
         $this->view->activetab = $activetab;
+        $this->view->has_switches = count(iterator_to_array((new Loupe())->switches->switch->iterateItems())) > 0;
         $this->view->formSettings = $this->getForm('settings');
         $this->view->formDialogService = $this->getForm('dialogService');
         $this->view->formDialogDevice = $this->getForm('dialogDevice');

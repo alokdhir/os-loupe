@@ -41,6 +41,12 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-bar { padding: 10px 15px; }
+    .loupe-switch { margin-bottom: 20px; }
+    .loupe-ports { table-layout: fixed; }
+    .loupe-ports th:nth-child(1) { width: 9em; }
+    .loupe-ports th:nth-child(2) { width: 6em; }
+    .loupe-ports th:nth-child(4) { width: 10em; }
+    .loupe-ports th:nth-child(6) { width: 8em; }
     .loupe-netpick { display: inline-block; margin-left: 10px; vertical-align: middle; }
     .loupe-net + .loupe-net { margin-left: 3px; }
     .loupe-rebuild { margin-top: 6px; }
@@ -180,13 +186,10 @@ POSSIBILITY OF SUCH DAMAGE.
                     + ((row.matched || []).length ? ' <span class="text-muted">' + esc(row.matched.join(', '))
                         + (row.sites > row.matched.length ? ', …' : '') + '</span>' : '');
             },
-            switchname: function (column, row) {
-                return '<a href="#switch=' + esc(row.id) + '">' + esc(row.name) + '</a>';
-            },
             switchsetname: function (column, row) {     /* a name not given here is the one the switch goes by */
                 return row.name ? esc(row.name) : '<span class="text-muted">' + esc(row.shown_name) + '</span>';
             },
-            switchlast: function (column, row) {        /* how the last read went (on the tab and in Settings) */
+            switchlast: function (column, row) {        /* how the last read went */
                 if (row.error) return '<span class="text-danger" title="' + esc(row.error) + '"><i class="fa fa-triangle-exclamation fa-fw"></i> ' + esc(row.error) + '</span>';
                 if (!row.fetched) return dash;
                 return esc(ago(row.fetched)) + (row.note ? ' <span class="text-warning">' + esc(row.note) + '</span>' : '');
@@ -350,9 +353,9 @@ POSSIBILITY OF SUCH DAMAGE.
             });
         }
 
-        /* Switches tab: the list, or one switch's ports. What it shows is the last refresh: nothing asks the switches
-           but Refresh and saving a switch in Settings */
-        let switchShown = '';
+        /* Switches tab: a section per switch, then what no switch accounts for. What it shows is the last refresh:
+           nothing asks the switches but Refresh and saving a switch in Settings */
+        let switchesWanted = 0;
         function deviceCell(r) {
             const name = r.id && r.kind !== 'ap'
                 ? '<a href="' + (r.switch ? '#switch=' : '#device=') + esc(r.id) + '">' + esc(r.name) + '</a>' : esc(r.name);
@@ -365,50 +368,55 @@ POSSIBILITY OF SUCH DAMAGE.
             return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r) + '</td><td>' + esc(r.ip)
                 + '</td><td class="loupe-wrap">' + what + '</td><td>' + used + '</td></tr>';
         }
-        function showSwitches() {
-            switchShown = '';
-            $('#switch_detail').hide();
-            $('#switch_list').show();
-            ajaxGet('/api/loupe/report/switch_elsewhere', {}, function (data) {
-                const rows = (data || {}).elsewhere || [];
-                const any = ((data || {}).switches || []).length > 0;
-                $('#switch_none').toggle(!any);
-                $('#switch_some').toggle(any);
-                if (any) grid('grid-switches', '/api/loupe/report/search_switches');
+        function scrollToSwitch(id) {
+            const el = document.getElementById('switch_' + id);
+            if (el) $('html, body').animate({scrollTop: $(el).offset().top - 70}, 400);
+        }
+        function switchSection(s) {
+            const uplink = s.uplink ? '{{ lang._("Uplink to") }} ' + (s.uplink_id
+                ? '<a href="#switch=' + esc(s.uplink_id) + '">' + esc(s.uplink) + '</a>' : esc(s.uplink)) : '';
+            const said = [s.model !== s.name ? esc(s.model) : '', esc(s.address), uplink,
+                s.total ? '{{ lang._("%s of %s ports up") }}'.replace('%s', s.up).replace('%s', s.total) : '',
+                s.fetched ? '{{ lang._("Read") }} ' + esc(ago(s.fetched)) : ''].filter(Boolean).join(' · ');
+            const foot = [];
+            if (s.down) foot.push('{{ lang._("Down:") }} ' + esc(s.down));
+            if (s.ignored) foot.push('{{ lang._("Ignored %s MACs listed on ports that are down.") }}'.replace('%s', s.ignored));
+            const problem = s.error || s.note;
+            return '<div id="switch_' + esc(s.id) + '" class="loupe-switch"><div class="loupe-bar">'
+                + '<button type="button" class="btn btn-default btn-xs switch-refresh pull-right" data-target="' + esc(s.id) + '"><i class="fa fa-refresh fa-fw"></i> {{ lang._("Refresh") }}</button>'
+                + '<h2 class="loupe-detail-title">' + esc(s.name) + ' <small class="text-muted">' + said + '</small></h2></div>'
+                + (problem ? '<p class="loupe-bar text-danger">' + esc(problem) + '</p>' : '')
+                + ((s.rows || []).length ? '<table class="table table-condensed table-striped loupe-ports"><thead><tr>'
+                    + '<th>{{ lang._("Port") }}</th><th>{{ lang._("Speed") }}</th><th>{{ lang._("Device") }}</th><th>{{ lang._("Address") }}</th>'
+                    + '<th>{{ lang._("Detail") }}</th><th>{{ lang._("Last 24 hours") }}</th></tr></thead><tbody>'
+                    + s.rows.map(r => deviceRow(r, r.port, r.speed)).join('') + '</tbody></table>' : '')
+                + (foot.length ? '<p class="loupe-bar text-muted">' + foot.join(' ') + '</p>' : '')
+                + '</div>';
+        }
+        function showSwitches(target) {
+            const wanted = ++switchesWanted;
+            ajaxGet('/api/loupe/report/switches', {}, function (data) {
+                if (wanted !== switchesWanted) return;
+                const list = (data || {}).switches || [], rows = (data || {}).elsewhere || [];
+                $('#switch_none').toggle(!list.length);
+                $('#switch_some').toggle(list.length > 0);
+                $('#switch_sections').html(list.map(switchSection).join(''));
                 $('#switch_elsewhere').toggle(rows.length > 0);
                 $('#switch_elsewhere tbody').html(rows.map(r => deviceRow(r, '', '')).join(''));
+                if (target) scrollToSwitch(target);
             });
         }
-        function showSwitch(id) {
-            switchShown = id;
-            $('#switch_list').hide();
-            $('#switch_detail').show();
-            ajaxGet('/api/loupe/report/switch/' + encodeURIComponent(id), {}, function (data) {
-                if (switchShown !== id) return;
-                const s = (data || {}).switch;
-                if (!s) {
-                    $('#switch_title').text((data || {}).error || '');
-                    $('#switch_problem, #switch_foot').hide();
-                    $('#switch_ports tbody').empty();
-                    return;
-                }
-                const uplink = s.uplink ? '{{ lang._("Uplink to") }} ' + (s.uplink_id
-                    ? '<a href="#switch=' + esc(s.uplink_id) + '">' + esc(s.uplink) + '</a>' : esc(s.uplink)) : '';
-                $('#switch_title').html(esc(s.name) + ' <small class="text-muted">' + [s.model !== s.name ? esc(s.model) : '', esc(s.address), uplink,
-                    s.fetched ? '{{ lang._("Read") }} ' + esc(ago(s.fetched)) : ''].filter(Boolean).join(' · ') + '</small>');
-                $('#switch_problem').text(s.error || s.note || '').toggle(!!(s.error || s.note));
-                $('#switch_ports tbody').html((s.rows || []).map(r => deviceRow(r, r.port, r.speed)).join(''));
-                const foot = [];
-                if (s.down) foot.push('{{ lang._("Down:") }} ' + s.down);
-                if (s.ignored) foot.push('{{ lang._("Ignored %s MACs listed on ports that are down.") }}'.replace('%s', s.ignored));
-                $('#switch_foot').text(foot.join(' ')).toggle(foot.length > 0);
-            });
-        }
-        $('.switch-refresh').click(function () {
+        /* a link to another section of this page: there already, so nothing to fetch */
+        $('#tab_switches').on('click', 'a[href^="#switch="]', function (e) {
+            e.preventDefault();
+            scrollToSwitch(decode($(this).attr('href').slice(8)));
+        });
+        $('#tab_switches').on('click', '.switch-refresh', function () {
             const $b = $(this), $i = $b.find('i').addClass('fa-spin');
+            const target = $b.data('target') || '';
             $b.prop('disabled', true);
-            ajaxCall('/api/loupe/report/refresh_switches', {target: switchShown || 'all'}, function () {
-                if (switchShown) { showSwitch(switchShown); } else { showSwitches(); }
+            ajaxCall('/api/loupe/report/refresh_switches', {target: target || 'all'}, function () {
+                showSwitches(target);
             }).always(function () {
                 $i.removeClass('fa-spin');
                 $b.prop('disabled', false);
@@ -500,7 +508,9 @@ POSSIBILITY OF SUCH DAMAGE.
                 });
             },
             switchmap: function () {
-                $('#{{ formGridSwitches['table_id'] }}').UIBootgrid({
+                $('#{{ formGridSwitches['table_id'] }}').on('loaded.rs.jquery.bootgrid', function () {
+                    switchesTab($(this).bootgrid('getCurrentRows').length > 0);
+                }).UIBootgrid({
                     search: '/api/loupe/settings/search_switch',
                     get: '/api/loupe/settings/get_switch/',
                     set: '/api/loupe/settings/set_switch/',
@@ -582,6 +592,12 @@ POSSIBILITY OF SUCH DAMAGE.
         }
 
         /* tabs <-> address: #device=…, #q=…, #services, and the settings pages #general, #servicenames, #overrides */
+        /* the Switches tab is there while a switch is listed */
+        function switchesTab(listed) {
+            $('#maintabs a[href="#tab_switches"]').parent().toggleClass('hidden', !listed);
+        }
+        switchesTab({{ has_switches ? 'true' : 'false' }});
+
         const TABS = {devices: '#tab_devices', services: '#tab_services', switches: '#tab_switches', settings: '#tab_settings'};
         const PAGES = ['general', 'servicenames', 'rules', 'overrides', 'switchmap'];
 
@@ -622,7 +638,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 showServices();
             } else if (tab === 'switches') {
                 const m = hash.match(/switch=([^&]+)/);
-                if (m) { showSwitch(decode(m[1])); } else { showSwitches(); }
+                showSwitches(m ? decode(m[1]) : '');
             } else {
                 const page = (hash.replace(/^#/, '') || '{{ activetab }}').replace(/^devicenames$/, 'overrides');
                 showSettings(PAGES.indexOf(page) >= 0 ? page : PAGES[0]);
@@ -1218,50 +1234,21 @@ POSSIBILITY OF SUCH DAMAGE.
     </div>
 
     <div id="tab_switches" class="tab-pane fade in">
-        <div id="switch_list">
-            <p id="switch_none" class="loupe-bar" style="display: none">{{ lang._('See which device is on which port of your managed switches. Turn on SNMP (read-only, v2c) on each switch, then add it under') }} <a href="#switchmap">{{ lang._('Settings, Switches') }}</a>. {{ lang._('Some budget switches, such as Netgear Plus, don\'t have SNMP.') }}</p>
-            <div id="switch_some" style="display: none">
+        <p id="switch_none" class="loupe-bar" style="display: none">{{ lang._('No switches to show. Add one, or turn one on, under') }} <a href="#switchmap">{{ lang._('Settings, Switches') }}</a>.</p>
+        <div id="switch_some" style="display: none">
             <div class="loupe-bar">
                 <button type="button" class="btn btn-default btn-sm switch-refresh"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh all') }}</button>
             </div>
-            <table id="grid-switches" class="table table-condensed table-hover table-striped table-responsive">
-                <thead><tr>
-                    <th data-column-id="id" data-identifier="true" data-visible="false">{{ lang._('ID') }}</th>
-                    <th data-column-id="name" data-formatter="switchname">{{ lang._('Switch') }}</th>
-                    <th data-column-id="address" data-formatter="copy">{{ lang._('Address') }}</th>
-                    <th data-column-id="model">{{ lang._('Model') }}</th>
-                    <th data-column-id="uplink">{{ lang._('Uplink') }}</th>
-                    <th data-column-id="up" data-type="numeric" data-width="7em">{{ lang._('Ports up') }}</th>
-                    <th data-column-id="devices" data-type="numeric" data-width="7em">{{ lang._('Devices') }}</th>
-                    <th data-column-id="fetched" data-formatter="switchlast">{{ lang._('Last read') }}</th>
-                </tr></thead>
-                <tbody></tbody>
-            </table>
-            </div>
-            <div id="switch_elsewhere" style="display: none">
-                <h4 class="loupe-bar">{{ lang._('Seen in the last day, on no port') }}</h4>
-                <p class="loupe-bar text-muted" style="padding-top: 0">{{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</p>
-                <table class="table table-condensed table-striped">
-                    <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th></th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
+            <div id="switch_sections"></div>
         </div>
-        <div id="switch_detail" style="display: none">
+        <div id="switch_elsewhere" style="display: none">
             <div class="loupe-bar">
-                <a href="#switches"><i class="fa fa-chevron-left fa-fw"></i> {{ lang._('All switches') }}</a>
-                <button type="button" class="btn btn-default btn-sm switch-refresh" style="margin-left: 12px"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh') }}</button>
-                <h2 id="switch_title" class="loupe-detail-title"></h2>
+                <h2 class="loupe-detail-title">{{ lang._('Seen in the last day, on no port') }} <small class="text-muted">{{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
             </div>
-            <p id="switch_problem" class="loupe-bar text-danger" style="display: none"></p>
-            <table id="switch_ports" class="table table-condensed table-striped">
-                <thead><tr>
-                    <th>{{ lang._('Port') }}</th><th>{{ lang._('Speed') }}</th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th>
-                    <th>{{ lang._('Detail') }}</th><th>{{ lang._('Last 24 hours') }}</th>
-                </tr></thead>
+            <table class="table table-condensed table-striped loupe-ports">
+                <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Last 24 hours') }}</th></tr></thead>
                 <tbody></tbody>
             </table>
-            <p id="switch_foot" class="loupe-bar text-muted" style="display: none"></p>
         </div>
     </div>
 
