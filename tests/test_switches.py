@@ -443,7 +443,7 @@ class TestDescribe(unittest.TestCase):
 
     def test_eero_clients_go_under_their_unit(self):
         eero = {"units": [{"name": "loft", "ip": "192.0.2.12", "backhaul": "Wired"},
-                          {"name": "attic", "ip": "192.0.2.13", "backhaul": "Wireless via loft (5 GHz)"}],
+                          {"name": "attic", "id": "42", "ip": "192.0.2.13", "backhaul": "Wireless via loft (5 GHz)"}],
                 "clients": [{"mac": PC, "name": "x", "unit": "loft", "connected": True, "band": "5 GHz"},
                             {"mac": PHONE, "name": "Phone", "ip": "192.0.2.14", "unit": "attic", "connected": True, "band": "2.4 GHz"},
                             {"mac": TV, "name": "TV", "unit": "loft", "connected": False}]}
@@ -455,7 +455,8 @@ class TestDescribe(unittest.TestCase):
                           ("device", "TV", 0)])
         self.assertIn("last seen on Wi-Fi", rows[-1]["detail"])
         self.assertEqual(found[PHONE]["via"], "eero attic")
-        self.assertEqual(found[PHONE]["via_unit"], "attic")
+        self.assertEqual((found[PHONE]["via_unit"], found[PHONE]["via_id"]), ("attic", "42"))
+        self.assertEqual(found[PC]["via_id"], "")       # no id, so the page shows its name without a link
         self.assertEqual(found[PC]["port"], "1")
 
     def test_elsewhere_lists_only_what_no_port_accounts_for(self):

@@ -313,17 +313,6 @@ POSSIBILITY OF SUCH DAMAGE.
         /* Devices tab: the list, or one device */
         /* a device's page leads back to where it was opened from: this list, or Services or Switches */
         let cameFrom = null;
-        /* back from the eero plugin's page for a unit, opened from a device's page: that page's way back still holds */
-        try {
-            cameFrom = JSON.parse(sessionStorage.getItem('loupe.cameFrom'));
-            sessionStorage.removeItem('loupe.cameFrom');
-        } catch (e) { cameFrom = null; }
-        $('#loupe-detail-title').on('click', 'a[data-back]', function () {
-            try {
-                sessionStorage.setItem('eero.back', JSON.stringify({href: window.location.pathname + window.location.hash, label: $(this).attr('data-back')}));
-                if (cameFrom) sessionStorage.setItem('loupe.cameFrom', JSON.stringify(cameFrom));
-            } catch (e) { /* storage is off: the browser's own back still works */ }
-        });
         $('#tab_services, #tab_switches').on('click', 'a[href^="#device="]', function () {
             cameFrom = {hash: window.location.hash, scroll: $(window).scrollTop(), label: $('#maintabs li.active a').text().trim()};
         });
@@ -373,7 +362,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     + ' ' + (data.networks || []).map(n => pill(n.id)).join('')
                     + (d.switch_port ? '<br>' + (d.switch_port.last_here ? '{{ lang._("Last on") }} ' : '') + '<a href="#switch=' + esc(d.switch_port.switch) + '">' + esc(d.switch_port.name + ' ' + d.switch_port.port) + '</a>'
                         + (d.switch_port.via ? ' {{ lang._("via") }} ' + (d.switch_port.via_id && d.switch_port.via_unit
-                            ? 'eero <a href="/ui/eero/#unit=' + esc(encodeURIComponent(d.switch_port.via_id)) + '" data-back="' + esc(d.name || d.ip || id) + '">' + esc(d.switch_port.via_unit) + '</a>'
+                            ? 'eero <a href="/ui/eero/#unit=' + esc(encodeURIComponent(d.switch_port.via_id)) + '">' + esc(d.switch_port.via_unit) + '</a>'
                             : esc(d.switch_port.via)) : '') : '') + '</small>');
                 drawChart('loupe-chart', data);
             });
