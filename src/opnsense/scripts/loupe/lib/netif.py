@@ -23,11 +23,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-"""Addresses configured on network interfaces, from getifaddrs(3) (what `ifconfig` prints),
-without starting a process."""
+"""Addresses configured on network interfaces, from getifaddrs(3) (what `ifconfig` prints), and what the router's
+bridges have learned (what `ifconfig bridge0 addr` prints), without starting a process."""
 import ctypes
+import fcntl
 import ipaddress
 import socket
+import struct
 
 
 class _Ifaddrs(ctypes.Structure):
@@ -109,4 +111,97 @@ def link_macs():
             p = ifa.next
     finally:
         _libc.freeifaddrs(head)
+    return out
+
+
+IFT_BRIDGE = 0xd1
+LINK_STATE_UP = 2
+SIOCGDRVSPEC = 0xc028697b       # _IOWR('i', 123, struct ifdrv): reading a bridge needs no privilege
+BRDGGIFS, BRDGRTS = 6, 7
+IFBREQ_SIZE = 80                # struct ifbreq, net/if_bridgevar.h
+IFBAREQ_SIZE = 40               # struct ifbareq
+
+
+def link_info():
+    """{interface: {bridge, up, mbit}} from getifaddrs: AF_LINK entries carry a sockaddr_dl and a struct if_data."""
+    global _libc
+    if _libc is None:
+        addresses(())
+    head = ctypes.POINTER(_Ifaddrs)()
+    if _libc.getifaddrs(ctypes.byref(head)) != 0:
+        raise OSError(ctypes.get_errno(), "getifaddrs")
+    out = {}
+    try:
+        p = head
+        while p:
+            ifa = p.contents
+            if ifa.addr and ifa.data and ctypes.string_at(ifa.addr, 2)[1] == AF_LINK:
+                data = ctypes.string_at(ifa.data, 24)
+                out[ifa.name.decode()] = {"bridge": data[0] == IFT_BRIDGE,
+                                          "up": data[4] == LINK_STATE_UP,
+                                          "mbit": struct.unpack_from("=Q", data, 16)[0] // 1000000}
+            p = ifa.next
+    finally:
+        _libc.freeifaddrs(head)
+    return out
+
+
+class _Ifdrv(ctypes.Structure):
+    _fields_ = [("name", ctypes.c_char * 16), ("cmd", ctypes.c_ulong), ("len", ctypes.c_size_t), ("data", ctypes.c_void_p)]
+
+
+class _ListConf(ctypes.Structure):      # struct ifbifconf, struct ifbaconf
+    _fields_ = [("len", ctypes.c_uint32), ("buf", ctypes.c_void_p)]
+
+
+def _bridge_list(sock, bridge, cmd, size):
+    """One of a bridge's lists, as bytes: ask with room to spare, and again with more if the answer filled it."""
+    room = 256
+    while True:
+        buf = ctypes.create_string_buffer(room * size)
+        conf = _ListConf(len=len(buf), buf=ctypes.addressof(buf))
+        drv = _Ifdrv(name=bridge.encode(), cmd=cmd, len=ctypes.sizeof(conf), data=ctypes.addressof(conf))
+        fcntl.ioctl(sock, SIOCGDRVSPEC, drv)
+        if conf.len < len(buf):
+            return buf.raw[:conf.len]
+        room *= 4
+
+
+def _name(raw):
+    return raw.split(b"\0", 1)[0].decode("ascii", "replace")
+
+
+def parse_bridge_members(raw):
+    """Interface names from a list of struct ifbreq."""
+    return [_name(raw[i:i + 16]) for i in range(0, len(raw) - IFBREQ_SIZE + 1, IFBREQ_SIZE)]
+
+
+def parse_bridge_addresses(raw):
+    """[(member interface, MAC)] from a list of struct ifbareq; only what was learned, not addresses set by hand."""
+    out = []
+    for i in range(0, len(raw) - IFBAREQ_SIZE + 1, IFBAREQ_SIZE):
+        flags, mac = raw[i + 24], raw[i + 25:i + 31]
+        if flags & 3 == 0:
+            out.append((_name(raw[i:i + 16]), ":".join(f"{b:02x}" for b in mac)))
+    return out
+
+
+def bridge_ports():
+    """The router's bridges as ports: {"bridges": [names], "ports": {member: {name, up, speed in Mbit}},
+    "fdb": {member: [MACs]}}, with nothing in them on a router that has no bridge."""
+    info = link_info()
+    out = {"bridges": sorted(n for n, i in info.items() if i["bridge"]), "ports": {}, "fdb": {}}
+    if not out["bridges"]:
+        return out
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        for bridge in out["bridges"]:
+            for member in parse_bridge_members(_bridge_list(sock, bridge, BRDGGIFS, IFBREQ_SIZE)):
+                link = info.get(member, {})
+                out["ports"][member] = {"name": member, "up": bool(link.get("up")), "speed": link.get("mbit") or 0}
+            for member, mac in parse_bridge_addresses(_bridge_list(sock, bridge, BRDGRTS, IFBAREQ_SIZE)):
+                if out["ports"].get(member, {}).get("up"):
+                    macs = out["fdb"].setdefault(member, [])
+                    if mac not in macs:
+                        macs.append(mac)
+    out["ports"] = dict(sorted(out["ports"].items()))       # the kernel lists the newest member first
     return out

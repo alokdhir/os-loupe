@@ -371,6 +371,7 @@ POSSIBILITY OF SUCH DAMAGE.
             return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r) + '</td><td>' + esc(r.ip)
                 + '</td><td class="loupe-wrap">' + what + '</td><td>' + (seen ? byteFormat(r.down || 0, 1) : '') + '</td><td>' + (seen ? byteFormat(r.up || 0, 1) : '') + '</td></tr>';
         }
+        const portCount = n => n === 1 ? '{{ lang._("1 port") }}' : '{{ lang._("%s ports") }}'.replace('%s', n);
         const deviceCount = n => n === 1 ? '{{ lang._("1 device") }}' : '{{ lang._("%s devices") }}'.replace('%s', n);
         /* a heading folds its section. All open when the page loads: the browser's find doesn't look in a closed one */
         function sectionOpen($section, open) {
@@ -386,7 +387,7 @@ POSSIBILITY OF SUCH DAMAGE.
             const uplink = s.uplink ? '{{ lang._("Uplink to") }} ' + (s.uplink_id
                 ? '<a href="#switch=' + esc(s.uplink_id) + '">' + esc(s.uplink) + '</a>' : esc(s.uplink)) : '';
             const said = [s.model !== s.name ? esc(s.model) : '', esc(s.address), uplink,
-                s.total ? '{{ lang._("%s of %s ports up") }}'.replace('%s', s.up).replace('%s', s.total) : '',
+                s.total ? '{{ lang._("%s up") }}'.replace('%s', s.up) : '',
                 s.fetched ? deviceCount(s.devices) : '',
                 s.fetched ? '{{ lang._("Read") }} ' + esc(ago(s.fetched)) : ''].filter(Boolean).join(' · ');
             const foot = [];
@@ -394,7 +395,8 @@ POSSIBILITY OF SUCH DAMAGE.
             if (s.ignored) foot.push('{{ lang._("Ignored %s MACs listed on ports that are down.") }}'.replace('%s', s.ignored));
             const problem = s.error || s.note;
             return '<div id="switch_' + esc(s.id) + '" class="loupe-switch"><div class="loupe-bar">'
-                + '<h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> ' + esc(s.name) + ' <small class="text-muted">' + said + '</small></h2></div>'
+                + '<h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> ' + esc(s.name)
+                + (s.total ? ' <span class="text-muted">· ' + portCount(s.total) + '</span>' : '') + ' <small class="text-muted">' + said + '</small></h2></div>'
                 + (problem ? '<p class="loupe-bar text-danger">' + esc(problem) + '</p>' : '')
                 + '<div class="loupe-section-body">'
                 + ((s.rows || []).length ? '<table class="table table-condensed table-striped loupe-ports"><thead><tr>'
@@ -1262,7 +1264,7 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
         <div id="switch_elsewhere" class="loupe-switch" style="display: none">
             <div class="loupe-bar">
-                <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in the last day, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
+                <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in the last day, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On a port of the router outside a bridge, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
             </div>
             <table class="table table-condensed table-striped loupe-ports loupe-section-body">
                 <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Down, 24 hours') }}</th><th>{{ lang._('Up, 24 hours') }}</th></tr></thead>

@@ -188,16 +188,24 @@ def locate(polls, router_macs):
     by_mac = {p["mac"]: sid for sid, p in polls.items() if p.get("mac")}
     uplinks, links = {}, {}
     for sid, p in polls.items():
+        if sid == ROUTER_ID:        # the top of the tree
+            uplinks[sid] = None
+            continue
         best = max(p.get("fdb", {}).items(), key=lambda kv: len(router_macs & set(kv[1])), default=None)
         uplinks[sid] = best[0] if best and router_macs & set(best[1]) else None
+    behind = {}     # {id: {ifIndex: the switches listed there}}
     for sid, p in polls.items():
-        links[sid] = {}
+        behind[sid] = {}
         for i, macs in p.get("fdb", {}).items():
             if i != uplinks[sid]:
-                for mac in macs:
-                    other = by_mac.get(mac)
-                    if other and other != sid:
-                        links[sid][i] = other
+                others = {by_mac.get(mac) for mac in macs} - {None, sid}
+                if others:
+                    behind[sid][i] = others
+    below = {sid: set().union(*ports.values()) if ports else set() for sid, ports in behind.items()}
+    for sid, ports in behind.items():
+        # a port can list a whole chain of switches: it links to the one the others are behind
+        links[sid] = {i: sorted(others, key=lambda o: (any(o in below[t] for t in others if t != o), o))[0]
+                      for i, others in ports.items()}
     places = {}
     for sid, p in polls.items():
         for i, macs in p.get("fdb", {}).items():
@@ -329,6 +337,9 @@ def _port_devices(macs, eero, info, traffic):
     return rows, note
 
 
+ROUTER_ID = "router"
+
+
 def display_name(switch, poll_result):
     """What a switch is called: the name given in Loupe, the one set on the switch, its model, else its address."""
     return (switch.get("name") or poll_result.get("sysname") or model_of(poll_result.get("descr") or "")
@@ -345,13 +356,19 @@ def _order(port_id):
     return int(port_id) if str(port_id).isdigit() else 0
 
 
-def describe(configured, state, info, router_macs, traffic=None):
+def describe(configured, state, info, router_macs, traffic=None, bridges=None):
     """The whole map, as the tab and device pages use it: {id: {id, name, address, model, fetched, tried, error, note,
     up, total, devices, uplink, uplink_id, rows, down, ignored}} for the enabled switches, in the settings' order, and
-    {MAC: where} for each device on a port or Wi-Fi."""
+    {MAC: where} for each device on a port or Wi-Fi. `bridges`: the router's own (netif.bridge_ports), which count as
+    one more switch, the top of the tree, while any switch is listed."""
     traffic = traffic or {}
     enabled = [s for s in configured if s.get("enabled")]
     polls = {s["id"]: state.get("polls", {}).get(s["id"], {}) for s in enabled}
+    if enabled and bridges and bridges.get("ports"):
+        # last, so that where a device ties, a switch's port wins over the router's
+        enabled.append({"id": ROUTER_ID, "name": "Router", "address": ""})
+        polls[ROUTER_ID] = {"descr": ", ".join(bridges["bridges"]), "ports": bridges["ports"], "fdb": bridges["fdb"],
+                            "fetched": int(time.time())}
     eero = Eero(state.get("eero"))
     uplinks, links, where = locate(polls, router_macs)
     on_port = {}

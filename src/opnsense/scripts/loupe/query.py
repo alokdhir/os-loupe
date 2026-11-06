@@ -1068,7 +1068,8 @@ def switch_list():
 
 def switch_map(info, traffic=None):
     """(the switches as described, {MAC: where}, os-eero's view), from the last refresh: no switch is asked anything."""
-    return switches.describe(switch_list(), switches.load_state(switch_state_path()), info, netif.link_macs(), traffic)
+    return switches.describe(switch_list(), switches.load_state(switch_state_path()), info, netif.link_macs(), traffic,
+                             netif.bridge_ports())
 
 
 def cmd_switchrefresh(path, target):
@@ -1102,12 +1103,13 @@ def cmd_switchmap():
     finally:
         db.close()
     described, _, _ = switch_map(info)
-    return {"switches": [public_switch(s) for s in sorted_switches(described)],
+    return {"switches": [public_switch(s) for s in sorted_switches(described) if s["id"] != switches.ROUTER_ID],
             "names": switches.all_names(switch_list(), switches.load_state(switch_state_path()))}
 
 
 def sorted_switches(described):
-    return sorted(described.values(), key=lambda s: ipaddress.ip_address(s["address"]).packed)
+    """The router first, then by address."""
+    return sorted(described.values(), key=lambda s: ipaddress.ip_address(s["address"]).packed if s["address"] else b"")
 
 
 def cmd_switches():
@@ -1121,7 +1123,7 @@ def cmd_switches():
         db.close()
     described, found, eero = switch_map(info, traffic)
     shown = sorted_switches(described)
-    read = any(s["fetched"] for s in shown)     # until a switch has been read, every device would count as elsewhere
+    read = any(s["fetched"] for s in shown if s["id"] != switches.ROUTER_ID)     # until a switch has been read, every device would count as elsewhere
     return {"switches": shown,
             "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - 86400, traffic) if read else []}
 

@@ -33,7 +33,7 @@ import threading
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "opnsense", "scripts", "loupe"))
-from lib import snmp, switches  # noqa: E402
+from lib import netif, snmp, switches  # noqa: E402
 
 ROUTER = "02:00:00:00:00:01"
 SW1, SW2 = "02:00:00:00:00:a1", "02:00:00:00:00:a2"
@@ -347,6 +347,37 @@ class TestDescribe(unittest.TestCase):
         self.assertIn("may be on its Wi-Fi or wired", rows[0]["port_note"])
         self.assertEqual(found[PC]["port"], "1")
 
+    def bridged(self):
+        return {"bridges": ["bridge0"], "ports": {"igc1": {"name": "igc1", "up": True, "speed": 2500},
+                                                  "ix0": {"name": "ix0", "up": True, "speed": 10000},
+                                                  "igc2": {"name": "igc2", "up": False, "speed": 0}},
+                "fdb": {"igc1": [PC], "ix0": [SW1, SW2, TV]}}
+
+    def test_the_router_bridge_is_the_top_of_the_tree(self):
+        state = {"polls": {
+            "a": tables(SW1, [("0/1", True, 1000, [ROUTER]), ("0/3", True, 10000, [SW2, TV])]),
+            "b": tables(SW2, [("TE1", True, 10000, [ROUTER, SW1]), ("TE2", True, 1000, [TV])]),
+        }, "eero": {}}
+        out, found, _ = switches.describe(self.CONF, state, self.INFO, [ROUTER], {}, self.bridged())
+        router = out[switches.ROUTER_ID]
+        self.assertEqual((router["name"], router["total"], router["up"], router["down"]), ("Router", 3, 2, "igc2"))
+        self.assertEqual(found[PC], {"switch": "router", "name": "Router", "port": "igc1"})
+        self.assertEqual(out["a"]["uplink"], "Router ix0")
+        self.assertEqual(out["a"]["uplink_id"], "router")
+        self.assertEqual(out["b"]["uplink"], "SW-1 0/3")     # a chain: the router's port lists both, and links to the first
+        self.assertEqual(found[TV]["switch"], "b")
+
+    def test_the_router_is_not_shown_without_a_listed_switch_or_a_bridge(self):
+        out, _, _ = switches.describe([], {"polls": {}, "eero": {}}, {}, [ROUTER], {}, self.bridged())
+        self.assertEqual(out, {})
+        out, _, _ = switches.describe(self.CONF[:1], self.state(), self.INFO, [ROUTER], {}, {"bridges": [], "ports": {}, "fdb": {}})
+        self.assertNotIn(switches.ROUTER_ID, out)
+
+    def test_where_a_device_ties_the_switch_wins_over_the_router(self):
+        state = {"polls": {"a": tables(SW1, [("1", True, 1000, [ROUTER]), ("2", True, 1000, [PC])])}, "eero": {}}
+        _, found, _ = switches.describe(self.CONF[:1], state, self.INFO, [ROUTER], {}, self.bridged())
+        self.assertEqual(found[PC]["switch"], "a")
+
     def test_unknown_mac_shows_as_itself(self):
         state = {"polls": {"a": tables(SW1, [("1", True, 1000, [PHONE])])}, "eero": {}}
         out, _, _ = switches.describe(self.CONF[:1], state, {}, [ROUTER])
@@ -446,6 +477,18 @@ class TestNames(unittest.TestCase):
         conf = [{"id": "a", "name": "", "address": "192.0.2.3", "enabled": False}]
         state = {"polls": {"a": {"sysname": "rack-switch"}}}
         self.assertEqual(switches.all_names(conf, state), {"a": "rack-switch"})
+
+
+class TestBridgeParsing(unittest.TestCase):
+    def test_members(self):
+        raw = b"igc1".ljust(netif.IFBREQ_SIZE, b"\0") + b"ix0".ljust(netif.IFBREQ_SIZE, b"\0")
+        self.assertEqual(netif.parse_bridge_members(raw), ["igc1", "ix0"])
+
+    def test_addresses_learned_only_and_a_short_tail_ignored(self):
+        def entry(name, flags, mac):
+            return name.ljust(16, b"\0") + bytes(8) + bytes([flags]) + mac + bytes(9)
+        raw = entry(b"igc1", 0, bytes.fromhex("020000000010")) + entry(b"ix0", 1, bytes.fromhex("020000000011")) + b"short"
+        self.assertEqual(netif.parse_bridge_addresses(raw), [("igc1", "02:00:00:00:00:10")])
 
 
 class TestText(unittest.TestCase):
