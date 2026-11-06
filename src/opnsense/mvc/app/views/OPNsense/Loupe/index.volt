@@ -402,12 +402,13 @@ POSSIBILITY OF SUCH DAMAGE.
                 return;
             }
             const $body = $section.children('.loupe-section-body').stop(true, true);
+            $section.removeClass('loupe-collapsed');
+            /* a long section needs longer: at the rows' speed, all but its top is gone in a blink */
+            const ms = FOLD_MS && Math.min(500, Math.max(FOLD_MS, $body.outerHeight() / 3));
             if (open) {
-                $body.hide();
-                $section.removeClass('loupe-collapsed');
-                $body.slideDown(FOLD_MS, () => $body.css('display', ''));
+                $body.hide().slideDown(ms, () => $body.css('display', ''));
             } else {
-                $body.slideUp(FOLD_MS, () => {
+                $body.slideUp(ms, () => {
                     $section.addClass('loupe-collapsed');
                     $body.css('display', '');
                 });
