@@ -166,17 +166,13 @@ class ReportController extends ApiControllerBase
         return $this->query(['switches']);
     }
 
-    /* Refresh: ask the switches now, all or one */
+    /* Refresh: ask the switches now */
     public function refreshSwitchesAction()
     {
         if (!$this->request->isPost()) {
             return ['error' => 'POST only'];
         }
-        $target = (string)$this->request->getPost('target', null, 'all');
-        if ($target !== 'all' && !preg_match('/^[0-9a-fA-F-]{36}$/', $target)) {
-            return ['error' => 'invalid switch'];
-        }
-        return (new \OPNsense\Loupe\Loupe())->refreshSwitches($target);
+        return (new \OPNsense\Loupe\Loupe())->refreshSwitches();
     }
 
     public function searchDevicesAction()

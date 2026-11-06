@@ -383,7 +383,6 @@ POSSIBILITY OF SUCH DAMAGE.
             if (s.ignored) foot.push('{{ lang._("Ignored %s MACs listed on ports that are down.") }}'.replace('%s', s.ignored));
             const problem = s.error || s.note;
             return '<div id="switch_' + esc(s.id) + '" class="loupe-switch"><div class="loupe-bar">'
-                + '<button type="button" class="btn btn-default btn-xs switch-refresh pull-right" data-target="' + esc(s.id) + '"><i class="fa fa-refresh fa-fw"></i> {{ lang._("Refresh") }}</button>'
                 + '<h2 class="loupe-detail-title">' + esc(s.name) + ' <small class="text-muted">' + said + '</small></h2></div>'
                 + (problem ? '<p class="loupe-bar text-danger">' + esc(problem) + '</p>' : '')
                 + ((s.rows || []).length ? '<table class="table table-condensed table-striped loupe-ports"><thead><tr>'
@@ -413,10 +412,9 @@ POSSIBILITY OF SUCH DAMAGE.
         });
         $('#tab_switches').on('click', '.switch-refresh', function () {
             const $b = $(this), $i = $b.find('i').addClass('fa-spin');
-            const target = $b.data('target') || '';
             $b.prop('disabled', true);
-            ajaxCall('/api/loupe/report/refresh_switches', {target: target || 'all'}, function () {
-                showSwitches(target);
+            ajaxCall('/api/loupe/report/refresh_switches', {}, function () {
+                showSwitches('');
             }).always(function () {
                 $i.removeClass('fa-spin');
                 $b.prop('disabled', false);
@@ -1237,7 +1235,7 @@ POSSIBILITY OF SUCH DAMAGE.
         <p id="switch_none" class="loupe-bar" style="display: none">{{ lang._('No switches to show. Add one, or turn one on, under') }} <a href="#switchmap">{{ lang._('Settings, Switches') }}</a>.</p>
         <div id="switch_some" style="display: none">
             <div class="loupe-bar">
-                <button type="button" class="btn btn-default btn-sm switch-refresh"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh all') }}</button>
+                <button type="button" class="btn btn-default btn-sm switch-refresh"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh') }}</button>
             </div>
             <div id="switch_sections"></div>
         </div>
