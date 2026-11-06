@@ -54,7 +54,6 @@ class IndexController extends \OPNsense\Base\IndexController
             'column-id' => 'last', 'label' => gettext('Last result'), 'visible' => 'true', 'sortable' => 'false',
             'identifier' => 'false', 'type' => 'string', 'formatter' => 'switchlast',
         ]]);
-        $switchGrid['hide_delete'] = true;      // a short list: each row has its own delete
         $this->view->formGridSwitches = $switchGrid;
         $this->view->formDialogRule = $this->getForm('dialogRule');
         // a rule's clues are hidden columns; one column says what it matches (built by search_rule)

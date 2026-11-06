@@ -553,8 +553,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     set: '/api/loupe/settings/set_switch/',
                     add: '/api/loupe/settings/add_switch/',
                     del: '/api/loupe/settings/del_switch/',
-                    options: {selection: false, multiSelect: false,
-                        formatters: {switchlast: formatters.switchlast, switchsetname: formatters.switchsetname}}
+                    options: {formatters: {switchlast: formatters.switchlast, switchsetname: formatters.switchsetname}}
                 });
             },
             overrides: function () {
