@@ -3,6 +3,5 @@
         <id>loupe.switchmap.enabled</id>
         <label>Enable switch map</label>
         <type>checkbox</type>
-        <help>Adds a Switches tab showing which device is on which port, read from your managed switches over SNMP. Turn on SNMP on each switch first. Budget lines such as Netgear Plus may not have it.</help>
     </field>
 </form>

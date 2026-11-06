@@ -1415,6 +1415,7 @@ POSSIBILITY OF SUCH DAMAGE.
             {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
         </div>
         <div id="page_switchmap" class="loupe-page">
+            <p class="loupe-bar">{{ lang._('Shows which device is on which port of your managed switches. Turn on SNMP (read-only, v2c) on each switch first. Some budget switches, such as Netgear Plus, don\'t have it.') }}</p>
             {{ partial("layout_partials/base_form", ['fields': formSwitchMap, 'id': 'frm_switchmap']) }}
             <div id="switchmap_grid" style="display: none">
                 {{ partial('layout_partials/base_bootgrid_table', formGridSwitches) }}
