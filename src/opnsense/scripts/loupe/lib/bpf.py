@@ -39,11 +39,10 @@ BIOCSBLEN = 0xC0044266      # _IOWR('B', 102, u_int)
 BIOCSETF = 0x80104267       # _IOW('B', 103, struct bpf_program)
 BIOCSETIF = 0x8020426C      # _IOW('B', 108, struct ifreq)
 BIOCSRTIMEOUT = 0x8010426D  # _IOW('B', 109, struct timeval)
-BIOCIMMEDIATE = 0x80044270  # _IOW('B', 112, u_int)
 BIOCSDIRECTION = 0x80044277  # _IOW('B', 119, u_int) (also BIOCSSEESENT)
 
 # which packets a descriptor sees (enum bpf_direction)
-D_IN, D_INOUT, D_OUT = 0, 1, 2
+D_IN, D_OUT = 0, 2
 
 BUFSIZE = 4 * 1024 * 1024
 SNAPLEN = 2048

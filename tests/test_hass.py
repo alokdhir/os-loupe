@@ -9,6 +9,18 @@ from lib import hass  # noqa: E402
 
 
 class TestHass(unittest.TestCase):
+    def test_a_bad_reply_or_a_full_disk_doesnt_end_the_fetching(self):
+        import http.client
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            n = hass.Names(os.path.join(tmp, "hass.json"), "https://ha.example:8123", "token")
+            for failure in (http.client.BadStatusLine("x"), AttributeError("not an object")):
+                with mock.patch.object(hass, "fetch", side_effect=failure):
+                    self.assertTrue(n.refresh()["error"])
+            n.path = os.path.join(tmp, "no", "such", "dir", "hass.json")
+            with mock.patch.object(hass, "fetch", return_value={}):
+                self.assertIn("can't save", n.refresh()["error"])
+
     def test_parse(self):
         text = json.dumps([{"mac": "AC:00:00:00:00:01", "name": "Office Fan", "area": "Office"},
                            {"mac": "ac-00-00-00-00-02", "name": "Deck Fan", "area": None},

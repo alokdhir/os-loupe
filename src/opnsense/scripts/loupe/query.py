@@ -264,10 +264,12 @@ def devices_info(db, overrides, macs=None):
                              "name_source": "", "area": "",
                              "first_seen": 0, "last_seen": 0,
                              "custom": True})
-    for mac in [m for m in out if m in groups and m == groups[m][0]]:       # each group once
-        merged = merge_group([out[m] for m in groups[mac] if m in out])
-        for m in merged["macs"]:
-            out[m] = merged
+    for group in {tuple(g) for g in groups.values()}:       # each group once
+        known = [out[m] for m in group if m in out]
+        if known:
+            merged = merge_group(known)
+            for m in merged["macs"]:
+                out[m] = merged
     return out
 
 
@@ -673,10 +675,6 @@ def cmd_device(arg, hours, span=None):
     }
 
 
-def matches(text, *fields):
-    return any(text in (f or "").lower() for f in fields)
-
-
 def cmd_sites(hours, text="", want=None):
     """Every named service the house used in the period, biggest first, with the devices that used it.
 
@@ -771,7 +769,7 @@ def cmd_service(text, hours, want=None, chart=False, span=None):
         name = site if named else ""
         r = rows[((info.get(mac) or {}).get("mac") or mac or ip, name or (s and "\0" + s) or site)]   # nameless: per service
         if r["first"] is None or last >= r["last"]:     # the address, and service, it had most recently
-            r.update(ip=ip, mac=mac, name=name, service=s)
+            r.update(ip=ip, mac=(info.get(mac) or {}).get("mac") or mac, name=name, service=s)     # a linked device's main MAC
         r["inferred"] = r.get("inferred", True) and bool(inferred)
         r["down"] += down
         r["up"] += up
@@ -896,6 +894,20 @@ def hours_arg(v):
 AI_REPLY = re.compile(r"^/tmp/loupe-ai-[A-Za-z0-9]{6,32}\.json$")      # where the GUI leaves a pasted reply
 
 
+def take_file(path):
+    """What the GUI left in a file for this command, which is removed once read."""
+    if not AI_REPLY.match(path or ""):
+        raise ValueError("expected a reply file")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 def ai_devices(db, ov):
     """The devices seen in the last week as loupd classifies them: [{mac, name, type, type_source, vendor, model,
     hostname, private, custom, info, names, for_rules: (mac, host name, info, names)}]; a linked device once."""
@@ -946,17 +958,8 @@ def cmd_aipreview(path):
     """The AI's reply (a file the GUI wrote: {"reply": text}) checked against every device; the file is removed
     once read. Row ids are fingerprints of the devices' evidence (airules.row_id), matched against every device
     now, so an answer still lands on the right devices when the list changed after the prompt was copied."""
-    if not AI_REPLY.match(path or ""):
-        raise ValueError("expected a reply file")
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-    finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
-    suggested, unknown, problem, _models = airules.parse(data.get("reply") or "")
+    data = take_file(path)
+    suggested, unknown, problem = airules.parse(data.get("reply") or "")
     user = read_conf().get("rules", [])
     db, _, ov = load()
     devs = ai_devices(db, ov)
@@ -980,9 +983,10 @@ def span_arg(start, end):
     if not (start and end):
         return None
     span = (int(start), int(end))
-    if not 0 < span[0] < span[1] <= time.time() + 3600:
+    if not 0 < span[0] < span[1]:
         raise ValueError("bad time range")
-    return span
+    # a daily chart plots today at noon, so a zoom to its right edge can end in the future
+    return span[0], min(span[1], max(int(time.time()), span[0] + 1))
 
 
 def model_codes(db, ov):
@@ -1019,16 +1023,7 @@ def cmd_aimodels():
 def cmd_aimodelpreview(path):
     """The AI's answer to the model-name prompt (a file the GUI wrote, removed once read): proposals for codes
     devices announce, with the devices that have them and the name now."""
-    if not AI_REPLY.match(path or ""):
-        raise ValueError("expected a reply file")
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-    finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+    data = take_file(path)
     names, problem = airules.parse_model_names(data.get("reply") or "")
     db, _, ov = load()
     codes = model_codes(db, ov)
@@ -1085,15 +1080,10 @@ def cmd_switchrefresh(path, target):
     if target != "all" and not switches.SWITCH_ID.match(target or ""):
         raise ValueError("expected a switch")
     eero = {}
-    if AI_REPLY.match(path or ""):
+    if path != "-":
         try:
-            with open(path, encoding="utf-8") as f:
-                eero = json.load(f)
+            eero = take_file(path)
         except (OSError, ValueError):
-            pass
-        try:
-            os.unlink(path)
-        except OSError:
             pass
     return {"errors": switches.refresh(switch_state_path(), switch_list(), target, eero,
                                        router_macs=netif.link_macs(), router=router_ports())}
@@ -1116,8 +1106,13 @@ def cmd_switchmap():
 
 
 def sorted_switches(described):
-    """The router first, then by address."""
-    return sorted(described.values(), key=lambda s: ipaddress.ip_address(s["address"]).packed if s["address"] else b"")
+    """The router first, then by address; one that isn't an address (a hand-edited config) can't break the page."""
+    def order(s):
+        try:
+            return ipaddress.ip_address(s["address"]).packed if s["address"] else b""
+        except ValueError:
+            return b"\xff" * 17
+    return sorted(described.values(), key=order)
 
 
 def cmd_switches(hours):

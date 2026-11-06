@@ -6,5 +6,7 @@
 pw usershow loupe >/dev/null 2>&1 || \
 	pw useradd loupe -u 1787 -d /nonexistent -s /usr/sbin/nologin -c "Loupe traffic monitor" || exit 1
 mkdir -p /var/db/loupe
-chown -R loupe:loupe /var/db/loupe
+# only moving data from root (an update from before 1.2): the directory is then loupe's, and root must not walk what
+# loupe can put there, as a hard link in it would hand loupe the file it points to
+[ "$(stat -f %Su /var/db/loupe)" = loupe ] || chown -R loupe:loupe /var/db/loupe
 chmod 750 /var/db/loupe

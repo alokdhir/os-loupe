@@ -46,11 +46,6 @@ class ReportController extends ApiControllerBase
         return ($hours > 0 && $hours <= 87600) ? (string)$hours : '24';
     }
 
-    public function devicesAction($hours = 24)
-    {
-        return $this->query(['devices', $this->hours($hours)]);
-    }
-
     public function deviceAction($id = '', $hours = 24)
     {
         $id = rawurldecode($id);

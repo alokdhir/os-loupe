@@ -64,6 +64,7 @@
                 <address type="NetworkField">
                     <Required>Y</Required>
                     <NetMaskAllowed>N</NetMaskAllowed>
+                    <WildcardEnabled>N</WildcardEnabled>
                     <ValidationMessage>Enter the switch's IP address.</ValidationMessage>
                     <Constraints>
                         <check001>

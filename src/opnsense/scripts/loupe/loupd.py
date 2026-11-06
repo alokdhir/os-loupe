@@ -49,6 +49,7 @@ from lib.report import local_day  # noqa: E402
 
 
 CATCHUP_BUDGET = 5.0        # seconds of summary work per poll while days wait to be built
+KEEP_NETWORKS = 600         # how long an interface that lost its address keeps its networks
 SHARED_ADDRESS = 1800       # two MACs using one IPv4 address this long are one host (not an address handed over)
 SAME_CLAIM = 120            # two MACs announcing one Bonjour host name this close together are one host
 MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
@@ -75,6 +76,7 @@ class Loupe:
                  local_networks=(), unbound_cache=""):
         self.ifaces = set(ifaces)
         self.no_address = set()
+        self.iface_nets = {}        # interface -> (its networks, when last seen with them)
         self.local_networks = usable_networks(local_networks)
         self.is_local = pfstate.local_matcher([])
         self.refresh_networks()
@@ -254,17 +256,24 @@ class Loupe:
 
     def refresh_networks(self):
         """LAN networks can change while running (e.g. a delegated IPv6 prefix arrives). An interface with no address
-        (a transparent bridge) has none to offer: Local networks from the settings, or else the private ranges."""
-        nets = pfstate.interface_networks(self.ifaces) + self.local_networks
-        self.check_addresses()
+        (a transparent bridge) has none to offer: Local networks from the settings, or else the private ranges. One
+        that had an address and lost it (being reconfigured, a prefix renewing) keeps its networks for a while, as
+        traffic missed while they are gone is never counted."""
+        now, current = time.monotonic(), {}
+        for name, i in netif.addresses(self.ifaces):
+            if not i.ip.is_link_local:
+                current.setdefault(name, []).append(str(i.network))
+        known = {name: seen for name, seen in self.iface_nets.items() if now - seen[1] < KEEP_NETWORKS}
+        known.update((name, (found, now)) for name, found in current.items())
+        self.iface_nets = known
+        self.check_addresses(self.ifaces - set(known))
+        nets = [n for found, _ in known.values() for n in found] + self.local_networks
         if self.no_address and not self.local_networks:
             nets += pfstate.PRIVATE_NETWORKS
         self.is_local = pfstate.local_matcher(nets)
 
-    def check_addresses(self):
+    def check_addresses(self, missing):
         """Say which interfaces have no address, once each time it happens: what counts as local is then a guess."""
-        addressed = {name for name, i in netif.addresses(self.ifaces) if not i.ip.is_link_local}
-        missing = self.ifaces - addressed
         if not self.local_networks:
             for name in sorted(missing - self.no_address):
                 syslog.syslog(syslog.LOG_NOTICE, f"loupe: {name} has no address: treating private addresses as local "

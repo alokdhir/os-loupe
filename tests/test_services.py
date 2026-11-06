@@ -321,8 +321,8 @@ class TestUnnumberedInterface(unittest.TestCase):
         from types import SimpleNamespace
 
         import loupd
-        d = SimpleNamespace(ifaces=set(ifaces), no_address=set(), local_networks=list(local_networks))
-        d.check_addresses = lambda: loupd.Loupe.check_addresses(d)
+        d = SimpleNamespace(ifaces=set(ifaces), no_address=set(), iface_nets={}, local_networks=list(local_networks))
+        d.check_addresses = lambda missing: loupd.Loupe.check_addresses(d, missing)
         return d
 
     def refresh(self, d, addresses):
@@ -345,7 +345,20 @@ class TestUnnumberedInterface(unittest.TestCase):
         self.assertEqual(self.refresh(d, [("bridge0", "198.51.100.1/24")]), [])
         self.assertTrue(d.is_local("198.51.100.9"))
         self.assertFalse(d.is_local("10.0.2.16"))
-        self.assertEqual(self.refresh(d, []), ["bridge0"])
+
+    def test_an_interface_that_loses_its_address_keeps_its_networks_for_a_while(self):
+        from unittest import mock
+
+        import loupd
+        d = self.daemon(["igc1"])
+        self.refresh(d, [("igc1", "198.51.100.1/24")])
+        self.assertEqual(self.refresh(d, []), [])       # being reconfigured, a prefix renewing: nothing said
+        self.assertTrue(d.is_local("198.51.100.9"))
+        later = loupd.time.monotonic() + loupd.KEEP_NETWORKS + 1
+        with mock.patch.object(loupd.time, "monotonic", return_value=later):
+            self.assertEqual(self.refresh(d, []), ["igc1"])     # gone for good: as with no address at all
+        self.assertFalse(d.is_local("198.51.100.9"))
+        self.assertTrue(d.is_local("10.0.2.16"))
 
     def test_link_local_is_no_address(self):
         d = self.daemon(["bridge0"])

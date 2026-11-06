@@ -8,14 +8,14 @@ Loupe is about each device's traffic to and from the internet. Traffic between y
 
 **A clean device list is half the point.** Much of Loupe's work goes into telling you what each device actually is: a real name, a type and, where it can, the model, instead of an IP address or `ESP_3A1F2C`. What it can't work out on its own, [*Settings*](#settings) helps you fix: rename or retype a device, write rules that type a whole group at once, name model codes, take names from Home Assistant, or have an AI chat suggest rules for the devices it's unsure of.
 
-When possible, devices are identified and named automatically. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and goes with the strongest evidence, so you see *MacBook Air 15″ (M3)*, *Apple TV 4K (3rd gen)*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 162 rules covering 109 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
+When possible, devices are identified and named automatically. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and goes with the strongest evidence, so you see *Mac*, *Apple TV*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 162 rules covering 109 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
 
 ![Devices list: every device, its type, vendor, traffic and top services](docs/images/devices.png)
 
 ## Features
 
 - **Device identification**: a multi-tier rule engine names each device and works out what it is from the evidence it gives off, strongest first (see [Identifying devices](#identifying-devices)). Every identification shows the evidence it rests on.
-- **Devices**: every device with its name, type and icon (e.g. *MacBook Air 15″ (M3)*, *Apple TV 4K*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and its top three services, for the last hour, 3 hours, day, week, month or year.
+- **Devices**: every device with its name, type and icon (e.g. *Mac*, *Apple TV*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and its top three services, for the last hour, 3 hours, day, week, month or year.
 - **Device detail**: a traffic chart over time, and what the device talked to: each service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (NordVPN)*…, unnamed traffic as *Other*), opening to the sites it used. Traffic that isn't the web shows its protocol and port (SSH, a game, a VPN).
 - **Services**: every service the house used in the period, with the devices that used it. Open one, or search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`), for a chart of its traffic over time and which devices used it, how much, and when.
 - **Zoomable charts**: drag across a device's or a service's traffic chart to zoom into that stretch of time. The list below it follows the zoom, showing only the traffic in the time shown (a note says which span), so you can see what a spike was. *Reset zoom* goes back to the whole period.

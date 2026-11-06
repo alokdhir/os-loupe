@@ -282,8 +282,8 @@ class Eero:
 
     def under(self, unit):
         """The units meshed through this one, over Wi-Fi."""
-        via = f"Wireless via {unit.get('name')} "
-        return [u for u in self.units.values() if str(u.get("backhaul") or "").startswith(via)]
+        via = re.compile(re.escape(f"Wireless via {unit.get('name')}") + r"( \(.*\))?")       # then the radio, if eero says
+        return [u for u in self.units.values() if via.fullmatch(str(u.get("backhaul") or ""))]
 
 
 def _plain(info, mac):

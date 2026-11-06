@@ -71,7 +71,8 @@ POSSIBILITY OF SUCH DAMAGE.
         /* values from the network (host names, vendor classes) also land in attributes: escape quotes too.
            The API HTML-escapes what it sends the GUI (& arrives as &amp;): decode first, so it isn't escaped twice */
         const ESC = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
-        const esc = s => (s == null ? '' : String(s).includes('&') ? htmlDecode(String(s)) : String(s))
+        const plainText = s => (s == null ? '' : String(s).includes('&') ? htmlDecode(String(s)) : String(s));
+        const esc = s => plainText(s)
             .replace(/[&<>"']/g, c => ESC[c]);
         /* a device's model, unless loupd named the device after it ("Miele Combi-Steam Oven XXL") */
         /* where a device's name comes from, on hover, when it isn't the user's or the device's own */
@@ -153,9 +154,9 @@ POSSIBILITY OF SUCH DAMAGE.
             devtraffic: function (column, row) {      /* a service row, or one of its sites (its addresses on hover) */
                 if (!row.servers) {
                     return row.service === 'Other' ? '<span class="text-muted">{{ lang._('Other') }}</span>'
-                        : '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>';
+                        : '<a href="#q=' + encodeURIComponent(plainText(row.service)) + '">' + esc(row.service) + '</a>';
                 }
-                return '<a href="#q=' + encodeURIComponent(row.label) + '" title="' + esc(row.servers.join(', ')) + '">'
+                return '<a href="#q=' + encodeURIComponent(plainText(row.label)) + '" title="' + esc(row.servers.join(', ')) + '">'
                     + esc(row.label) + '</a>' + inferred(row)
                     + ((row.ports || []).length ? ' <span class="text-muted">' + row.ports.map(esc).join(', ') + '</span>' : '');
             },
@@ -170,7 +171,7 @@ POSSIBILITY OF SUCH DAMAGE.
             servicedevice: function (column, row) {
                 if (!row.device) {          /* a site, under its device: as a device's page lists them (searches it; addresses on hover) */
                     const site = row.name || (row.servers || []).join(', ');
-                    return '<a href="#q=' + encodeURIComponent(site) + '" title="' + esc((row.servers || []).join(', ')) + '">'
+                    return '<a href="#q=' + encodeURIComponent(plainText(site)) + '" title="' + esc((row.servers || []).join(', ')) + '">'
                         + esc(site) + '</a>' + inferred(row);
                 }
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
@@ -185,7 +186,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '') + esc(row.type);
             },
             housesvc: function (column, row) {           /* matched through its sites only: which ones */
-                return '<a href="#q=' + encodeURIComponent(row.service) + '">' + esc(row.service) + '</a>'
+                return '<a href="#q=' + encodeURIComponent(plainText(row.service)) + '">' + esc(row.service) + '</a>'
                     + ((row.matched || []).length ? ' <span class="text-muted">' + esc(row.matched.join(', '))
                         + (row.sites > row.matched.length ? ', …' : '') + '</span>' : '');
             },

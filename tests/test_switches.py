@@ -332,6 +332,12 @@ class TestDescribe(unittest.TestCase):
         out, _, _ = switches.describe(conf, self.state(), self.INFO, [ROUTER])
         self.assertNotIn("s3cret", json.dumps(out))
 
+    def test_a_meshed_eero_with_no_radio_named_still_shows(self):
+        eero = switches.Eero({"units": [{"name": "loft", "ip": "192.0.2.12"}, {"name": "loft two", "ip": "192.0.2.14", "backhaul": "Wireless via loft two (5 GHz)"},
+                                        {"name": "attic", "ip": "192.0.2.13", "backhaul": "Wireless via loft"},
+                                        {"name": "den", "ip": "192.0.2.15", "backhaul": "Wireless via loft (5 GHz)"}], "clients": []})
+        self.assertEqual(sorted(u["name"] for u in eero.under({"name": "loft"})), ["attic", "den"])
+
     def test_a_port_with_nothing_known_still_has_a_row(self):
         state = {"polls": {"a": tables(SW1, [("1", True, 1000, [])])}, "eero": {}}
         out, _, _ = switches.describe(self.CONF[:1], state, {}, [ROUTER])

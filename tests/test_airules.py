@@ -33,14 +33,14 @@ RULE = '{"devices": ["D1"], "when": {"vendor": "Espressif", "talks_to": "acme-ga
 
 class TestParse(unittest.TestCase):
     def test_code_block_and_prose(self):
-        rules, unknown, problem, _ = airules.parse('Here you go:\n```json\n{"rules": [' + RULE + '], "unknown": []}\n```\nCheers')
+        rules, unknown, problem = airules.parse('Here you go:\n```json\n{"rules": [' + RULE + '], "unknown": []}\n```\nCheers')
         self.assertEqual((len(rules), problem), (1, None))
-        rules, _, problem, _ = airules.parse('{"rules": [' + RULE + ']} and some words after')
+        rules, _, problem = airules.parse('{"rules": [' + RULE + ']} and some words after')
         self.assertEqual((len(rules), problem), (1, None))
 
     def test_invalid_escapes(self):
         """AIs write regexes with \\$ inside JSON strings, which JSON doesn't allow."""
-        rules, _, problem, _ = airules.parse(r'{"rules": [{"devices": ["D1"], "when": {"hostname": "^Scale\$"}, "type": "Scale"}]}')
+        rules, _, problem = airules.parse(r'{"rules": [{"devices": ["D1"], "when": {"hostname": "^Scale\$"}, "type": "Scale"}]}')
         self.assertIsNone(problem)
         self.assertEqual(rules[0]["when"]["hostname"], "^Scale$")
         mixed = r'{"rules": [{"devices": ["D1"], "when": {"hostname": "^gs_\\d+\$", "mdns_name": "^acme \d"}, "type": "X"}]}'
@@ -49,7 +49,7 @@ class TestParse(unittest.TestCase):
 
     def test_cut_off(self):
         text = '```json\n{"rules": [' + RULE + ', {"devices": ["D2"], "when": {"hostname": "^Acme"}, "type": "Ov'
-        rules, unknown, problem, _ = airules.parse(text)
+        rules, unknown, problem = airules.parse(text)
         self.assertEqual(len(rules), 1)
         self.assertIn("stops partway", problem)
         self.assertIn("kept the 1 complete rules", problem)
@@ -57,14 +57,11 @@ class TestParse(unittest.TestCase):
     def test_control_characters(self):
         """A stray control character copied along from a chat page (inside a note) doesn't lose the rules after it."""
         text = '{"rules": [' + RULE + ', {"devices": ["D2"], "when": {"hostname": "^acme"}, "type": "Oven", "note": "Cas\t\x0bta"}]}'
-        rules, _, problem, _ = airules.parse(text)
+        rules, _, problem = airules.parse(text)
         self.assertEqual((len(rules), problem), (2, None))
 
-    def test_model_names(self):
-        """An answer can bring names for code-like models, with or without rules."""
-        rules, _, problem, models = airules.parse('{"rules": [], "models": [{"devices": ["DA1B2C3"], "model": "Acme TV 4K"},'
-                                                  ' {"devices": ["D9"], "model": ""}, "x"]}')
-        self.assertEqual((rules, problem, models), ([], None, [(["DA1B2C3"], "Acme TV 4K")]))
+    def test_an_answer_with_only_models_has_no_rules(self):
+        self.assertEqual(airules.parse('{"rules": [], "models": [{"devices": ["D1"], "model": "Acme"}]}')[2], airules.NO_RULES)
 
     def test_model_name_prompt_and_answer(self):
         prompt = airules.models_prompt([("ACME9,1", "Acme Inc.", "Media player", 2)])
@@ -79,7 +76,7 @@ class TestParse(unittest.TestCase):
 
     def test_the_prompt_is_not_an_answer(self):
         prompt = airules.prompt(airules.rows([("ac:00:00:00:00:01", airules.evidence({"vendor": "Acme"}))]), {"Oven": {}})
-        rules, _, problem, _ = airules.parse(prompt)
+        rules, _, problem = airules.parse(prompt)
         self.assertEqual(rules, [])
         self.assertIn("That's the prompt", problem)
 
@@ -87,7 +84,7 @@ class TestParse(unittest.TestCase):
         self.assertEqual(airules.parse("sorry, I can't help")[2], airules.NO_RULES)
         self.assertEqual(airules.parse('{"answer": 42}')[2], airules.NO_RULES)
         self.assertEqual(airules.parse('{"rules": ["x", {"type": "Oven"}, {"when": {}, "type": "Oven"}]}')[2], airules.NO_RULES)
-        rules, _, problem, _ = airules.parse('{"rules": [' + RULE + ', {"devices": ["D2"], "type": "Oven"}]}')
+        rules, _, problem = airules.parse('{"rules": [' + RULE + ', {"devices": ["D2"], "type": "Oven"}]}')
         self.assertEqual(len(rules), 1)
         self.assertIn("Skipped 1 entries", problem)
 

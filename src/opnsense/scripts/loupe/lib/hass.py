@@ -95,11 +95,14 @@ class Names:
         now = now or time.time()
         try:
             state = {"names": fetch(self.url, self.token, self.verify), "fetched": now, "error": None, "url": self.url}
-        except (OSError, ValueError) as e:
+        except Exception as e:      # anything from the far end (a bad reply, odd JSON) mustn't end the fetching for good
             state = {**self.state, "error": str(e) or e.__class__.__name__, "tried": now}
         self.state = state
         tmp = self.path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(state, f)
-        os.replace(tmp, self.path)
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(state, f)
+            os.replace(tmp, self.path)
+        except OSError as e:
+            return {**state, "error": f"can't save the names: {e}"}
         return state

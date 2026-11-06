@@ -248,18 +248,18 @@ def parse(text):
     # control characters other than line breaks and tabs: copied along from some chat pages, never meant
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text or "")
     if PROMPT_START in text and "## Response format" in text:     # its example would read as a rule
-        return [], [], "That's the prompt. Paste it into the AI chat, then paste the AI's answer here.", []
+        return [], [], "That's the prompt. Paste it into the AI chat, then paste the AI's answer here."
     block = re.search(r"```(?:json)?\s*(\{.*?)```", text, re.S)
     body = block.group(1) if block else text[text.find("{"):] if "{" in text else ""
     if not body:
-        return [], [], NO_RULES, []
+        return [], [], NO_RULES
     try:
         data = _loads(body[:body.rfind("}") + 1] if block is None else body)
         if not isinstance(data, dict):
             raise ValueError
         problem = None
     except ValueError:
-        data = {"rules": _objects(body, "rules"), "unknown": _objects(body, "unknown"), "models": _objects(body, "models")}
+        data = {"rules": _objects(body, "rules"), "unknown": _objects(body, "unknown")}
         kept = len(data["rules"])
         depth = body.count("{") - body.count("}")       # still open at the end: the answer stops partway
         problem = (f"The answer stops partway, in the middle of a rule: kept the {kept} complete rules. Copy it again "
@@ -270,21 +270,12 @@ def parse(text):
     rules = [r for r in listed if isinstance(r, dict) and isinstance(r.get("when"), dict) and r["when"]
              and isinstance(r.get("type"), str) and r["type"].strip()]
     unknown = [u for u in data.get("unknown") or [] if isinstance(u, dict)] if isinstance(data.get("unknown"), list) else []
-    if not rules and not parse_models(data):     # an answer may bring only model names
-        return [], [], NO_RULES, []
+    if not rules:
+        return [], [], NO_RULES
     if len(rules) < len(listed):
         skipped = f"Skipped {len(listed) - len(rules)} entries that aren't rules (no conditions or no type)."
         problem = f"{problem} {skipped}" if problem else skipped
-    return rules, unknown, problem, parse_models(data)
-
-
-def parse_models(data):
-    """The answer's "models" list: [(row ids, model name)] for rows whose model is a code."""
-    out = []
-    for m in data.get("models") or [] if isinstance(data.get("models"), list) else []:
-        if isinstance(m, dict) and isinstance(m.get("model"), str) and m["model"].strip() and isinstance(m.get("devices"), list):
-            out.append(([str(d) for d in m["devices"]], m["model"].strip()[:100]))
-    return out
+    return rules, unknown, problem
 
 
 MODELS_START = "You are helping Loupe name product models"
