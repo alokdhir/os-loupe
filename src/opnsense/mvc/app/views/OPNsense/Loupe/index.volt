@@ -370,7 +370,11 @@ POSSIBILITY OF SUCH DAMAGE.
            read by Refresh, by saving one in Settings, and on opening this tab if the last read is old enough for
            devices in use to be missing from it. Switches forget a silent device after about this long */
         const SWITCHES_STALE_SECONDS = 300;
-        let switchesWanted = 0, switchJumped = '';
+        let switchesWanted = 0, switchJumped = '', switchesRead = 0;
+        function switchesAge() {
+            $('#switch_age').text(switchesRead ? '{{ lang._("Read") }} ' + ago(switchesRead) : '');
+        }
+        setInterval(switchesAge, 30000);
         function deviceCell(r) {
             const name = r.id && r.kind !== 'ap'
                 ? '<a href="' + (r.switch ? '#switch=' : '#device=') + esc(r.id) + '">' + esc(r.name) + '</a>' : esc(r.name);
@@ -401,8 +405,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 ? '<a href="#switch=' + esc(s.uplink_id) + '">' + esc(s.uplink) + '</a>' : esc(s.uplink)) : '';
             const said = [s.model !== s.name ? esc(s.model) : '', esc(s.address), uplink,
                 s.total ? '{{ lang._("%s up") }}'.replace('%s', s.up) : '',
-                s.fetched ? deviceCount(s.devices) : '',
-                s.fetched ? '{{ lang._("Read") }} ' + esc(ago(s.fetched)) : ''].filter(Boolean).join(' · ');
+                s.fetched ? deviceCount(s.devices) : ''].filter(Boolean).join(' · ');
             const foot = [];
             if (s.down) foot.push('{{ lang._("Down:") }} ' + esc(s.down));
             if (s.ignored) foot.push('{{ lang._("Ignored %s MACs listed on ports that are down.") }}'.replace('%s', s.ignored));
@@ -440,6 +443,10 @@ POSSIBILITY OF SUCH DAMAGE.
                     scrollToSwitch(target);
                 }
                 switchJumped = target;
+                /* the oldest: a switch that can't be read says so in its section */
+                const good = list.filter(s => s.id !== 'router' && s.fetched).map(s => s.fetched);
+                switchesRead = good.length ? Math.min(...good) : 0;
+                switchesAge();
                 /* a switch that can't be read counts as tried, so this asks once, not on every answer */
                 const read = list.filter(s => s.id !== 'router').map(s => Math.max(s.fetched || 0, s.tried || 0));
                 if (read.length && Date.now() / 1000 - Math.min(...read) > SWITCHES_STALE_SECONDS) {
@@ -1283,7 +1290,10 @@ POSSIBILITY OF SUCH DAMAGE.
         <p id="switch_none" class="loupe-bar" style="display: none">{{ lang._('No switches to show. Add one, or turn one on, under') }} <a href="#switchmap">{{ lang._('Settings, Switches') }}</a>.</p>
         <div id="switch_some" style="display: none">
             <div class="loupe-bar">
-                <button type="button" class="btn btn-default btn-sm switch-refresh pull-right"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh') }}</button>
+                <div class="pull-right">
+                    <span id="switch_age" class="text-muted" style="margin-right: 8px"></span>
+                    <button type="button" class="btn btn-default btn-sm switch-refresh"><i class="fa fa-refresh fa-fw"></i> {{ lang._('Refresh') }}</button>
+                </div>
                 <div class="btn-group loupe-period">
                     {% for p in periods %}<button type="button" class="btn btn-default btn-sm" data-hours="{{ p[0] }}">{{ p[1] }}</button>{% endfor %}
                 </div>
