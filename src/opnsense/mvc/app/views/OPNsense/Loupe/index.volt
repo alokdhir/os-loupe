@@ -49,7 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-ports th:nth-child(1) { width: 9em; }
     .loupe-ports th:nth-child(2) { width: 6em; }
     .loupe-ports th:nth-child(4) { width: 10em; }
-    .loupe-ports th:nth-child(6) { width: 8em; }
+    .loupe-ports th:nth-child(6), .loupe-ports th:nth-child(7) { width: 8em; }
     .loupe-netpick { display: inline-block; margin-left: 10px; vertical-align: middle; }
     .loupe-net + .loupe-net { margin-left: 3px; }
     .loupe-rebuild { margin-top: 6px; }
@@ -366,10 +366,10 @@ POSSIBILITY OF SUCH DAMAGE.
                 + (r.icon ? '<i class="' + esc(r.icon) + ' fa-fw text-muted"></i> ' : '') + name + '</span>';
         }
         function deviceRow(r, port, speed) {
-            const used = (r.down || r.up) ? byteFormat((r.down || 0) + (r.up || 0), 1) : '';
+            const seen = r.down || r.up;
             const what = [r.detail, r.port_note].filter(Boolean).map(esc).join(' · ');
             return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r) + '</td><td>' + esc(r.ip)
-                + '</td><td class="loupe-wrap">' + what + '</td><td>' + used + '</td></tr>';
+                + '</td><td class="loupe-wrap">' + what + '</td><td>' + (seen ? byteFormat(r.down || 0, 1) : '') + '</td><td>' + (seen ? byteFormat(r.up || 0, 1) : '') + '</td></tr>';
         }
         const deviceCount = n => n === 1 ? '{{ lang._("1 device") }}' : '{{ lang._("%s devices") }}'.replace('%s', n);
         /* a heading folds its section. All open when the page loads: the browser's find doesn't look in a closed one */
@@ -399,7 +399,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 + '<div class="loupe-section-body">'
                 + ((s.rows || []).length ? '<table class="table table-condensed table-striped loupe-ports"><thead><tr>'
                     + '<th>{{ lang._("Port") }}</th><th>{{ lang._("Speed") }}</th><th>{{ lang._("Device") }}</th><th>{{ lang._("Address") }}</th>'
-                    + '<th>{{ lang._("Detail") }}</th><th>{{ lang._("Last 24 hours") }}</th></tr></thead><tbody>'
+                    + '<th>{{ lang._("Detail") }}</th><th>{{ lang._("Down, 24 hours") }}</th><th>{{ lang._("Up, 24 hours") }}</th></tr></thead><tbody>'
                     + s.rows.map(r => deviceRow(r, r.port, r.speed)).join('') + '</tbody></table>' : '')
                 + (foot.length ? '<p class="loupe-bar text-muted">' + foot.join(' ') + '</p>' : '')
                 + '</div></div>';
@@ -1265,7 +1265,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in the last day, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On one of the router\'s own ports, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
             </div>
             <table class="table table-condensed table-striped loupe-ports loupe-section-body">
-                <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Last 24 hours') }}</th></tr></thead>
+                <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Down, 24 hours') }}</th><th>{{ lang._('Up, 24 hours') }}</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
