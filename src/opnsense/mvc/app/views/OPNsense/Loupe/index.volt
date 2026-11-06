@@ -46,7 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-switch h2 small { cursor: auto; }
     .loupe-collapsed .loupe-section-body { display: none; }
     .loupe-ports { table-layout: fixed; }
-    .loupe-ports th:nth-child(1) { width: 9em; }
+    .loupe-ports th:nth-child(1) { width: 13em; }
     .loupe-ports th:nth-child(2) { width: 6em; }
     .loupe-ports th:nth-child(4) { width: 10em; }
     .loupe-ports th:nth-child(6), .loupe-ports th:nth-child(7) { width: 8em; }
@@ -55,6 +55,7 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-rebuild { margin-top: 6px; }
     #switch_ports td { white-space: nowrap; }
     #switch_ports td.loupe-wrap { white-space: normal; }
+    #switch_ports td:first-child { white-space: normal; overflow-wrap: anywhere; }
 </style>
 <script>
     $(document).ready(function () {

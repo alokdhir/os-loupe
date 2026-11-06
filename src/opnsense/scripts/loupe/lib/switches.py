@@ -137,7 +137,7 @@ def poll(address, community, now=None):
     if not out["ports"]:
         return {"error": "it answered, but lists no ports"}
     if not out["fdb"]:
-        out["note"] = "it answered, but its MAC table is empty"
+        out["note"] = "it answered, but gave no MAC table; it may not offer one over SNMP"
     out["fetched"] = int(now or time.time())
     return out
 
