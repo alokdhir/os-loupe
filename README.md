@@ -29,7 +29,7 @@ When possible, devices are identified and named automatically. A layered, eviden
 
 ## Screenshots
 
-All from a real home network, with people's names blurred. The address bar shows the router's IP address, not its host name, on purpose: it keeps the domain out of the pictures.
+All from a real home network, with people's names blurred. The address bar shows the router's IP address, or is blurred, on purpose: it keeps the domain out of the pictures.
 
 **A device**: its traffic over time, and each service it used, opening to its sites.
 
@@ -51,7 +51,13 @@ All from a real home network, with people's names blurred. The address bar shows
 
 ![Overrides: names and types set by hand](docs/images/overrides.png)
 
-![Device rules: a custom rule typing five MAC prefixes as window shades](docs/images/rules.png)
+![Device rules: custom rules for appliances and other devices, most from the AI Rule Generator, one typing five MAC prefixes as window shades](docs/images/rules.png)
+
+**Switch map** (optional): which device is on which port of the router and your managed switches, with each eero's Wi-Fi clients under it.
+
+![Switch map: a section for the router and each switch, listing each port's speed, devices, addresses and traffic](docs/images/switchmap.png)
+
+![Settings, Switches: the listed switches with their port counts, addresses and last read](docs/images/switches.png)
 
 ## How it works
 
