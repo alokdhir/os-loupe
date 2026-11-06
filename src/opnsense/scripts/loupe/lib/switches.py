@@ -356,18 +356,18 @@ def _order(port_id):
     return int(port_id) if str(port_id).isdigit() else 0
 
 
-def describe(configured, state, info, router_macs, traffic=None, bridges=None):
+def describe(configured, state, info, router_macs, traffic=None, router=None):
     """The whole map, as the tab and device pages use it: {id: {id, name, address, model, fetched, tried, error, note,
     up, total, devices, uplink, uplink_id, rows, down, ignored}} for the enabled switches, in the settings' order, and
-    {MAC: where} for each device on a port or Wi-Fi. `bridges`: the router's own (netif.bridge_ports), which count as
-    one more switch, the top of the tree, while any switch is listed."""
+    {MAC: where} for each device on a port or Wi-Fi. `router`: its own ports (netif.router_ports), which count as one
+    more switch, the top of the tree, while any switch is listed."""
     traffic = traffic or {}
     enabled = [s for s in configured if s.get("enabled")]
     polls = {s["id"]: state.get("polls", {}).get(s["id"], {}) for s in enabled}
-    if enabled and bridges and bridges.get("ports"):
+    if enabled and router and router.get("ports"):
         # last, so that where a device ties, a switch's port wins over the router's
         enabled.append({"id": ROUTER_ID, "name": "Router", "address": ""})
-        polls[ROUTER_ID] = {"descr": ", ".join(bridges["bridges"]), "ports": bridges["ports"], "fdb": bridges["fdb"],
+        polls[ROUTER_ID] = {"descr": ", ".join(router["bridges"]), "ports": router["ports"], "fdb": router["fdb"],
                             "fetched": int(time.time())}
     eero = Eero(state.get("eero"))
     uplinks, links, where = locate(polls, router_macs)
@@ -395,7 +395,10 @@ def describe(configured, state, info, router_macs, traffic=None, bridges=None):
             if not port.get("up"):
                 continue
             head = {"port": port.get("name") or i, "speed": speed_text(port.get("speed") or 0)}
-            if i == uplinks.get(sid):
+            if port.get("wan"):
+                body = [{"kind": "wan", "name": "WAN", "ip": "", "icon": "fa-solid fa-globe", "detail": "", "depth": 0, "id": ""}]
+                note = ""
+            elif i == uplinks.get(sid):
                 body = [{"kind": "uplink", "name": uplink_text or "Router", "ip": "", "icon": "", "detail": "", "depth": 0,
                          "id": parent or "", "switch": bool(parent)}]
                 note = ""

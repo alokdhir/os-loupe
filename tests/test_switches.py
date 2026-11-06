@@ -347,6 +347,17 @@ class TestDescribe(unittest.TestCase):
         self.assertIn("may be on its Wi-Fi or wired", rows[0]["port_note"])
         self.assertEqual(found[PC]["port"], "1")
 
+    def test_a_router_without_a_bridge_keeps_its_section_with_the_wan_and_the_downlink(self):
+        ports = {"bridges": [], "ports": {"ix0": {"name": "ix0", "up": True, "speed": 10000},
+                                          "ix1": {"name": "ix1", "up": True, "speed": 10000, "wan": True}},
+                 "fdb": {"ix0": [SW1, PC]}}
+        state = {"polls": {"a": tables(SW1, [("1", True, 1000, [ROUTER]), ("2", True, 1000, [PC])])}, "eero": {}}
+        out, found, _ = switches.describe(self.CONF[:1], state, self.INFO, [ROUTER], {}, ports)
+        rows = out[switches.ROUTER_ID]["rows"]
+        self.assertEqual([(r["port"], r["kind"], r["name"]) for r in rows], [("ix0", "switch", "SW-1"), ("ix1", "wan", "WAN")])
+        self.assertEqual(out["a"]["uplink"], "Router ix0")
+        self.assertEqual(found[PC]["switch"], "a")
+
     def bridged(self):
         return {"bridges": ["bridge0"], "ports": {"igc1": {"name": "igc1", "up": True, "speed": 2500},
                                                   "ix0": {"name": "ix0", "up": True, "speed": 10000},
@@ -367,11 +378,9 @@ class TestDescribe(unittest.TestCase):
         self.assertEqual(out["b"]["uplink"], "SW-1 0/3")     # a chain: the router's port lists both, and links to the first
         self.assertEqual(found[TV]["switch"], "b")
 
-    def test_the_router_is_not_shown_without_a_listed_switch_or_a_bridge(self):
+    def test_the_router_is_not_shown_without_a_listed_switch(self):
         out, _, _ = switches.describe([], {"polls": {}, "eero": {}}, {}, [ROUTER], {}, self.bridged())
         self.assertEqual(out, {})
-        out, _, _ = switches.describe(self.CONF[:1], self.state(), self.INFO, [ROUTER], {}, {"bridges": [], "ports": {}, "fdb": {}})
-        self.assertNotIn(switches.ROUTER_ID, out)
 
     def test_where_a_device_ties_the_switch_wins_over_the_router(self):
         state = {"polls": {"a": tables(SW1, [("1", True, 1000, [ROUTER]), ("2", True, 1000, [PC])])}, "eero": {}}

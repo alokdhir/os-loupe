@@ -553,7 +553,8 @@ POSSIBILITY OF SUCH DAMAGE.
                     set: '/api/loupe/settings/set_switch/',
                     add: '/api/loupe/settings/add_switch/',
                     del: '/api/loupe/settings/del_switch/',
-                    options: {formatters: {switchlast: formatters.switchlast, switchsetname: formatters.switchsetname}}
+                    options: {selection: false, multiSelect: false,
+                        formatters: {switchlast: formatters.switchlast, switchsetname: formatters.switchsetname}}
                 });
             },
             overrides: function () {
@@ -1285,7 +1286,7 @@ POSSIBILITY OF SUCH DAMAGE.
         </div>
         <div id="switch_elsewhere" class="loupe-switch" style="display: none">
             <div class="loupe-bar">
-                <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in this period, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On a port of the router outside a bridge, on Wi-Fi, or on a switch that isn\'t listed.') }}</small></h2>
+                <h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> {{ lang._('Seen in this period, on no port') }} <small class="text-muted"><span id="switch_elsewhere_count"></span> · {{ lang._('On Wi-Fi, on a switch that isn\'t listed, or no longer on the network.') }}</small></h2>
             </div>
             <table class="table table-condensed table-striped loupe-ports loupe-section-body">
                 <thead><tr><th></th><th></th><th>{{ lang._('Device') }}</th><th>{{ lang._('Address') }}</th><th>{{ lang._('Detail') }}</th><th>{{ lang._('Down') }}</th><th>{{ lang._('Up') }}</th></tr></thead>
@@ -1436,7 +1437,7 @@ POSSIBILITY OF SUCH DAMAGE.
             {{ partial('layout_partials/base_bootgrid_table', formGridOverrides) }}
         </div>
         <div id="page_switchmap" class="loupe-page">
-            <p class="loupe-bar">{{ lang._('Shows which device is on which port of your managed switches. Turn on SNMP (read-only, v2c) on each switch first. Some budget switches, such as Netgear Plus, don\'t have it.') }}</p>
+            <p class="loupe-bar">{{ lang._('Shows which device is on which port of your switches. This requires a managed switch with SNMP support.') }}</p>
             {{ partial('layout_partials/base_bootgrid_table', formGridSwitches) }}
         </div>
     </div>

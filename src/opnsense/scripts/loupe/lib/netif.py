@@ -31,6 +31,8 @@ import ipaddress
 import socket
 import struct
 
+from . import neighbours
+
 
 class _Ifaddrs(ctypes.Structure):
     pass
@@ -114,7 +116,7 @@ def link_macs():
     return out
 
 
-IFT_BRIDGE = 0xd1
+IFT_ETHER, IFT_BRIDGE = 0x06, 0xd1
 LINK_STATE_UP = 2
 SIOCGDRVSPEC = 0xc028697b       # _IOWR('i', 123, struct ifdrv): reading a bridge needs no privilege
 BRDGGIFS, BRDGRTS = 6, 7
@@ -123,7 +125,7 @@ IFBAREQ_SIZE = 40               # struct ifbareq
 
 
 def link_info():
-    """{interface: {bridge, up, mbit}} from getifaddrs: AF_LINK entries carry a sockaddr_dl and a struct if_data."""
+    """{interface: {ether, bridge, up, mbit}} from getifaddrs: AF_LINK entries carry a sockaddr_dl and a struct if_data."""
     global _libc
     if _libc is None:
         addresses(())
@@ -137,7 +139,7 @@ def link_info():
             ifa = p.contents
             if ifa.addr and ifa.data and ctypes.string_at(ifa.addr, 2)[1] == AF_LINK:
                 data = ctypes.string_at(ifa.data, 24)
-                out[ifa.name.decode()] = {"bridge": data[0] == IFT_BRIDGE,
+                out[ifa.name.decode()] = {"ether": data[0] == IFT_ETHER, "bridge": data[0] == IFT_BRIDGE,
                                           "up": data[4] == LINK_STATE_UP,
                                           "mbit": struct.unpack_from("=Q", data, 16)[0] // 1000000}
             p = ifa.next
@@ -186,22 +188,32 @@ def parse_bridge_addresses(raw):
     return out
 
 
-def bridge_ports():
-    """The router's bridges as ports: {"bridges": [names], "ports": {member: {name, up, speed in Mbit}},
-    "fdb": {member: [MACs]}}, with nothing in them on a router that has no bridge."""
+def router_ports():
+    """The router's own Ethernet ports: {"bridges": [names], "ports": {port: {name, up, speed in Mbit, wan}},
+    "fdb": {port: [MACs]}}. What is on a port comes from its bridge's table, or outside a bridge from the neighbour
+    table. The port of the default route is the WAN: what is beyond it isn't on the LAN."""
     info = link_info()
     out = {"bridges": sorted(n for n, i in info.items() if i["bridge"]), "ports": {}, "fdb": {}}
-    if not out["bridges"]:
-        return out
+    ports = {n: {"name": n, "up": i["up"], "speed": i["mbit"]} for n, i in info.items() if i["ether"]}
+    members = set()
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         for bridge in out["bridges"]:
             for member in parse_bridge_members(_bridge_list(sock, bridge, BRDGGIFS, IFBREQ_SIZE)):
+                members.add(member)
                 link = info.get(member, {})
-                out["ports"][member] = {"name": member, "up": bool(link.get("up")), "speed": link.get("mbit") or 0}
+                ports[member] = {"name": member, "up": bool(link.get("up")), "speed": link.get("mbit") or 0}
             for member, mac in parse_bridge_addresses(_bridge_list(sock, bridge, BRDGRTS, IFBAREQ_SIZE)):
-                if out["ports"].get(member, {}).get("up"):
+                if ports.get(member, {}).get("up"):
                     macs = out["fdb"].setdefault(member, [])
                     if mac not in macs:
                         macs.append(mac)
-    out["ports"] = dict(sorted(out["ports"].items()))       # the kernel lists the newest member first
+    index = neighbours.default_interface()
+    wan = socket.if_indextoname(index) if index else None
+    if wan in ports:
+        ports[wan]["wan"] = True
+    for index, macs in neighbours.by_interface().items():
+        name = socket.if_indextoname(index)
+        if name in ports and name not in members and name != wan and ports[name]["up"]:
+            out["fdb"][name] = macs
+    out["ports"] = dict(sorted(ports.items()))       # the kernel lists a bridge's newest member first
     return out

@@ -1066,10 +1066,17 @@ def switch_list():
     return (read_conf().get("switch_map") or {}).get("switches") or []
 
 
+def router_ports():
+    try:
+        return netif.router_ports()
+    except OSError:
+        return {}
+
+
 def switch_map(info, traffic=None):
     """(the switches as described, {MAC: where}, os-eero's view), from the last refresh: no switch is asked anything."""
     return switches.describe(switch_list(), switches.load_state(switch_state_path()), info, netif.link_macs(), traffic,
-                             netif.bridge_ports())
+                             router_ports())
 
 
 def cmd_switchrefresh(path, target):

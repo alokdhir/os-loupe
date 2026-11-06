@@ -33,7 +33,7 @@ import ctypes
 import socket
 import struct
 
-CTL_NET, PF_ROUTE, NET_RT_FLAGS, RTF_LLINFO = 4, 17, 2, 0x400
+CTL_NET, PF_ROUTE, NET_RT_DUMP, NET_RT_FLAGS, RTF_LLINFO = 4, 17, 1, 2, 0x400
 AF_LINK = 18
 RTA_DST, RTA_GATEWAY = 0x1, 0x2
 
@@ -73,9 +73,9 @@ def _sysctl(mib):
     raise OSError(ctypes.get_errno(), "sysctl")
 
 
-def parse(data):
-    """rt_msghdr records -> {ip: mac}."""
-    out, off = {}, 0
+def records(data):
+    """rt_msghdr records -> (interface index, ip, mac), either of those last two None if it hasn't one."""
+    off = 0
     while off + HDR <= len(data):
         msglen = struct.unpack_from("H", data, off)[0]
         if msglen == 0:
@@ -98,10 +98,18 @@ def parse(data):
                 if alen == 6:
                     mac = ":".join(f"{b:02x}" for b in data[p + 8 + nlen:p + 14 + nlen])
             p += (salen + ALIGN - 1) & ~(ALIGN - 1) if salen else ALIGN
-        if ip and mac:
-            out[ip] = mac
+        yield struct.unpack_from("H", data, off + 4)[0], ip, mac
         off += msglen
-    return out
+
+
+def parse(data):
+    """rt_msghdr records -> {ip: mac}."""
+    return {ip: mac for _, ip, mac in records(data) if ip and mac}
+
+
+def default_index(data):
+    """The interface the default route leaves by, from a route dump, or None."""
+    return next((index for index, ip, _ in records(data) if ip == "0.0.0.0"), None)
 
 
 def table():
@@ -110,3 +118,18 @@ def table():
     for family in (socket.AF_INET, socket.AF_INET6):
         out.update(parse(_sysctl([CTL_NET, PF_ROUTE, 0, family, NET_RT_FLAGS, RTF_LLINFO])))
     return out
+
+
+def by_interface():
+    """{interface index: [MACs]}: who the router has talked to directly, on each interface."""
+    out = {}
+    for family in (socket.AF_INET, socket.AF_INET6):
+        for index, _, mac in records(_sysctl([CTL_NET, PF_ROUTE, 0, family, NET_RT_FLAGS, RTF_LLINFO])):
+            if mac and mac not in out.setdefault(index, []):
+                out[index].append(mac)
+    return out
+
+
+def default_interface():
+    """The interface index of the IPv4 default route, or None."""
+    return default_index(_sysctl([CTL_NET, PF_ROUTE, 0, socket.AF_INET, NET_RT_DUMP, 0]))
