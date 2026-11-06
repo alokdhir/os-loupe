@@ -158,7 +158,25 @@ def save_state(path, state):
     os.replace(tmp, path)
 
 
-def refresh(path, configured, target, eero, polling=poll):
+def _router_poll(router):
+    return {"descr": ", ".join(router["bridges"]), "ports": router["ports"], "fdb": router["fdb"], "fetched": int(time.time())}
+
+
+def remember(memory, polls, router_macs, now):
+    """Update {MAC: {switch, port, seen}}, the port each device was last found on. A switch forgets a device that goes
+    quiet, so this is what says where it is until it talks again. Tables kept from a failed read don't overrule a newer
+    finding, and devices not found for REMEMBER_DAYS are dropped, as are those on switches no longer listed."""
+    _, _, where = locate(polls, router_macs)
+    out = {mac: m for mac, m in memory.items()
+           if m.get("switch") in polls and now - (m.get("seen") or 0) < REMEMBER_DAYS * 86400}
+    for mac, (sid, port) in where.items():
+        seen = polls[sid].get("fetched") or now
+        if seen >= out.get(mac, {}).get("seen", 0):
+            out[mac] = {"switch": sid, "port": port, "seen": seen}
+    return out
+
+
+def refresh(path, configured, target, eero, polling=poll, router_macs=(), router=None):
     """Read the enabled switches in `configured`, or only the one `target` names, and keep the results. A switch that
     fails keeps its last good tables, with why. Returns {id: error or None}."""
     wanted = [s for s in configured if s.get("enabled") and target in ("all", s["id"])]
@@ -176,7 +194,10 @@ def refresh(path, configured, target, eero, polling=poll):
             polls[sid] = {**kept, "error": result["error"], "tried": now}
         else:
             polls[sid] = {**result, "tried": now}
-    save_state(path, {"polls": polls, "eero": eero or {}})
+    listed = {s["id"]: polls[s["id"]] for s in configured if s.get("enabled") and s["id"] in polls}
+    if listed and router and router.get("ports"):
+        listed[ROUTER_ID] = _router_poll(router)    # last: where a device ties, a switch's port wins over the router's
+    save_state(path, {"polls": polls, "eero": eero or {}, "last_ports": remember(state.get("last_ports") or {}, listed, router_macs, now)})
     return {sid: r.get("error") for sid, r in results.items()}
 
 
@@ -338,6 +359,7 @@ def _port_devices(macs, eero, info, traffic):
 
 
 ROUTER_ID = "router"
+REMEMBER_DAYS = 30
 
 
 def display_name(switch, poll_result):
@@ -356,25 +378,34 @@ def _order(port_id):
     return int(port_id) if str(port_id).isdigit() else 0
 
 
-def describe(configured, state, info, router_macs, traffic=None, router=None):
+def describe(configured, state, info, router_macs, traffic=None, router=None, since=0):
     """The whole map, as the tab and device pages use it: {id: {id, name, address, model, fetched, tried, error, note,
     up, total, devices, uplink, uplink_id, rows, down, ignored}} for the enabled switches, in the settings' order, and
     {MAC: where} for each device on a port or Wi-Fi. `router`: its own ports (netif.router_ports), which count as one
-    more switch, the top of the tree, while any switch is listed."""
+    more switch, the top of the tree, while any switch is listed. A device no switch lists now shows on the port it was
+    last found on, marked `last_here`, if it has been seen since `since`."""
     traffic = traffic or {}
     enabled = [s for s in configured if s.get("enabled")]
     polls = {s["id"]: state.get("polls", {}).get(s["id"], {}) for s in enabled}
     if enabled and router and router.get("ports"):
         # last, so that where a device ties, a switch's port wins over the router's
         enabled.append({"id": ROUTER_ID, "name": "Router", "address": ""})
-        polls[ROUTER_ID] = {"descr": ", ".join(router["bridges"]), "ports": router["ports"], "fdb": router["fdb"],
-                            "fetched": int(time.time())}
+        polls[ROUTER_ID] = _router_poll(router)
     eero = Eero(state.get("eero"))
     uplinks, links, where = locate(polls, router_macs)
     on_port = {}
     for mac, place in where.items():
         on_port.setdefault(place, []).append(mac)
     names = {s["id"]: display_name(s, polls[s["id"]]) for s in enabled}
+    last_on = {}    # {(id, port): {MAC: when found there}}
+    for mac, m in (state.get("last_ports") or {}).items():
+        d = info.get(mac)
+        place = (m.get("switch"), m.get("port"))
+        if (d and (d.get("last_seen") or 0) >= since and mac not in where and mac not in eero.wifi
+                and not set(d.get("macs") or ()) & (set(where) | eero.wifi)
+                and place[0] in polls and place[1] in polls[place[0]].get("ports", {})
+                and place[1] != uplinks.get(place[0]) and place[1] not in links.get(place[0], {})):
+            last_on.setdefault(place, {})[mac] = m.get("seen") or 0
     out = {}
     found = {}
     for s in enabled:
@@ -392,9 +423,10 @@ def describe(configured, state, info, router_macs, traffic=None, router=None):
         devices = 0
         for i in sorted(ports, key=_order):
             port = ports[i]
-            if not port.get("up"):
+            remembered = last_on.get((sid, i), {})
+            if not port.get("up") and not remembered:
                 continue
-            head = {"port": port.get("name") or i, "speed": speed_text(port.get("speed") or 0)}
+            head = {"port": port.get("name") or i, "speed": speed_text(port.get("speed") or 0) if port.get("up") else "down"}
             if port.get("wan"):
                 body = [{"kind": "wan", "name": "WAN", "ip": "", "icon": "fa-solid fa-globe", "detail": "", "depth": 0, "id": ""}]
                 note = ""
@@ -409,12 +441,18 @@ def describe(configured, state, info, router_macs, traffic=None, router=None):
                          "id": other, "switch": True}]
                 note = ""
             else:
-                macs = on_port.get((sid, i), [])
+                macs = on_port.get((sid, i), []) + list(remembered)
                 body, note = _port_devices(macs, eero, info, traffic)
+                when = {_device_row(info, mac, {})["id"]: seen for mac, seen in remembered.items()}
+                for row in body:
+                    if row["kind"] == "device" and row["id"] in when:
+                        row["last_here"] = when[row["id"]]
                 devices += sum(1 for r in body if r["kind"] in ("device", "client"))
                 for mac in macs:
                     if mac not in eero.wifi:
                         found[mac] = {"switch": sid, "name": names[sid], "port": head["port"]}
+                        if mac in remembered:
+                            found[mac]["last_here"] = remembered[mac]
                 if not body:
                     body = [{"kind": "none", "name": "", "ip": "", "icon": "", "detail": "", "depth": 0, "id": ""}]
             for n, row in enumerate(body):

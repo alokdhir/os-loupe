@@ -387,6 +387,49 @@ class TestDescribe(unittest.TestCase):
         _, found, _ = switches.describe(self.CONF[:1], state, self.INFO, [ROUTER], {}, self.bridged())
         self.assertEqual(found[PC]["switch"], "a")
 
+    def quiet_tv(self, seen=1000, port_up=True, table=None):
+        state = {"polls": {"a": tables(SW1, [("1", True, 1000, [ROUTER]), ("2", port_up, 1000, table or [])])}, "eero": {},
+                 "last_ports": {TV: {"switch": "a", "port": "2", "seen": seen}}}
+        return state
+
+    def test_a_quiet_device_stays_on_its_last_port(self):
+        out, found, _ = switches.describe(self.CONF[:1], self.quiet_tv(), self.INFO, [ROUTER])
+        row = out["a"]["rows"][1]
+        self.assertEqual((row["port"], row["name"], row["last_here"]), ("2", "TV", 1000))
+        self.assertEqual(found[TV]["last_here"], 1000)
+        self.assertEqual(out["a"]["devices"], 1)
+
+    def test_a_port_that_is_down_shows_if_a_device_was_last_on_it(self):
+        out, _, _ = switches.describe(self.CONF[:1], self.quiet_tv(port_up=False), self.INFO, [ROUTER])
+        row = out["a"]["rows"][1]
+        self.assertEqual((row["port"], row["speed"], row["name"]), ("2", "down", "TV"))
+
+    def test_where_it_is_now_beats_where_it_was(self):
+        state = self.quiet_tv()
+        state["polls"]["a"]["ports"]["3"] = {"name": "3", "up": True, "speed": 1000}
+        state["polls"]["a"]["fdb"]["3"] = [TV]
+        out, found, _ = switches.describe(self.CONF[:1], state, self.INFO, [ROUTER])
+        self.assertEqual(found[TV]["port"], "3")
+        self.assertNotIn("last_here", found[TV])
+        self.assertEqual([(r["port"], r["kind"]) for r in out["a"]["rows"]], [("1", "uplink"), ("2", "none"), ("3", "device")])
+
+    def test_on_wifi_now_means_not_on_its_old_port(self):
+        state = self.quiet_tv()
+        state["eero"] = {"units": [], "clients": [{"mac": TV, "name": "TV", "unit": "x", "connected": True}]}
+        _, found, _ = switches.describe(self.CONF[:1], state, self.INFO, [ROUTER])
+        self.assertNotIn(TV, found)
+
+    def test_a_device_not_seen_in_the_period_is_not_shown(self):
+        _, found, _ = switches.describe(self.CONF[:1], self.quiet_tv(), self.INFO, [ROUTER], since=2000)
+        self.assertNotIn(TV, found)
+
+    def test_a_port_that_became_a_link_holds_no_remembered_devices(self):
+        state = self.quiet_tv()
+        state["polls"]["b"] = tables(SW2, [("TE1", True, 1000, [ROUTER, SW1])])
+        state["polls"]["a"]["fdb"]["2"] = [SW2]
+        _, found, _ = switches.describe(self.CONF[:2], state, self.INFO, [ROUTER])
+        self.assertNotIn(TV, found)
+
     def test_unknown_mac_shows_as_itself(self):
         state = {"polls": {"a": tables(SW1, [("1", True, 1000, [PHONE])])}, "eero": {}}
         out, _, _ = switches.describe(self.CONF[:1], state, {}, [ROUTER])
@@ -471,6 +514,33 @@ class TestRefresh(unittest.TestCase):
         with open(self.path, "w", encoding="utf-8") as f:
             f.write("{not json")
         self.assertEqual(switches.load_state(self.path)["polls"], {})
+
+
+class TestRemember(unittest.TestCase):
+    def polls(self, fetched=100):
+        return {"a": dict(tables(SW1, [("1", True, 1000, [ROUTER]), ("2", True, 1000, [PC])]), fetched=fetched)}
+
+    def test_a_device_found_is_remembered_and_stays_when_it_goes_quiet(self):
+        memory = switches.remember({}, self.polls(), [ROUTER], 100)
+        self.assertEqual(memory[PC], {"switch": "a", "port": "2", "seen": 100})
+        empty = {"a": tables(SW1, [("1", True, 1000, [ROUTER])])}
+        self.assertEqual(switches.remember(memory, empty, [ROUTER], 200)[PC]["port"], "2")
+
+    def test_tables_kept_from_a_failed_read_dont_overrule_a_newer_finding(self):
+        memory = {PC: {"switch": "a", "port": "9", "seen": 500}}
+        self.assertEqual(switches.remember(memory, self.polls(fetched=100), [ROUTER], 600)[PC]["port"], "9")
+
+    def test_old_finds_and_unlisted_switches_are_dropped(self):
+        now = 100 + switches.REMEMBER_DAYS * 86400
+        self.assertEqual(switches.remember({PC: {"switch": "a", "port": "2", "seen": 100}}, {"a": tables(SW1, [])}, [ROUTER], now), {})
+        self.assertEqual(switches.remember({PC: {"switch": "gone", "port": "2", "seen": 100}}, {"a": tables(SW1, [])}, [ROUTER], 200), {})
+
+    def test_refresh_keeps_them_in_the_state_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "s.json")
+            conf = [{"id": "a", "address": "192.0.2.1", "community": "public", "enabled": True}]
+            switches.refresh(path, conf, "all", {}, polling=lambda a, c: self.polls()["a"], router_macs=[ROUTER])
+            self.assertEqual(switches.load_state(path)["last_ports"][PC]["port"], "2")
 
 
 class TestNames(unittest.TestCase):

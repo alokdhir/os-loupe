@@ -1073,10 +1073,10 @@ def router_ports():
         return {}
 
 
-def switch_map(info, traffic=None):
+def switch_map(info, traffic=None, since=0):
     """(the switches as described, {MAC: where}, os-eero's view), from the last refresh: no switch is asked anything."""
     return switches.describe(switch_list(), switches.load_state(switch_state_path()), info, netif.link_macs(), traffic,
-                             router_ports())
+                             router_ports(), since)
 
 
 def cmd_switchrefresh(path, target):
@@ -1095,7 +1095,8 @@ def cmd_switchrefresh(path, target):
             os.unlink(path)
         except OSError:
             pass
-    return {"errors": switches.refresh(switch_state_path(), switch_list(), target, eero)}
+    return {"errors": switches.refresh(switch_state_path(), switch_list(), target, eero,
+                                       router_macs=netif.link_macs(), router=router_ports())}
 
 
 def public_switch(s):
@@ -1128,11 +1129,12 @@ def cmd_switches(hours):
         info = devices_info(db, ov)
     finally:
         db.close()
-    described, found, eero = switch_map(info, traffic)
+    since = time.time() - hours * 3600
+    described, found, eero = switch_map(info, traffic, since)
     shown = sorted_switches(described)
     read = any(s["fetched"] for s in shown if s["id"] != switches.ROUTER_ID)     # until a switch has been read, every device would count as elsewhere
     return {"switches": shown,
-            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), time.time() - hours * 3600, traffic) if read else []}
+            "elsewhere": switches.elsewhere(described, found, eero, info, netif.link_macs(), since, traffic) if read else []}
 
 
 def main(argv):

@@ -360,7 +360,7 @@ POSSIBILITY OF SUCH DAMAGE.
                     + ((d.macs || []).length > 1 ? ' <span title="{{ lang._('Loupe saw these MACs as one device') }}">('
                         + esc('{{ lang._('also') }} ' + d.macs.filter(m => m !== d.mac).join(', ')) + ')</span>' : '')
                     + ' ' + (data.networks || []).map(n => pill(n.id)).join('')
-                    + (d.switch_port ? '<br><a href="#switch=' + esc(d.switch_port.switch) + '">' + esc(d.switch_port.name + ' ' + d.switch_port.port) + '</a>'
+                    + (d.switch_port ? '<br>' + (d.switch_port.last_here ? '{{ lang._("Last on") }} ' : '') + '<a href="#switch=' + esc(d.switch_port.switch) + '">' + esc(d.switch_port.name + ' ' + d.switch_port.port) + '</a>'
                         + (d.switch_port.via ? ' {{ lang._("via") }} ' + esc(d.switch_port.via) : '') : '') + '</small>');
                 drawChart('loupe-chart', data);
             });
@@ -379,7 +379,8 @@ POSSIBILITY OF SUCH DAMAGE.
         }
         function deviceRow(r, port, speed) {
             const seen = r.down || r.up;
-            const what = [r.detail, r.port_note].filter(Boolean).map(esc).join(' · ');
+            const what = [r.detail, r.port_note, r.last_here ? '{{ lang._("Last here") }} ' + ago(r.last_here) : '']
+                .filter(Boolean).map(esc).join(' · ');
             return '<tr><td>' + esc(port) + '</td><td>' + esc(speed) + '</td><td>' + deviceCell(r) + '</td><td>' + esc(r.ip)
                 + '</td><td class="loupe-wrap">' + what + '</td><td>' + (seen ? byteFormat(r.down || 0, 1) : '') + '</td><td>' + (seen ? byteFormat(r.up || 0, 1) : '') + '</td></tr>';
         }
