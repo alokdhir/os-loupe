@@ -356,9 +356,7 @@ def _port_devices(macs, eero, info, traffic):
         rows.extend(_unit_rows(unit, eero, info, traffic))
     rows.extend(sorted(wired.values(), key=lambda r: r["name"].lower()))
     note = ""
-    if len(wired_units) > 1:
-        note = f"{len(wired_units)} eeros on this port: another switch"
-    elif ap and not units and len(wired) > 1:
+    if ap and not units and len(wired) > 1:
         note = f"Same port as {', '.join(sorted(ap))}: these may be on its Wi-Fi or wired"
     return rows, note
 
