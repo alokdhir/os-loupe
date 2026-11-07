@@ -292,17 +292,22 @@ def _plain(info, mac):
     return {"id": d.get("mac") or mac, "name": d.get("name") or d.get("ip") or mac, "ip": d.get("ip") or "",
             "icon": d.get("icon") or "", "type": d.get("type") or "",
             "model": "" if d.get("model_in_name") else d.get("model") or "", "area": d.get("area") or "",
-            "known": bool(d)}
+            "type_in_model": bool(d.get("type_in_model")), "known": bool(d)}
 
 
 def _detail(d):
-    return " · ".join(x for x in (d["type"], d["model"], d["area"]) if x)
+    # a model that already says the type stands alone
+    return " · ".join(x for x in ("" if d["model"] and d["type_in_model"] else d["type"], d["model"], d["area"]) if x)
 
 
 def _device_row(info, mac, traffic, kind="device", depth=0, note=""):
     d = _plain(info, mac)
     row = {"kind": kind, "name": d["name"], "ip": d["ip"], "icon": d["icon"], "detail": " · ".join(x for x in (_detail(d), note) if x),
            "depth": depth, "id": d["id"] if d["known"] else ""}
+    if d["known"]:      # what the pencil beside its name needs, as on the Devices tab
+        full = info[mac]
+        row.update(mac=d["id"], type=d["type"], custom=bool(full.get("custom")), type_source=full.get("type_source") or "",
+                   icon_set=full.get("icon_set") or "")
     used = traffic.get(d["id"]) or traffic.get(mac)
     if used:
         row["down"], row["up"] = used

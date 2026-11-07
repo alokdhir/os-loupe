@@ -426,7 +426,7 @@ SERIAL_NAME = re.compile(r"(?i)^[a-z][a-z0-9]*[-_ ][0-9a-f]{12,}$")
 # the legal form and other words a maker's registered name ends with ("Miele & Cie. KG", "Sub-Zero Group, Inc.")
 COMPANY_WORDS = {"inc", "corp", "corporation", "co", "ltd", "limited", "llc", "gmbh", "kg", "ag", "sa", "bv", "nv",
                  "plc", "srl", "spa", "oy", "ab", "as", "group", "holdings", "technologies", "technology",
-                 "electronics", "international", "company"}
+                 "electronics", "international", "company", "systems"}
 
 
 def short_maker(vendor):
@@ -442,11 +442,24 @@ def is_name(name):
     return bool(name) and name.lower() not in PLACEHOLDERS and not ID_NAME.match(name) and not SERIAL_NAME.match(name)
 
 
-def name_with_model(name, vendor, model):
-    """(name, named after the model?): a device whose name is only an ID or a maker plus a serial is named after its
-    model ("Miele Combi-Steam Oven XXL"), with the maker in front unless the model starts with it. A placeholder
-    ("iPhone") gives way only to a readable model, not a code (Mac16,1)."""
-    if not model or is_name(name) or (name and name.lower() in PLACEHOLDERS and " " not in model):
+def model_codes(info, fallback=None):
+    """The model identifiers a device goes by: what it announces in Bonjour TXT ("md=EP25") and a rule's model."""
+    codes = [m.partition("=")[2] or m for m in (info or {}).get("mdns_models", [])]
+    return [c.strip().lower() for c in codes + ([fallback] if fallback else [])]
+
+
+def type_in_model(type_, model):
+    """Whether a model already says the type, as whole words ("HomePod" in "HomePod mini", not "Mac" in "MacBook"):
+    the reports then show only the model."""
+    return bool(type_ and model and re.search(rf"(?<!\w){re.escape(type_)}(?!\w)", model, re.I))
+
+
+def name_with_model(name, vendor, model, codes=()):
+    """(name, named after the model?): a device whose name is only an ID, a maker plus a serial or its own model code
+    (`codes`, from model_codes) is named after its model ("Miele Combi-Steam Oven XXL"), with the maker in front unless
+    the model starts with it. A placeholder ("iPhone") gives way only to a readable model, not a code (Mac16,1)."""
+    own_code = bool(name) and name.strip().lower() in codes
+    if not model or (is_name(name) and not own_code) or (name and name.lower() in PLACEHOLDERS and " " not in model):
         return name, False
     maker = short_maker(vendor)
     return (model if not maker or model.lower().startswith(maker.lower()) else f"{maker} {model}"), True

@@ -33,7 +33,7 @@ POSSIBILITY OF SUCH DAMAGE.
     /* the AI Rule Generator's confidence pills: small, beside their label */
     .loupe-pill { font-size: 75%; font-weight: 600; padding: 1px 6px; border-radius: 8px; vertical-align: 1px; }
     .loupe-edit { color: #999; cursor: pointer; visibility: hidden; padding-left: 8px; }
-    .tabulator-cell:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit { visibility: visible; }
+    .tabulator-cell:hover .loupe-edit, #loupe-detail-title:hover .loupe-edit, .loupe-ports td:hover .loupe-edit, .loupe-switch h2:hover .loupe-edit { visibility: visible; }
     @media (hover: none) { .loupe-edit { visibility: visible; } }
     .loupe-edit:hover { color: #337ab7; }
     .loupe-copy { display: block; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
@@ -80,6 +80,8 @@ POSSIBILITY OF SUCH DAMAGE.
         const nameTitle = d => d.name_source === 'home assistant'
             ? ' title="' + esc('{{ lang._("Name from Home Assistant") }}' + (d.area ? ' · ' + d.area : '')) + '"' : '';
         const modelShown = d => d.model_in_name ? '' : (d.model || '');
+        /* a device's type, unless the model shown beside it already says it ("HomePod mini") */
+        const typeShown = d => d.type_in_model && modelShown(d) ? '' : (d.type || '');
         /* Settings > General: how the Home Assistant link is doing (loupd fetches names every 10 minutes) */
         function hassStatus() {
             const $s = $('#hass-status');
@@ -107,6 +109,10 @@ POSSIBILITY OF SUCH DAMAGE.
                 + '" data-name="' + esc(r.custom && r.name !== r.ip ? r.name : '') + '" data-type="' + esc(r.type_source === 'set by you' ? r.type : '') + '" data-ic="' + esc(r.icon_set || '')
                 + '" data-shown-name="' + esc(r.name !== r.ip ? r.name || '' : '') + '" data-shown-type="' + esc(r.type || '') + '" data-shown-ic="' + esc(r.icon || '')
                 + '" data-source="' + esc(r.type_source || '') + '"></i>';
+        }
+
+        function switchEditButton(id) {     /* a listed switch: the router has no settings to edit */
+            return /^[0-9a-f-]{36}$/i.test(id || '') ? '<i class="fa fa-pencil loupe-edit" title="{{ lang._("Edit switch") }}" data-switch="' + esc(id) + '"></i>' : '';
         }
 
         /* click a cell to copy its value (the cursor says so); it flashes green when copied */
@@ -138,12 +144,12 @@ POSSIBILITY OF SUCH DAMAGE.
             device: function (column, row) {
                 return '<a href="#device=' + esc(row.id) + '"' + nameTitle(row) + '>' + esc(row.name) + '</a>' + editButton(row);
             },
-            devtype: function (column, row) {           /* the type, its model (when known) after it */
-                const model = modelShown(row);
-                if (!row.type && !model) return dash + editButton(row);
+            devtype: function (column, row) {           /* the type, its model (when known) after it; or the model alone */
+                const model = modelShown(row), type = typeShown(row);
+                if (!type && !model) return dash + editButton(row);
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
-                    + '<span title="' + esc(row.type_source || '') + '">' + esc(row.type || '') + '</span>'
-                    + (model ? ' <span class="text-muted">' + esc(model) + '</span>' : '') + editButton(row);
+                    + '<span title="' + esc(row.type_source || '') + '">' + esc(type || model) + '</span>'
+                    + (type && model ? ' <span class="text-muted">' + esc(model) + '</span>' : '') + editButton(row);
             },
             vendor: function (column, row) {
                 if (!row.vendor_note) return esc(row.vendor);
@@ -359,7 +365,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 deviceColumns($(DEVICE_GRIDS));
                 $('#loupe-detail-title').html((d.icon ? '<i class="' + esc(d.icon) + ' fa-fw text-muted"></i> ' : '')
                     + esc(d.name || d.ip || id) + editButton(d)
-                    + ' <small class="text-muted">' + esc([d.area, modelShown(d), d.type, d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
+                    + ' <small class="text-muted">' + esc([d.area, modelShown(d), typeShown(d), d.vendor, d.fqdn, d.ip, d.mac].filter(Boolean).join(' · '))
                     /* one device seen with several MACs (a bridge and its NIC, wired and Wi-Fi): the others too */
                     + ((d.macs || []).length > 1 ? ' <span title="{{ lang._('Loupe saw these MACs as one device') }}">('
                         + esc('{{ lang._('also') }} ' + d.macs.filter(m => m !== d.mac).join(', ')) + ')</span>' : '')
@@ -388,7 +394,7 @@ POSSIBILITY OF SUCH DAMAGE.
             return '<span style="padding-left: ' + (r.depth || 0) * 20 + 'px">'
                 + (unit ? '<i class="fa-regular ' + (closedUnits.has(unit) ? 'fa-square-plus' : 'fa-square-minus')
                     + ' fa-fw loupe-unit-toggle" style="cursor: pointer" data-unit="' + esc(unit) + '"></i> ' : '')
-                + (r.icon ? '<i class="' + esc(r.icon) + ' fa-fw text-muted"></i> ' : '') + name + '</span>';
+                + (r.icon ? '<i class="' + esc(r.icon) + ' fa-fw text-muted"></i> ' : '') + name + (r.switch ? switchEditButton(r.id) : editButton(r)) + '</span>';
         }
         function deviceRow(r, port, speed, unit) {
             const seen = r.down || r.up;
@@ -466,7 +472,7 @@ POSSIBILITY OF SUCH DAMAGE.
             if (s.ignored) foot.push('{{ lang._("Ignored %s MACs listed on ports that are down.") }}'.replace('%s', s.ignored));
             const problem = s.error || s.note;
             return '<div id="switch_' + esc(s.id) + '" class="loupe-switch"><div class="loupe-bar">'
-                + '<h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> ' + esc(s.name)
+                + '<h2 class="loupe-detail-title"><i class="fa-regular fa-square-minus fa-fw loupe-toggle"></i> ' + esc(s.name) + switchEditButton(s.id)
                 + (s.total ? ' <span class="text-muted">· ' + portCount(s.total) + '</span>' : '') + ' <small class="text-muted">' + said + '</small></h2></div>'
                 + (problem ? '<p class="loupe-bar text-danger">' + esc(problem) + '</p>' : '')
                 + '<div class="loupe-section-body">'
@@ -539,7 +545,7 @@ POSSIBILITY OF SUCH DAMAGE.
             }
         });
         $('#tab_switches').on('click', '.loupe-switch h2', function (e) {
-            if ($(e.target).closest('a').length || String(window.getSelection())) return;   /* a link, or copying an address */
+            if ($(e.target).closest('a, .loupe-edit').length || String(window.getSelection())) return;   /* a link, the pencil, or copying an address */
             const $section = $(this).closest('.loupe-switch');
             sectionOpen($section, $section.find('.loupe-toggle').hasClass('fa-square-plus'), true);
         });
@@ -835,7 +841,7 @@ POSSIBILITY OF SUCH DAMAGE.
         });
 
         /* the pencil opens the same standard dialog as the Overrides grid, saved per MAC */
-        $(document).on('click', '.loupe-edit', function (e) {
+        $(document).on('click', '.loupe-edit[data-mac]', function (e) {
             e.preventDefault();
             e.stopPropagation();
             const $b = $(this);
@@ -892,6 +898,26 @@ POSSIBILITY OF SUCH DAMAGE.
                         handleFormValidation('frm_' + dialog, data.validations);
                     }
                 });
+            });
+        });
+        /* a switch's pencil on the map: the same dialog and calls as the Switches grid in Settings */
+        const switchDialog = '{{ formGridSwitches['edit_dialog_id'] }}';
+        $(document).on('click', '.loupe-edit[data-switch]', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = String($(this).data('switch'));
+            clearFormValidation('frm_' + switchDialog);
+            mapDataToFormUI({['frm_' + switchDialog]: '/api/loupe/settings/get_switch/' + id}).done(function () {
+                $('#' + switchDialog).modal({backdrop: 'static', keyboard: false});
+            });
+            const $save = $('#btn_' + switchDialog + '_save').unbind('click').click(function () {
+                const $spin = $save.find('i').addClass('fa fa-spinner fa-pulse');     /* saving reads the switch */
+                saveFormToEndpoint('/api/loupe/settings/set_switch/' + id, 'frm_' + switchDialog, function () {
+                    $spin.removeClass('fa fa-spinner fa-pulse');
+                    $('#' + switchDialog).modal('hide');
+                    if (started.switchmap) $('#{{ formGridSwitches['table_id'] }}').bootgrid('reload');
+                    if (currentTab === 'switches') showSwitches('');
+                }, true, function () { $spin.removeClass('fa fa-spinner fa-pulse'); });
             });
         });
         $('#' + dialog).on('shown.bs.modal', function () { $('#device\\.name').focus().select(); })

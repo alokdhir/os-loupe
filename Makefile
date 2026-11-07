@@ -1,6 +1,6 @@
 PLUGIN_NAME=		loupe
 PLUGIN_VERSION=		1.3
-PLUGIN_REVISION=	6
+PLUGIN_REVISION=	7
 PLUGIN_COMMENT=		Per-device traffic: which device talked to which site, how much, when
 PLUGIN_MAINTAINER=	alok@dhir.net
 PLUGIN_WWW=		https://github.com/alokdhir/os-loupe

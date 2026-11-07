@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS devices (
     type TEXT,
     type_source TEXT,
     model TEXT,                       -- e.g. "MacBook Air 15″ (M3)" when the device announces it
-    name_source TEXT,                 -- "model": named after its model (it calls itself only by an ID or a serial);
+    name_source TEXT,                 -- "model": named after its model (it calls itself only by an ID, a serial or its model code);
                                       -- "home assistant": the name it has there
     area TEXT,                        -- its area (room) in Home Assistant
     info TEXT NOT NULL DEFAULT '{}',  -- JSON: dhcp, mdns, ... clues for device identification

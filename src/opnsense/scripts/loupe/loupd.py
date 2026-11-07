@@ -295,8 +295,9 @@ class Loupe:
             t, src, ven, rule_model = devid.classify(mac, name or hostname, {**info, "dhcp_hostname": hostname}, seen, self.oui)
             known[mac]["type"] = t
             model = devid.model(info, fallback=rule_model)
-            # a device that only calls itself by an ID or a serial is named after its model
-            shown, by_model = devid.name_with_model(devid.display_name(name, hostname, devid.mdns_name(info)), ven, model)
+            # a device that only calls itself by an ID, a serial or its model code is named after its model
+            shown, by_model = devid.name_with_model(devid.display_name(name, hostname, devid.mdns_name(info)), ven, model,
+                                                    devid.model_codes(info, rule_model))
             # Home Assistant's name for it (the user's, in its device registry) wins over any the device sent
             ha = self.hass.get(mac) if self.hass else None
             source = "home assistant" if ha else ("model" if by_model else None)

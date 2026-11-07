@@ -226,6 +226,7 @@ def merge_group(devs):
     return {**main, "name": named["name"],
             **{k: typed[k] for k in ("type", "type_source", "vendor", "vendor_note", "icon", "icon_set", "model")},
             "model_in_name": named.get("model_in_name", False) and named["model"] == typed["model"],
+            "type_in_model": typed.get("type_in_model", False),
             "name_source": named.get("name_source", ""), "area": named.get("area", ""),
             "first_seen": min(d["first_seen"] or 0 for d in devs), "custom": any(d["custom"] for d in devs),
             "macs": [d["mac"] for d in devs]}
@@ -255,6 +256,7 @@ def devices_info(db, overrides, macs=None):
                     "model": model or "",
                     # named after its model by loupd (not by you): the Type column needn't repeat the model
                     "model_in_name": not o.get("name") and name_src == "model",
+                    "type_in_model": devid.type_in_model(o.get("type") or dtype, model),
                     # where the name comes from when it isn't yours: Home Assistant, the model, else the device
                     "name_source": "" if o.get("name") else (name_src or ""), "area": area or "",
                     "type": o.get("type") or dtype or "", "type_source": "set by you" if o.get("type") else (src or ""),
@@ -265,7 +267,7 @@ def devices_info(db, overrides, macs=None):
         out.setdefault(mac, {"mac": mac, "ip": "", "name": o.get("name") or "", "vendor": "", "vendor_note": "",
                              "icon": icon_for(o, o.get("type"), picked), "icon_set": o.get("icon") or "",
                              "type": o.get("type") or "",
-                             "type_source": "set by you" if o.get("type") else "", "model": "", "model_in_name": False,
+                             "type_source": "set by you" if o.get("type") else "", "model": "", "model_in_name": False, "type_in_model": False,
                              "name_source": "", "area": "",
                              "first_seen": 0, "last_seen": 0,
                              "custom": True})
@@ -327,7 +329,7 @@ def cmd_devices(hours, want=None):
         on[key].add(net)
         r = rows.get(key)
         if r is None:
-            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model", "model_in_name", "name_source", "area")},
+            r = rows[key] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model", "model_in_name", "type_in_model", "name_source", "area")},
                              "custom": d.get("custom", False),
                              "mac": d.get("mac") or mac, "ip": ip, "down": 0, "up": 0, "conns": 0, "last": 0}
         r["down"] += down
@@ -350,7 +352,7 @@ def cmd_devices(hours, want=None):
         if want and net not in want:
             continue
         on[mac].add(net)
-        rows[mac] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model", "model_in_name", "name_source", "area")},
+        rows[mac] = {**{k: d.get(k, "") for k in ("name", "vendor", "vendor_note", "icon", "icon_set", "type", "type_source", "model", "model_in_name", "type_in_model", "name_source", "area")},
                      "custom": d.get("custom", False), "mac": mac, "ip": d["ip"], "down": 0, "up": 0, "conns": 0, "last": 0}
     for key, r in rows.items():
         r["top"] = [s for s, _ in tops[key].most_common(3)]     # "Other" too: an unnamed stream can be the biggest

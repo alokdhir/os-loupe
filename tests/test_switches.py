@@ -338,6 +338,22 @@ class TestDescribe(unittest.TestCase):
                                         {"name": "den", "ip": "192.0.2.15", "backhaul": "Wireless via loft (5 GHz)"}], "clients": []})
         self.assertEqual(sorted(u["name"] for u in eero.under({"name": "loft"})), ["attic", "den"])
 
+    def test_detail_leaves_out_a_type_the_model_says(self):
+        mac = "02:00:00:00:00:01"
+        detail = lambda **d: switches._device_row({mac: {"mac": mac, "name": "x", **d}}, mac, {})["detail"]   # noqa: E731
+        self.assertEqual(detail(type="Hub", model="Acme Hub 2", type_in_model=True), "Acme Hub 2")
+        self.assertEqual(detail(type="Hub", model="Acme Box"), "Hub · Acme Box")
+        # named after the model, which is then hidden: the type stays
+        self.assertEqual(detail(type="Hub", model="Acme Hub 2", type_in_model=True, model_in_name=True), "Hub")
+
+    def test_a_known_device_can_be_renamed_from_its_row(self):
+        info = {"02:00:00:00:00:01": {"mac": "02:00:00:00:00:01", "name": "Lamp", "type": "Smart plug", "custom": True,
+                                      "type_source": "hostname", "icon_set": "fa-solid fa-plug"}}
+        row = switches._device_row(info, "02:00:00:00:00:01", {})
+        self.assertEqual((row["mac"], row["custom"], row["type"], row["type_source"], row["icon_set"]),
+                         ("02:00:00:00:00:01", True, "Smart plug", "hostname", "fa-solid fa-plug"))
+        self.assertNotIn("mac", switches._device_row({}, "02:00:00:00:00:02", {}))     # no record: no pencil
+
     def test_a_port_with_nothing_known_still_has_a_row(self):
         state = {"polls": {"a": tables(SW1, [("1", True, 1000, [])])}, "eero": {}}
         out, _, _ = switches.describe(self.CONF[:1], state, {}, [ROUTER])

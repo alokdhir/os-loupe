@@ -449,6 +449,7 @@ class TestModelAndName(unittest.TestCase):
         self.assertEqual(devid.short_maker("Acme & Cie. KG"), "Acme")
         self.assertEqual(devid.short_maker("Acme Group, Inc."), "Acme")
         self.assertEqual(devid.short_maker("Acme Electronics Co.,Ltd"), "Acme")
+        self.assertEqual(devid.short_maker("Acme-Link Systems Inc"), "Acme-Link")
         self.assertEqual(devid.short_maker("Texas Acme"), "Texas Acme")
         self.assertEqual(named("Acme-0011223344556677", "Acme & Cie. KG", "Steam Oven XL"), "Acme Steam Oven XL")
         self.assertEqual(named("0005CD000001", "Acme Inc.", "AV-100"), "Acme AV-100")
@@ -458,6 +459,27 @@ class TestModelAndName(unittest.TestCase):
         self.assertEqual(named("Acme-0011223344556677", "Acme Inc.", None), "Acme-0011223344556677")
         self.assertEqual(named("iPhone", None, "iPhone 15 Pro"), "iPhone 15 Pro")      # a placeholder: a readable model
         self.assertEqual(named("Mac", None, "Mac16,1"), "Mac")                           # not a code
+
+    def test_type_in_model(self):
+        """Whole words, either case: the model alone then says what the device is."""
+        self.assertTrue(devid.type_in_model("HomePod", "HomePod mini"))
+        self.assertTrue(devid.type_in_model("Smart plug", "Acme Smart Plug"))
+        self.assertTrue(devid.type_in_model("TV", "Acme Roku TV (G138X)"))
+        self.assertFalse(devid.type_in_model("Mac", "MacBook Air (M1, 2020)"))
+        self.assertFalse(devid.type_in_model("Mac", "Mac16,1"))
+        self.assertFalse(devid.type_in_model("TV", "Acme Box"))
+        self.assertFalse(devid.type_in_model("", "Acme Box"))
+        self.assertFalse(devid.type_in_model("TV", ""))
+
+    def test_named_after_model_for_own_code(self):
+        """A device whose name is only the model code it announces is named after its model; another name stays."""
+        codes = devid.model_codes({"mdns_models": ["md=AB12"]})
+        self.assertEqual(devid.name_with_model("AB12", "Acme Inc.", "Acme Smart Plug", codes), ("Acme Smart Plug", True))
+        self.assertEqual(devid.name_with_model("ab12", "Acme Inc.", "Smart Plug", codes), ("Acme Smart Plug", True))
+        self.assertEqual(devid.name_with_model("AB12", "Acme Inc.", "AB12", codes), ("Acme AB12", True))  # no name for the code yet
+        self.assertEqual(devid.name_with_model("office-plug", "Acme Inc.", "Smart Plug", codes), ("office-plug", False))
+        self.assertEqual(devid.name_with_model("AB12", "Acme Inc.", "Smart Plug"), ("AB12", False))     # not its code
+        self.assertEqual(devid.model_codes({}, "CD34"), ["cd34"])                                        # a rule's model
 
     def test_announced_model(self):
         model = lambda *m: devid.model({"mdns_models": list(m)})       # noqa: E731
