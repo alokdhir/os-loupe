@@ -153,6 +153,39 @@ class TestSharedServer(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_carried_from_an_earlier_day(self):
+        """A connection named on one day and nameless on the next (open across midnight, or its name lost) keeps the
+        service, for CARRY_DAYS; a day that named it a service of its own decides that day."""
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "loupe.db")
+            s = store.Store(path)
+            mac, ip = "02:00:00:00:00:40", "10.9.1.40"
+            day1 = report.local_day(int(time.time()) - 20 * 86400)
+            day2, later = report.next_day(day1), report.local_day(day1 + (report.CARRY_DAYS + 3) * 86400 + 3600)
+            day3 = report.next_day(day2)
+            s.write({(day1 + 3600, ip, "203.0.113.10", 443, "tcp", "api.nfl.com"): [mac, "sni", 0, 1, 2, 1, 1],
+                     (day2 + 3600, ip, "203.0.113.10", 443, "tcp", ""): [mac, "", 0, 1, 900, 1, 0],
+                     (day3 + 3600, ip, "203.0.113.10", 443, "tcp", "www.hulu.com"): [mac, "sni", 0, 1, 2, 1, 1],
+                     (day3 + 7200, ip, "203.0.113.10", 443, "tcp", ""): [mac, "", 0, 1, 5, 1, 0],
+                     (later + 3600, ip, "203.0.113.10", 443, "tcp", ""): [mac, "", 0, 1, 5, 1, 0]}, {}, {})
+            svc = services.ServiceMap()
+            for day in (day1, day2, day3, later):           # oldest first, as loupd builds them once
+                daily, hourly, lab, sites = report.build_day(s.db, svc, day)
+                s.replace_day(day, report.next_day(day), daily, hourly, lab.evidence(), "fp", time.time(), sites)
+            s.close()
+            db = sqlite3.connect(path)
+            try:
+                services_of = lambda day: {r[0]: r[1] for r in db.execute(          # noqa: E731
+                    "SELECT service, inferred FROM sites_1d WHERE day = ?", (day,))}
+                self.assertEqual(services_of(day2), {"NFL": 1})                     # (same server)
+                self.assertEqual(set(services_of(day3)), {"Hulu"})                  # its own day's name wins
+                self.assertEqual(set(services_of(later)), {""})                     # too long ago
+                stored = report.Labels.from_evidence(svc, db.execute(
+                    "SELECT kind, ip, server, value FROM day_names WHERE day = ?", (day2,)))
+                self.assertEqual(stored.service(ip, "", "203.0.113.10", 443, "tcp"), "NFL")
+            finally:
+                db.close()
+
 
 class TestTrafficTree(unittest.TestCase):
     def test_services_with_their_sites(self):

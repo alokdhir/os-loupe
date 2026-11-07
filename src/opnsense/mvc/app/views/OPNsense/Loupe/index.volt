@@ -98,8 +98,6 @@ POSSIBILITY OF SUCH DAMAGE.
         }
         const ago = ts => ts ? moment(ts * 1000).fromNow() : '';
         const dash = '<span class="text-muted">&mdash;</span>';
-        /* named from the same device's other traffic to the same server (query.py Labels) */
-        const inferred = r => r.inferred ? ' <span class="text-muted" title="{{ lang._("Named from other traffic between this device and the same server") }}">({{ lang._("same server") }})</span>' : '';
         const dialog = '{{ formGridOverrides['edit_dialog_id'] }}';
 
         function editButton(r) {        /* on hover, beside a device's name and its type */
@@ -164,7 +162,7 @@ POSSIBILITY OF SUCH DAMAGE.
                         : '<a href="#q=' + encodeURIComponent(plainText(row.service)) + '">' + esc(row.service) + '</a>';
                 }
                 return '<a href="#q=' + encodeURIComponent(plainText(row.label)) + '" title="' + esc(row.servers.join(', ')) + '">'
-                    + esc(row.label) + '</a>' + inferred(row)
+                    + esc(row.label) + '</a>'
                     + ((row.ports || []).length ? ' <span class="text-muted">' + row.ports.map(esc).join(', ') + '</span>' : '');
             },
             pct: function (column, row) {             /* the number, on a bar as long as its share */
@@ -179,7 +177,7 @@ POSSIBILITY OF SUCH DAMAGE.
                 if (!row.device) {          /* a site, under its device: as a device's page lists them (searches it; addresses on hover) */
                     const site = row.name || (row.servers || []).join(', ');
                     return '<a href="#q=' + encodeURIComponent(plainText(site)) + '" title="' + esc((row.servers || []).join(', ')) + '">'
-                        + esc(site) + '</a>' + inferred(row);
+                        + esc(site) + '</a>';
                 }
                 return (row.icon ? '<i class="' + esc(row.icon) + ' fa-fw text-muted"></i> ' : '<i class="fa fa-fw"></i> ')
                     + '<a href="#device=' + esc(row.mac || row.ip) + '">' + esc(row.device) + '</a>'

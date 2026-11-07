@@ -99,6 +99,19 @@ class Names:
         self.conn[st.key] = got
         return got
 
+    def saved(self, states):
+        """The named connections still open in `states` ({key: pfstate.State}), as JSON-ready rows for restore():
+        a restart must not take the name of a connection opened before it (its hello doesn't come again)."""
+        return [[*st.key, st.proto, st.local, st.lport, st.remote, st.rport, *got]
+                for key, got in self.conn.items() if got[0] and (st := states.get(key))]
+
+    def restore(self, rows, states):
+        """Names from saved() for the states that are still those connections (pf reuses ids after it restarts)."""
+        for sid, creator, proto, local, lport, remote, rport, name, source in rows:
+            st = states.get((sid, creator))
+            if st and (st.proto, st.local, st.lport, st.remote, st.rport) == (proto, local, lport, remote, rport):
+                self.conn[st.key] = (name, source)
+
     def expire(self, live_keys, now=None):
         now = now or time.time()
         self.conn = {k: v for k, v in self.conn.items() if k in live_keys}

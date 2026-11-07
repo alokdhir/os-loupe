@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS services_1h (
 CREATE TABLE IF NOT EXISTS day_names (
     day INTEGER NOT NULL,
     kind TEXT NOT NULL,             -- owner: a service named on this server | tunnel: its VPN | provider: the VPN app
+                                    -- carried: an owner from an earlier day (none on this one)
     ip TEXT NOT NULL,               -- the device's address (provider: its MAC, or address without one)
     server TEXT NOT NULL,
     value TEXT NOT NULL,
@@ -333,6 +334,16 @@ class Store:
     def active_days(self, mac):
         """The days a MAC had traffic (the daily site summary, by its mac index)."""
         return {d for (d,) in self.db.execute("SELECT DISTINCT day FROM sites_1d WHERE mac = ?", (mac,))}
+
+    def save_conn_names(self, rows):
+        """Names.saved() rows, kept over a restart."""
+        self.db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('conn_names', ?)", (json.dumps(rows),))
+
+    def take_conn_names(self):
+        """The rows save_conn_names() kept, once: a later start (after a crash) mustn't use them again."""
+        row = self.db.execute("SELECT value FROM meta WHERE key = 'conn_names'").fetchone()
+        self.db.execute("DELETE FROM meta WHERE key = 'conn_names'")
+        return json.loads(row[0]) if row else []
 
     def forget_devices(self, macs):
         """Remove devices (the router's own MACs, recorded before loupd skipped them)."""

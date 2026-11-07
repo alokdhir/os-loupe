@@ -38,8 +38,9 @@ import time
 
 from .services import DATA_JSON, HOSTING
 
-SUMMARY_VERSION = 5     # raise when the naming or what the summaries hold changes, so loupd builds them again
+SUMMARY_VERSION = 6     # raise when the naming or what the summaries hold changes, so loupd builds them again
 HOURLY_DAYS = 3         # days kept in the hourly summary (report periods up to 48 hours)
+CARRY_DAYS = 7          # nameless traffic takes the service the device's traffic to the same server had this many days back
 SETTLE = 120            # seconds until loupd has written a minute's traffic (it writes once a minute)
 WEB_PORTS = {"tcp/443", "udp/443", "tcp/80"}      # a site's ports are kept and shown when they aren't these
 
@@ -80,6 +81,23 @@ def pieces(start, end):
         d = n
 
 
+def carried(db, day, pairs):
+    """{(ip, server): service} for `pairs` from the CARRY_DAYS days before `day`: the latest day with named traffic
+    between them, when that named one service."""
+    if not pairs:
+        return {}
+    found = {}
+    ips = json.dumps(sorted({ip for ip, _ in pairs}))
+    for d, ip, server, s in db.execute("SELECT day, ip, server, value FROM day_names WHERE day >= ? AND day < ? "
+                                       "AND ip IN (SELECT value FROM json_each(?)) AND kind = 'owner' ORDER BY day DESC",
+                                       (local_day(day - CARRY_DAYS * 86400 + 3600), day, ips)):
+        if (ip, server) in pairs:
+            got = found.setdefault((ip, server), (d, set()))
+            if got[0] == d:
+                got[1].add(s)
+    return {k: next(iter(v)) for k, (_d, v) in found.items() if len(v) == 1}
+
+
 class Labels:
     """Service names from a set of evidence, with VPN tunnels told apart.
 
@@ -89,6 +107,8 @@ class Labels:
     Traffic with no service, or one that only names the hosting company (Fastly CDN), takes the service of the
     other traffic between the same device and server, if that is exactly one service: a stream from a video
     vendor's domain on the servers the NFL app's own names used is NFL. `inferred()` tells such rows apart.
+    When the day has no named traffic between them, the most recent of the CARRY_DAYS days before that had some
+    decides (a connection opened, and named, on an earlier day; or one whose name loupd lost).
 
     Built from a window's traffic (the constructor), or from a day's stored evidence (`from_evidence`).
     """
@@ -129,6 +149,10 @@ class Labels:
             vpn_ports = set(vpn_ports)
             tunnels = {(f[0], f[3], f[5], f[4]) for f in flows if not f[2] and (f[5], f[4]) in vpn_ports}
             named = {(f[0], f[3], f[2]) for f in flows if f[2]}
+            pairs = {(f[0], f[3]) for f in flows}
+        if flows is None:
+            pairs = db.execute(f"SELECT DISTINCT ip, server FROM {table} WHERE bucket >= ? AND bucket < ?{mine}",
+                               (start, end, *args))
         for ip, server, proto, port in sorted(tunnels):      # same answer every run if a server has two
             self.tunnels[(ip, server)] = svc.ports[(proto, port)]
         self.owners = collections.defaultdict(set)
@@ -136,6 +160,7 @@ class Labels:
             s = svc.by_my_address(server) or svc.by_name(name)
             if s and s not in HOSTING:
                 self.owners[(ip, server)].add(s)
+        self.carried = carried(db, local_day(start), {k for k in pairs if k not in self.owners})
         self._share()
 
     @classmethod
@@ -143,9 +168,12 @@ class Labels:
         """rows: (kind, ip, server, value) as evidence() gives them."""
         self = cls.__new__(cls)
         self.svc, self.provider, self.tunnels, self.owners = svc, {}, {}, collections.defaultdict(set)
+        self.carried = {}
         for kind, ip, server, value in rows:
             if kind == "owner":
                 self.owners[(ip, server)].add(value)
+            elif kind == "carried":
+                self.carried[(ip, server)] = value
             elif kind == "tunnel":
                 self.tunnels[(ip, server)] = value
             elif kind == "provider":
@@ -157,6 +185,7 @@ class Labels:
         """What a day's names were decided from: (kind, ip, server, value). 'provider' rows hold the MAC (or the
         address, for sites seen without one) in `ip`."""
         out = [("owner", ip, server, s) for (ip, server), v in self.owners.items() for s in v]
+        out += [("carried", ip, server, s) for (ip, server), s in self.carried.items()]
         out += [("tunnel", ip, server, t) for (ip, server), t in self.tunnels.items()]
         out += [("provider", k, "", p) for k, p in self.provider.items()]
         return out
@@ -166,6 +195,7 @@ class Labels:
         out = Labels.from_evidence(self.svc, ())
         out.provider = {**newer.provider, **self.provider}
         out.tunnels = {**newer.tunnels, **self.tunnels}
+        out.carried = {**newer.carried, **self.carried}
         for src in (self.owners, newer.owners):
             for k, v in src.items():
                 out.owners[k] |= v
@@ -174,6 +204,7 @@ class Labels:
 
     def _share(self):
         self.shared = {k: next(iter(v)) for k, v in self.owners.items() if len(v) == 1}
+        self.shared.update((k, s) for k, s in self.carried.items() if k not in self.owners)
         self._named = {}
 
     def named(self, ip, name, server, port, proto, mac=""):

@@ -84,6 +84,28 @@ class TestNames(unittest.TestCase):
         self.assertEqual(n.name_for(st, 105), ("b.example", "dns"))      # state gone -> fresh lookup
 
 
+    def test_names_kept_over_a_restart(self):
+        """A connection named by its hello keeps the name when loupd restarts; a reused pf id doesn't take it."""
+        n = names.Names()
+        n.tls({"ts": 100, "client": "10.9.1.20", "cport": 51000, "server": "203.0.113.10", "port": 443, "sni": "a.example"})
+        st, gone, plain = state(), state("2", lport=51001), state("3", lport=51002, remote="203.0.113.11")
+        n.name_for(st, 101)
+        n.name_for(plain, 101)                                              # no name: nothing to keep
+        with tempfile.TemporaryDirectory() as d:
+            s = store.Store(os.path.join(d, "loupe.db"))
+            self.addCleanup(s.close)
+            s.save_conn_names(n.saved({st.key: st, gone.key: gone, plain.key: plain}))
+            rows = s.take_conn_names()
+            self.assertEqual(s.take_conn_names(), [])                        # once only
+        after = names.Names()
+        reused = state("1", lport=52000)                                   # same id, another connection
+        after.restore(rows, {reused.key: reused})
+        self.assertEqual(after.name_for(reused, 200), (None, None))
+        after = names.Names()
+        after.restore(rows, {st.key: st})
+        self.assertEqual(after.name_for(st, 200), ("a.example", "sni"))
+
+
 class TestLateHello(unittest.TestCase):
     """capture can hand over a connection's hello after pf shows its state: the first bytes wait for it"""
 

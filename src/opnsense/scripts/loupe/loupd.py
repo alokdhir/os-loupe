@@ -107,6 +107,7 @@ class Loupe:
         self.sites_seen = {}
         self.devices = collections.defaultdict(dict)
         self.live = set()
+        self.saved_names = self.store.take_conn_names()     # restored at the first poll, when pf's states are known
         self.error_hour, self.errors_logged = None, 0
         if unbound_cache:
             self.names.seed_unbound(unbound_cache, time.time())
@@ -221,6 +222,7 @@ class Loupe:
         if self.stopping:               # the final write happens here, never inside the signal handler
             try:
                 self.guarded("final flush", self.flush, now)
+                self.guarded("saving connection names", self.save_names)
             finally:
                 sys.exit(0)
         if mono >= self.next_poll:
@@ -253,6 +255,10 @@ class Loupe:
             return fn(*args)
         except Exception as e:
             syslog.syslog(syslog.LOG_ERR, f"loupe: {what} failed: {e!r}")
+
+    def save_names(self):
+        """Keep the names of open connections for the next start (an update or a settings change restarts loupd)."""
+        self.store.save_conn_names(self.names.saved(self.tracker.prev or {}))
 
     def refresh_networks(self):
         """LAN networks can change while running (e.g. a delegated IPv6 prefix arrives). An interface with no address
@@ -357,6 +363,9 @@ class Loupe:
             self.stopping = True
             return
         self.live = set(states)
+        if self.saved_names:
+            self.names.restore(self.saved_names, states)
+            self.saved_names = None
         self.count(now, self.tracker.update(states))
 
     def count(self, now, deltas):
