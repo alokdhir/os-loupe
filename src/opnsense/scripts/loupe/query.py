@@ -123,9 +123,9 @@ def start_as_user(cmd, path):
     if os.getuid() != 0:
         return
     _conf = read_conf()
-    for path in (CONF, REPORT_CONF):
+    for conf in (CONF, REPORT_CONF):
         try:
-            os.chmod(path, 0o600)       # the Home Assistant token, the switches' communities (loupd does the same)
+            os.chmod(conf, 0o600)       # the Home Assistant token, the switches' communities (loupd does the same)
         except OSError:
             pass
     devid.read_root_files()

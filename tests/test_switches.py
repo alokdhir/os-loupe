@@ -588,5 +588,30 @@ class TestText(unittest.TestCase):
         self.assertEqual([switches.speed_text(s) for s in (0, 100, 1000, 2500, 10000)], ["", "100M", "1G", "2.5G", "10G"])
 
 
+class TestStartAsUser(unittest.TestCase):
+    """configd runs reports as root: a file the GUI left must be handed over before root is dropped."""
+
+    def run_start(self, cmd, path):
+        import query
+        from unittest import mock
+        chown = mock.Mock()
+        user = mock.Mock(pw_uid=1787, pw_gid=1787)
+        with mock.patch.object(query.os, "getuid", return_value=0), mock.patch.object(query.os, "chmod"), \
+                mock.patch.object(query.os, "chown", chown), mock.patch.object(query.privs, "user", return_value=user), \
+                mock.patch.object(query.privs, "drop"), mock.patch.object(query.devid, "read_root_files"), \
+                mock.patch.object(query, "_conf", None):
+            query.start_as_user(cmd, path)
+        return chown
+
+    def test_reply_file_is_handed_over(self):
+        path = "/tmp/loupe-ai-0123456789abcdef.json"
+        for cmd in ("switchrefresh", "aipreview", "aimodelpreview"):
+            self.run_start(cmd, path).assert_called_once_with(path, 1787, 1787)
+
+    def test_other_paths_are_not(self):
+        self.run_start("switchrefresh", "/etc/passwd").assert_not_called()
+        self.run_start("switchmap", "/tmp/loupe-ai-0123456789abcdef.json").assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
