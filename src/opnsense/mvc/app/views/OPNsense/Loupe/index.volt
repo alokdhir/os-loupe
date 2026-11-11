@@ -38,6 +38,9 @@ POSSIBILITY OF SUCH DAMAGE.
     .loupe-edit:hover { color: #337ab7; }
     .loupe-copy { display: block; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
     .loupe-copied { color: #3c763d; transition: color 0.2s; }
+    /* core's edit dialog has a box that searches its fields; ours are a few fields each (the rule dialog hides the
+       clues not in use, which a search would show), so leave it out. This page's dialogs are all ours. */
+    .modal-header .form-search { display: none; }
     .loupe-detail-title { font-size: 24px; margin: 8px 0 4px; }
     .loupe-detail-title small { display: block; margin-top: 6px; font-size: 13px; }
     .loupe-bar { padding: 10px 15px; }
@@ -699,7 +702,7 @@ POSSIBILITY OF SUCH DAMAGE.
             rulesSearch = type;
             const id = '{{ formGridRules['table_id'] }}';
             $('#page_rules .loupe-source .btn[data-source="mine"]').click();
-            if (started.rules) $('#' + id + '-search-field').val(type).trigger('keyup');
+            if (started.rules) $('#' + id + '-search-field').val(type).trigger('input').trigger('keyup');
             window.location.hash = '#rules';
         }
         let currentTab = '';            /* the tab route() showed: the panes' classes lag behind their fade */

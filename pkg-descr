@@ -11,17 +11,26 @@ Reports live under Reporting, with a dashboard widget.
 Plugin Changelog
 ================
 
+1.3.1
+
+* With OPNsense 26.7.9: the search box's new clear button (x) also shows when a device's "edit the rule" link fills in the Device rules search
+* Edit dialogs no longer show OPNsense's "Search form" box: each has only a few fields
+* Connection names survive a restart of the service, and a day with no named traffic to a server takes its service from the latest of the 7 days before
+* A device whose name is only its model code is named after its model
+* Switch map: a pencil to edit devices and switches, long port names wrap, and it says when a switch gave no MAC table (some offer none over SNMP)
+* Fold a switch's section, or an access point's clients
+* An eero's name on a device's page links to the eero plugin
+* Renaming a device or saving a switch no longer restarts the service
+* The package no longer lists Python dependencies, which OPNsense itself provides; without cryptography, QUIC naming turns off with a warning in the log
+* Fixes: a service with & in its name opens, a linked device shows once on a service's page, zooming a daily chart to its right edge, an interface that briefly loses its address keeps its networks, Home Assistant fetching survives a bad reply
+
 1.3
 
 * Switch map (optional): a tab showing which device is on which port of your managed switches and of the router itself, with Loupe's names and each device's traffic in the period you pick. Needs managed switches with SNMP v2c; the tab appears once one is listed under Settings, Switches
 * Switches are read over SNMP when you save one, press Refresh, or open the tab more than 5 minutes after the last read; nothing polls in the background and nothing on a switch is changed
 * A quiet device stays on the port it was last found on, marked as such
-* Fold a switch's section, or an access point's clients
 * A device's page says which switch and port it is on
 * A device's page opened from Services or the Switch map leads back there
-* An eero's name on a device's page links to the eero plugin
-* Renaming a device or saving a switch no longer restarts the service
-* Fixes: a service with & in its name opens, a linked device shows once on a service's page, zooming a daily chart to its right edge, an interface that briefly loses its address keeps its networks, Home Assistant fetching survives a bad reply
 
 1.2
 
