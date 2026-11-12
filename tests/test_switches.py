@@ -609,6 +609,14 @@ class TestBridgeParsing(unittest.TestCase):
         raw = entry(b"igc1", 0, bytes.fromhex("020000000010")) + entry(b"ix0", 1, bytes.fromhex("020000000011")) + b"short"
         self.assertEqual(netif.parse_bridge_addresses(raw), [("igc1", "02:00:00:00:00:10")])
 
+    def test_a_port_turned_off_is_down_whatever_link_it_last_had(self):
+        def data(link):     # struct if_data: type, ..., link state at 4, baudrate at 16
+            return bytes([netif.IFT_ETHER, 0, 0, 0, link]) + bytes(11) + (2500 * 10 ** 6).to_bytes(8, sys.byteorder)
+        on = netif.link_entry(netif.IFF_UP, data(netif.LINK_STATE_UP))
+        self.assertEqual(on, {"ether": True, "bridge": False, "up": True, "mbit": 2500})
+        self.assertFalse(netif.link_entry(0, data(netif.LINK_STATE_UP))["up"])        # unassigned: the cable may be long gone
+        self.assertFalse(netif.link_entry(netif.IFF_UP, data(1))["up"])               # on, no cable
+
 
 class TestText(unittest.TestCase):
     def test_ranges(self):

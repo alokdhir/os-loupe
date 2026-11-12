@@ -118,10 +118,19 @@ def link_macs():
 
 IFT_ETHER, IFT_BRIDGE = 0x06, 0xd1
 LINK_STATE_UP = 2
+IFF_UP = 0x1
 SIOCGDRVSPEC = 0xc028697b       # _IOWR('i', 123, struct ifdrv): reading a bridge needs no privilege
 BRDGGIFS, BRDGRTS = 6, 7
 IFBREQ_SIZE = 80                # struct ifbreq, net/if_bridgevar.h
 IFBAREQ_SIZE = 40               # struct ifbareq
+
+
+def link_entry(flags, data):
+    """One interface from its flags and the start of its struct if_data. Up means turned on and linked: a port that is
+    turned off (unassigned) keeps the link state it had when it was turned off, cable or not."""
+    return {"ether": data[0] == IFT_ETHER, "bridge": data[0] == IFT_BRIDGE,
+            "up": bool(flags & IFF_UP) and data[4] == LINK_STATE_UP,
+            "mbit": struct.unpack_from("=Q", data, 16)[0] // 1000000}
 
 
 def link_info():
@@ -138,10 +147,7 @@ def link_info():
         while p:
             ifa = p.contents
             if ifa.addr and ifa.data and ctypes.string_at(ifa.addr, 2)[1] == AF_LINK:
-                data = ctypes.string_at(ifa.data, 24)
-                out[ifa.name.decode()] = {"ether": data[0] == IFT_ETHER, "bridge": data[0] == IFT_BRIDGE,
-                                          "up": data[4] == LINK_STATE_UP,
-                                          "mbit": struct.unpack_from("=Q", data, 16)[0] // 1000000}
+                out[ifa.name.decode()] = link_entry(ifa.flags, ctypes.string_at(ifa.data, 24))
             p = ifa.next
     finally:
         _libc.freeifaddrs(head)
