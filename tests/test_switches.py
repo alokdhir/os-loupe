@@ -36,7 +36,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "opnsens
 from lib import netif, snmp, switches  # noqa: E402
 
 ROUTER = "02:00:00:00:00:01"
-SW1, SW2 = "02:00:00:00:00:a1", "02:00:00:00:00:a2"
+SW1, SW2, SW3 = "02:00:00:00:00:a1", "02:00:00:00:00:a2", "02:00:00:00:00:a3"
 PC, TV, PHONE, RADIO = "ac:00:00:00:00:01", "ac:00:00:00:00:02", "ac:00:00:00:00:03", "ac:00:00:00:05:04"
 
 
@@ -295,6 +295,22 @@ class TestLocate(unittest.TestCase):
         self.assertEqual(where[TV], ("b", "2"))
         self.assertNotIn(ROUTER, where)
         self.assertNotIn(SW2, where)
+
+    def test_a_switch_that_lists_the_router_nowhere_takes_its_busiest_port_toward_other_switches(self):
+        # the router's address stuck on a port that is down: the switch is still below the one it hangs off
+        polls = {"a": tables(SW1, [("1", True, 10000, [ROUTER]), ("2", True, 10000, [SW2, PHONE]), ("3", True, 10000, [SW3, TV])]),
+                 "b": tables(SW2, [("1", True, 10000, [SW1, SW3, PC, TV]), ("2", True, 1000, [PHONE])]),
+                 "c": tables(SW3, [("1", True, 10000, [ROUTER, SW1, SW2, PC, PHONE]), ("2", True, 1000, [TV])])}
+        uplinks, links, where = switches.locate(polls, [ROUTER])
+        self.assertEqual(uplinks, {"a": "1", "b": "1", "c": "1"})
+        self.assertEqual((links["a"], links["b"], links["c"]), ({"2": "b", "3": "c"}, {}, {}))
+        self.assertEqual(where[PHONE], ("b", "2"))
+
+    def test_a_lone_switch_without_the_router_keeps_its_devices(self):
+        polls = {"a": tables(SW1, [("1", True, 1000, [PC, TV]), ("2", True, 1000, [PHONE])])}
+        uplinks, _, where = switches.locate(polls, [ROUTER])
+        self.assertEqual(uplinks, {"a": None})
+        self.assertEqual(where[PC], ("a", "1"))
 
     def test_an_unpolled_switch_between_goes_to_the_quieter_port(self):
         polls = {"a": tables(SW1, [("1", True, 1000, [ROUTER]), ("2", True, 1000, [PC, TV, PHONE])]),

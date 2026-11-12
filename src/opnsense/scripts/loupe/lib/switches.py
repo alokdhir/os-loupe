@@ -212,8 +212,15 @@ def locate(polls, router_macs):
         if sid == ROUTER_ID:        # the top of the tree
             uplinks[sid] = None
             continue
-        best = max(p.get("fdb", {}).items(), key=lambda kv: len(router_macs & set(kv[1])), default=None)
-        uplinks[sid] = best[0] if best and router_macs & set(best[1]) else None
+        fdb = p.get("fdb", {})
+        best = max(fdb.items(), key=lambda kv: len(router_macs & set(kv[1])), default=None)
+        if best and router_macs & set(best[1]):
+            uplinks[sid] = best[0]
+        else:
+            # a switch can keep the router's address on a port that is down, and then lists it nowhere it's up: the
+            # uplink is then the busiest port toward other switches, since the rest of the network is that way
+            toward = [kv for kv in fdb.items() if {by_mac.get(mac) for mac in kv[1]} - {None, sid}]
+            uplinks[sid] = max(toward, key=lambda kv: len(kv[1]))[0] if toward else None
     behind = {}     # {id: {ifIndex: the switches listed there}}
     for sid, p in polls.items():
         behind[sid] = {}
