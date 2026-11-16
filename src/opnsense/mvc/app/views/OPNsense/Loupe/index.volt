@@ -153,8 +153,9 @@ POSSIBILITY OF SUCH DAMAGE.
                     + (type && model ? ' <span class="text-muted">' + esc(model) + '</span>' : '') + editButton(row);
             },
             vendor: function (column, row) {
-                if (!row.vendor_note) return esc(row.vendor);
-                return '<span class="text-muted" title="' + esc(row.vendor_note) + '">' + esc(row.vendor || row.vendor_note) + '</span>';
+                const title = ' title="' + esc([row.mac, row.vendor_note].filter(Boolean).join(' · ')) + '"';
+                if (!row.vendor_note) return row.vendor ? '<span' + title + '>' + esc(row.vendor) + '</span>' : '';
+                return '<span class="text-muted"' + title + '>' + esc(row.vendor || row.vendor_note) + '</span>';
             },
             services: function (column, row) {
                 return (row.top || []).length ? row.top.map(esc).join(', ') : dash;
