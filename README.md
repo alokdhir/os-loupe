@@ -109,6 +109,14 @@ Loupe keys everything on the device's MAC address and works out what it is from 
 
 Each identification records the evidence it rests on, shown as a tooltip on the type.
 
+**MAC vendors** come from the IEEE list that OPNsense ships (`/usr/local/opnsense/contrib/ieee/oui.csv`, also behind the Manufacturer column of its ARP and NDP tables). OPNsense hasn't updated it since September 2025, so devices with newer MAC blocks, such as recent Apple hardware, show no vendor until a rule or Bonjour identifies them ([opnsense/core#11220](https://github.com/opnsense/core/pull/11220) refreshes it). To refresh your copy now, as root:
+
+```sh
+curl -fsS -o /tmp/oui.csv https://standards-oui.ieee.org/oui/oui.csv && install -m 644 /tmp/oui.csv /usr/local/opnsense/contrib/ieee/oui.csv && configctl loupe restart
+```
+
+The next OPNsense update replaces the file with its own copy; until then `pkg check -s` reports it as modified.
+
 **One device, several MACs.** A host whose traffic goes out under a bridge's MAC, an Apple TV moved from Wi-Fi to Ethernet, a laptop's dock and its Wi-Fi, a phone's new private address: Loupe links such MACs (the same address at the same time, the same Bonjour host name at the same time, or the same name used by related MACs at different times) and shows them as one device, with all their traffic.
 
 ### Why not just NetFlow / Insight?
