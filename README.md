@@ -314,7 +314,7 @@ All test data is synthetic.
 
 ## See also
 
-[**Probes**](https://github.com/alokdhir/os-probes) is Loupe's opposite. Loupe shows the traffic your firewall lets through, going out from your devices. Probes shows the traffic it stops, coming in from the internet: who is scanning you, what they try and where from.
+[**Probes**](https://github.com/alokdhir/os-probes) is Loupe's opposite. Loupe shows the traffic going out, and from which device on your network. Probes shows the traffic coming in from the internet that your firewall stops: who is scanning you, what they try and where from.
 
 ## License
 
