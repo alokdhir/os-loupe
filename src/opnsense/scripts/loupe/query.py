@@ -838,17 +838,22 @@ def cmd_icons():
     return {mac: info[mac]["icon"] for mac in ov}
 
 
+WIDGET_STEP = 900       # the dashboard widget's points: 15 minutes, as in Probes' widget
+
+
 def cmd_widget():
     db, _svc, _ov = load()
     now = int(time.time())
-    spark = collections.defaultdict(lambda: [0, 0])
-    first = (now - 86400) // 3600 * 3600        # whole hours: the first one is in the chart, so in the sums too
+    spark = {}
+    first = (now - 86400) // WIDGET_STEP * WIDGET_STEP     # whole points: the first one is in the chart, so in the sums too
     for bucket, up, down in db.execute(
-            "SELECT bucket, sum(up), sum(down) FROM flows_1h WHERE bucket >= ? GROUP BY bucket", (first,)):
+            "SELECT bucket - bucket % ? b, sum(up), sum(down) FROM flows_5m WHERE bucket >= ? GROUP BY b",
+            (WIDGET_STEP, first)):
         spark[bucket] = [down, up]
-    hours = [[b, *spark.get(b, [0, 0])] for b in range(first, now + 1, 3600)]
+    timeline = [[b, *spark.get(b, [0, 0])] for b in range(first, now + 1, WIDGET_STEP)]
     top = cmd_devices(24)["rows"][:8]
-    return {"hours": hours, "down": sum(h[1] for h in hours), "up": sum(h[2] for h in hours), "top": top}
+    return {"step": WIDGET_STEP, "timeline": timeline, "down": sum(p[1] for p in timeline),
+            "up": sum(p[2] for p in timeline), "top": top}
 
 
 def cmd_summary():

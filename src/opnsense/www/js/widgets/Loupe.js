@@ -88,6 +88,17 @@ export default class Loupe extends BaseWidget {
         return `<a href="/ui/loupe/#device=${Loupe.esc(r.mac || r.ip)}">${Loupe.esc(r.name || r.ip)}</a>`;
     }
 
+    // [[time, a, b, ...], ...] every `step` seconds, added up into `size`-second points (the same in Loupe's and Probes' widgets)
+    static buckets(points, step, size) {
+        if (step >= size) return points;
+        const out = new Map();
+        points.forEach(([t, ...v]) => {
+            const b = t - t % size, sum = out.get(b) || v.map(() => 0);
+            out.set(b, sum.map((x, i) => x + v[i]));
+        });
+        return [...out.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => [t, ...v]);
+    }
+
     async onMarkupRendered() {
         const blue = 'rgba(54,162,235,1)', orange = 'rgba(255,159,64,1)';
         const blueFill = 'rgba(54,162,235,0.25)', orangeFill = 'rgba(255,159,64,0.25)';
@@ -102,8 +113,9 @@ export default class Loupe extends BaseWidget {
                 maintainAspectRatio: false, animation: false,
                 interaction: {mode: 'index', intersect: false},
                 elements: {line: {borderWidth: 1.5, cubicInterpolationMode: 'monotone'}, point: {radius: 0, hoverRadius: 3}},
-                plugins: {legend: {display: false}, tooltip: {callbacks: {
-                    title: items => new Date(items[0].label * 1000).toLocaleTimeString([], {hour: 'numeric'}),
+                // the dashboard's colour-scheme plugin would repaint the lines in its own palette (as core's widgets, off)
+                plugins: {colorschemes: false, legend: {display: false}, tooltip: {callbacks: {
+                    title: items => new Date(this.chart.data.labels[items[0].dataIndex]).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}),
                     label: c => c.dataset.label + ': ' + c.raw.toFixed(c.raw < 10 ? 2 : 1) + ' Mbps ('
                         + Loupe.bytes(c.dataset.bytes[c.dataIndex]) + ')'
                 }}},
@@ -118,7 +130,7 @@ export default class Loupe extends BaseWidget {
 
     async onWidgetTick() {
         const d = await this.ajaxCall('/api/loupe/report/widget');
-        if (!d || d.error || !d.hours) {
+        if (!d || d.error || !d.timeline) {
             $('#loupe-w-top').html(`<a href="/ui/loupe/#general">${this.translations.nodata}</a>`);
             return;
         }
@@ -126,10 +138,11 @@ export default class Loupe extends BaseWidget {
             return;
         }
         $('#loupe-w-total').text(`↓ ${Loupe.bytes(d.down)}  ↑ ${Loupe.bytes(d.up)}`);
-        const mbps = b => b * 8 / 3600 / 1e6;                 // average rate over each hour
-        this.chart.data.labels = d.hours.map(h => h[0] + 1800);
+        const size = 15 * 60, points = Loupe.buckets(d.timeline, d.step, size);
+        const mbps = b => b * 8 / size / 1e6;                 // average rate over each point
+        this.chart.data.labels = points.map(p => p[0] * 1000);
         this.chart.data.datasets.forEach((ds, i) => {
-            ds.bytes = d.hours.map(h => h[i + 1]);
+            ds.bytes = points.map(p => p[i + 1]);
             ds.data = ds.bytes.map(mbps);
         });
         this.chart.update();
