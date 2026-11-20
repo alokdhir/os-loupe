@@ -85,7 +85,8 @@ export default class Loupe extends BaseWidget {
     }
 
     link(r) {
-        return `<a href="/ui/loupe/#device=${Loupe.esc(r.mac || r.ip)}">${Loupe.esc(r.name || r.ip)}</a>`;
+        // with the widget's period, so the page shows the same 24 hours (as in Probes' widget)
+        return `<a href="/ui/loupe/#device=${Loupe.esc(r.mac || r.ip)}&hours=24">${Loupe.esc(r.name || r.ip)}</a>`;
     }
 
     // [[time, a, b, ...], ...] every `step` seconds, added up into `size`-second points (the same in Loupe's and Probes' widgets)

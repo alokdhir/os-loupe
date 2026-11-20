@@ -760,7 +760,19 @@ POSSIBILITY OF SUCH DAMAGE.
 
         /* the address is anyone's typing: a stray % must not stop the page */
         const decode = s => { try { return decodeURIComponent(s); } catch (e) { return ''; } };
+        /* a link's own period (the dashboard widget's: &hours=24) shows that period this once, without becoming the remembered
+           one; it then leaves the address, so a period picked afterwards isn't undone (the same in Probes) */
+        function linkPeriod() {
+            const m = window.location.hash.match(/&hours=(\d+(?:\.\d+)?)/);
+            if (!m) return;
+            history.replaceState(null, '', window.location.pathname + window.location.hash.replace(m[0], ''));
+            const h = parseFloat(m[1]);
+            if (!$('.loupe-period .btn').filter('[data-hours="' + h + '"]').length) return;
+            hours = h;
+            $('.loupe-period .btn').removeClass('active').filter('[data-hours="' + hours + '"]').addClass('active');
+        }
         function route() {
+            linkPeriod();
             const hash = window.location.hash;
             fresh.add('grid-devices').add('grid-house').add('grid-traffic');    /* opened, period changed or saved: not the cached copy */
             rebuildNote();
