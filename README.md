@@ -312,6 +312,10 @@ cd tests && python3 -m unittest test_tls test_quic test_pfstate test_store test_
 
 All test data is synthetic.
 
+## See also
+
+[**Probes**](https://github.com/alokdhir/os-probes) is Loupe's opposite. Loupe shows the traffic your firewall lets through, going out from your devices. Probes shows the traffic it stops, coming in from the internet: who is scanning you, what they try and where from.
+
 ## License
 
 BSD 2-Clause — see [LICENSE](LICENSE).
