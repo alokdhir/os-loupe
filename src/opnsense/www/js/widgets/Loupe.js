@@ -99,6 +99,11 @@ export default class Loupe extends BaseWidget {
         return [...out.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => [t, ...v]);
     }
 
+    // the seconds a point starting at `t` covers: `size`, or up to now for the one still filling (so it isn't a false dip)
+    static covers(t, size) {
+        return Math.max(60, Math.min(size, Date.now() / 1000 - t));
+    }
+
     async onMarkupRendered() {
         const blue = 'rgba(54,162,235,1)', orange = 'rgba(255,159,64,1)';
         const blueFill = 'rgba(54,162,235,0.25)', orangeFill = 'rgba(255,159,64,0.25)';
@@ -138,8 +143,9 @@ export default class Loupe extends BaseWidget {
             return;
         }
         $('#loupe-w-total').text(`↓ ${Loupe.bytes(d.down)}  ↑ ${Loupe.bytes(d.up)}`);
-        const size = 15 * 60, points = Loupe.buckets(d.timeline, d.step, size);
-        const mbps = b => b * 8 / size / 1e6;                 // average rate over each point
+        // per 15 minutes (or the data's own step, when longer), as in Probes' widget
+        const size = Math.max(d.step, 15 * 60), points = Loupe.buckets(d.timeline, d.step, size);
+        const mbps = (b, j) => b * 8 / Loupe.covers(points[j][0], size) / 1e6;    // average rate over each point
         this.chart.data.labels = points.map(p => p[0] * 1000);
         this.chart.data.datasets.forEach((ds, i) => {
             ds.bytes = points.map(p => p[i + 1]);
