@@ -10,6 +10,8 @@ Loupe is about each device's traffic to and from the internet. Traffic between y
 
 When possible, devices are identified and named automatically. A layered, evidence-ranked rule engine weighs what each device says about itself — its Bonjour model, host name, DHCP fingerprint, MAC vendor and the services it uses — and goes with the strongest evidence, so you see *Mac*, *Apple TV*, *PlayStation* or *Fire TV* instead of `192.0.2.57`. It ships with 162 rules covering 109 device types, follows each device by MAC address across address changes, and takes your own rules and corrections first.
 
+**And where each one is plugged in.** If you have managed switches, the *Switch map* shows which device is on which port of each one, under the names Loupe gives them and with each device's traffic, and Wi-Fi clients on their access point's port. Your switch's own page lists MAC addresses per port; tools that map them (NetDisco, LibreNMS) need a server of their own and know nothing of your traffic. Loupe only asks each switch over read-only SNMP, when you look (see [Switch map](#switch-map)).
+
 ![Devices list: every device, its type, vendor, traffic and top services](docs/images/devices.png)
 
 ## Features
@@ -17,6 +19,7 @@ When possible, devices are identified and named automatically. A layered, eviden
 - **Device identification**: a multi-tier rule engine names each device and works out what it is from the evidence it gives off, strongest first (see [Identifying devices](#identifying-devices)). Every identification shows the evidence it rests on.
 - **Devices**: every device with its name, type and icon (e.g. *Mac*, *Apple TV*, *PlayStation*, *Smart plug*), vendor, bytes down and up, and its top three services, for the last hour, 3 hours, day, week, month or year.
 - **Device detail**: a traffic chart over time, and what the device talked to: each service (*YouTube*, *Netflix*, *iCloud Private Relay*, *VPN (NordVPN)*…, unnamed traffic as *Other*), opening to the sites it used. Traffic that isn't the web shows its protocol and port (SSH, a game, a VPN).
+- **Switch map**: which device is on which port of the router and each of your managed switches, under the names Loupe gives them, with each device's traffic in the period you pick, and a device that has gone quiet kept on the port it was last seen on. Read over SNMP when you ask; without managed switches, there's simply no Switch map tab (see [Switch map](#switch-map)).
 - **Services**: every service the house used in the period, with the devices that used it. Open one, or search a service, site or address (`YouTube`, `playstation.net`, `203.0.113.7`), for a chart of its traffic over time and which devices used it, how much, and when.
 - **Zoomable charts**: drag across a device's or a service's traffic chart to zoom into that stretch of time. The list below it follows the zoom, showing only the traffic in the time shown (a note says which span), so you can see what a spike was. *Reset zoom* goes back to the whole period.
 - **Networks (VLANs)**: when Loupe watches more than one network, the device and service lists show each device's network and can be filtered to one or more. A device on several networks shows them all, and its page shows which network each service and site was used from. Network colours match *Reporting → Traffic*.
@@ -24,12 +27,17 @@ When possible, devices are identified and named automatically. A layered, eviden
 - **Your own names, types and icons**: rename a device, correct its type or pick its icon from any report page. Overrides follow the device by MAC address, and an icon picked for one device applies to every device of that type. Rules type many devices at once, e.g. every device whose MAC vendor is Tuya is a *Window shade*; a compound rule combines clues (MAC vendor Espressif *and* a host name starting `shelly`).
 - **AI Rule Generator**: for the devices Loupe can only guess at, *Settings → Device rules → AI Rule Generator* builds a prompt to paste into any AI chat (Claude, ChatGPT, Gemini…), reads the rules out of its answer, shows what each would change on your network (flagging rules that reach other devices, change nothing or make a type vaguer), and saves the ones you tick. Loupe itself sends nothing anywhere.
 - **Your own service names**: add domains (including patterns like `cdn-*.example.com`), addresses, ports or VPN app domains. *Settings → Service names / Device rules → Built-in* shows what Loupe ships with.
-- **Switch map (optional)**: which device is on which port of your managed switches, under the names Loupe gives them, with each device's traffic in the period you pick. Read over SNMP when you ask (see [Switch map](#switch-map)).
 - **Dashboard widget**: the last 24 hours at a glance, with totals, an hourly chart and the top devices.
 
 ## Screenshots
 
 All from a real home network, with people's names blurred. The address bar shows the router's IP address, or is blurred, on purpose: it keeps the domain out of the pictures.
+
+**Switch map**: which device is on which port of the router and your managed switches (if you have them), with each eero's Wi-Fi clients under it.
+
+![Switch map: a section for the router and each switch, listing each port's speed, devices, addresses and traffic](docs/images/switchmap.png)
+
+![Settings, Switches: the listed switches with their port counts, addresses and last read](docs/images/switches.png)
 
 **A device**: its traffic over time, and each service it used, opening to its sites.
 
@@ -52,12 +60,6 @@ All from a real home network, with people's names blurred. The address bar shows
 ![Overrides: names and types set by hand](docs/images/overrides.png)
 
 ![Device rules: custom rules for appliances and other devices, most from the AI Rule Generator, one typing five MAC prefixes as window shades](docs/images/rules.png)
-
-**Switch map** (optional): which device is on which port of the router and your managed switches, with each eero's Wi-Fi clients under it.
-
-![Switch map: a section for the router and each switch, listing each port's speed, devices, addresses and traffic](docs/images/switchmap.png)
-
-![Settings, Switches: the listed switches with their port counts, addresses and last read](docs/images/switches.png)
 
 ## How it works
 
