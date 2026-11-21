@@ -33,7 +33,7 @@ When possible, devices are identified and named automatically. A layered, eviden
 
 All from a real home network, with people's names blurred. The address bar shows the router's IP address, or is blurred, on purpose: it keeps the domain out of the pictures.
 
-**Switch map**: which device is on which port of the router and your managed switches (if you have them), with each eero's Wi-Fi clients under it.
+**Switch map**: which device is on which port of the router and your managed switches (if you have them). Here, with the [eero plugin](https://github.com/alokdhir/os-eero) installed, each eero's Wi-Fi clients are listed under it.
 
 ![Switch map: a section for the router and each switch, listing each port's speed, devices, addresses and traffic](docs/images/switchmap.png)
 
