@@ -11,6 +11,14 @@ Reports live under Reporting, with a dashboard widget.
 Plugin Changelog
 ================
 
+1.3.2
+
+* With the eero plugin installed, a device Loupe has no name for (a phone with a private address that sends none) takes the name eero has for it, from the device or from you; hover the name to see where it came from
+* Switch map: a router port counts as up only when it is turned on and linked, so a pulled cable no longer shows as up
+* Switch map: a switch that lists the router on no working port takes its busiest port toward other switches as its uplink, instead of putting the switches beyond it below it
+* Devices: hovering the vendor shows the device's MAC address
+* Widget: 15-minute points, no false dip at the point still filling, and its links open the page at the widget's 24 hours
+
 1.3.1
 
 * With OPNsense 26.7.9: the search box's new clear button (x) also shows when a device's "edit the rule" link fills in the Device rules search
