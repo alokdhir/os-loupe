@@ -95,6 +95,7 @@ class Loupe:
         self.stopping = False
         self.hass = hass_names         # names from Home Assistant (optional), kept fresh by a thread
         self.eero = {}                 # names os-eero has for Wi-Fi clients (when installed), kept fresh by a thread
+        self.eero_types = {}           # and the types it gives them ("tablet"), evidence for the rules
         self.oui = devid.load_oui()
         self.ip_mac = {}
         self.heard = {}             # {ip: (mac, ts)} from the devices' own frames
@@ -300,7 +301,8 @@ class Loupe:
             info = devid.current_mdns(info)     # what the device announces now outranks older announcements
             name = leases.get(mac) or hosts.get(ip)
             # the name it has here (a lease or static mapping) and the one it sent: rules match either
-            t, src, ven, rule_model = devid.classify(mac, name or hostname, {**info, "dhcp_hostname": hostname}, seen, self.oui)
+            clues = {**info, "dhcp_hostname": hostname, "eero_type": self.eero_types.get(mac)}
+            t, src, ven, rule_model = devid.classify(mac, name or hostname, clues, seen, self.oui)
             known[mac]["type"] = t
             model = devid.model(info, fallback=rule_model)
             # a device that only calls itself by an ID, a serial or its model code is named after its model
@@ -487,7 +489,7 @@ def main():
         while not lp.stopping:
             clients = configd.query("eero query clients all", list)
             if clients is not None:             # None: os-eero isn't installed, or didn't answer (keep what we had)
-                lp.eero = configd.eero_names(clients)
+                lp.eero, lp.eero_types = configd.eero_names(clients), configd.eero_types(clients)
             for _ in range(EERO_REFRESH):
                 if lp.stopping:
                     return

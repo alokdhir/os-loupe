@@ -31,7 +31,7 @@ import helpers  # noqa: F401
 from lib import devid, services
 
 FIELDS = {"mac_prefix": str, "mdns_model": str, "mdns_name": str, "category": str, "hostname": str, "mdns_service": str, "dhcp_vendor": str,
-          "dhcp_params": str, "talks_to": str, "vendor": str, "private_mac": bool}
+          "dhcp_params": str, "talks_to": str, "vendor": str, "private_mac": bool, "eero_type": str}
 ENTRY_KEYS = {"type", "vendor", "any"}
 RULE_KEYS = {"when", "all", "tier", "vendor", "note", "example"}
 EXAMPLE_KEYS = {"mac", "hostname", "vendor", "info", "names"}

@@ -930,12 +930,15 @@ def ai_devices(db, ov):
     info = devices_info(db, ov)
     leases, hosts = devid.leases(), devid.static_hosts()
     oui = devid.load_oui()
+    eero_types = configd.eero_types(configd.query("eero query clients all", list))      # as loupd classifies with
     out = []
     for mac, ip, hostname, raw in db.execute("SELECT mac, ip, hostname, info FROM devices WHERE last_seen >= ?", (since,)):
         d = info.get(mac) or {}
         if d.get("mac", mac) != mac:            # another MAC of a linked device
             continue
         current = devid.current_mdns(json.loads(raw or "{}"))
+        if eero_types.get(mac):
+            current["eero_type"] = eero_types[mac]
         names = sorted(seen.get(mac, set()) | seen.get(ip, set()))
         # the MAC vendor, which rules match - not the maker a type names (a Sub-Zero rule calls its Card Access
         # module's maker Sub-Zero)

@@ -67,6 +67,13 @@
         <grid_view><visible>false</visible></grid_view>
     </field>
     <field>
+        <id>rule.eero_type</id>
+        <label>eero type</label>
+        <type>text</type>
+        <help>The kind of device eero says it is, with the eero plugin installed, e.g. tablet. Separate several with commas: any of them matches.</help>
+        <grid_view><visible>false</visible></grid_view>
+    </field>
+    <field>
         <id>rule.private_mac</id>
         <label>MAC address</label>
         <type>dropdown</type>

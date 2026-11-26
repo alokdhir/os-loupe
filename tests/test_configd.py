@@ -102,6 +102,12 @@ class TestConfigd(unittest.TestCase):
         self.assertEqual(configd.eero_names(clients), {"02:00:00:00:00:10": "iPad-1", "ac:00:00:00:00:15": "office-pc"})
         self.assertEqual(configd.eero_names(None), {})
 
+    def test_eero_types(self):
+        clients = [{"mac": "02:00:00:00:00:10", "type": "tablet"}, {"mac": "02:00:00:00:00:11", "type": "generic"},
+                   {"mac": "02:00:00:00:00:12", "type": "unknown"}, {"mac": "AC:00:00:00:00:13", "type": "Game Console"},
+                   {"mac": "02:00:00:00:00:14"}, "junk"]
+        self.assertEqual(configd.eero_types(clients), {"02:00:00:00:00:10": "tablet", "ac:00:00:00:00:13": "game console"})
+
     def test_no_configd(self):
         self.assertIsNone(configd.run("eero query units", os.path.join(self.fake.dir, "none.sock")))
 

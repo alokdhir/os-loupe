@@ -97,6 +97,13 @@ class TestToRule(unittest.TestCase):
         self.assertEqual(fields, {"hostname": "(?:^acme-)|(?:^ac-)", "talks_to": "a.example, b.example", "type": "Oven"})
         self.assertEqual((rule["source"], rule["vendor"]), ("ai", "Acme"))
 
+    def test_eero_type(self):
+        rule, fields, problem = airules.to_rule({"when": {"eero_type": "tablet", "vendor": "Acme"}, "type": "Tablet"})
+        self.assertIsNone(problem)
+        self.assertEqual(fields, {"eero_type": "tablet", "vendor": "Acme", "type": "Tablet"})
+        self.assertEqual(airules.evidence({"info": {"eero_type": "tablet"}})["eero_type"], "tablet")
+        self.assertEqual(airules.evidence({})["eero_type"], "")
+
     def test_refused(self):
         self.assertIn("dhcp_params", airules.to_rule({"when": {"dhcp_params": "1,3"}, "type": "X"})[2])
         self.assertIn("comma", airules.to_rule({"when": {"vendor": ["Acme, Inc"]}, "type": "X"})[2])

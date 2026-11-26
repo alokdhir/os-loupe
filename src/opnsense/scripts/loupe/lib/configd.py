@@ -70,6 +70,21 @@ def eero():
     return {"units": units, "clients": clients} if clients is not None else {}
 
 
+# eero's types that say nothing about what a device is
+EERO_NO_TYPE = {"", "generic", "unknown"}
+
+
+def eero_types(clients):
+    """{MAC: type} from os-eero's clients ("tablet", "game console"), when eero knows more than "generic"."""
+    out = {}
+    for c in clients or []:
+        if isinstance(c, dict) and isinstance(c.get("mac"), str) and isinstance(c.get("type"), str):
+            t = c["type"].strip().lower()
+            if t not in EERO_NO_TYPE:
+                out[c["mac"].lower()] = t
+    return out
+
+
 def eero_names(clients):
     """{MAC: name} from os-eero's clients: the names eero has from the device or its user, not the maker's name or
     the MAC it shows when it has neither."""

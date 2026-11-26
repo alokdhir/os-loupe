@@ -111,7 +111,7 @@ class SettingsController extends ApiMutableModelControllerBase
         'mac_prefix' => 'MAC prefix', 'mdns_model' => 'Bonjour model', 'mdns_name' => 'Bonjour name',
         'hostname' => 'Host name', 'category' => 'Category code', 'dhcp_vendor' => 'DHCP vendor class',
         'talks_to' => 'Talks to', 'mdns_service' => 'Bonjour service',
-        'vendor' => 'MAC vendor', 'private_mac' => 'Private MAC',
+        'vendor' => 'MAC vendor', 'eero_type' => 'eero type', 'private_mac' => 'Private MAC',
     ];
 
     public function searchRuleAction()

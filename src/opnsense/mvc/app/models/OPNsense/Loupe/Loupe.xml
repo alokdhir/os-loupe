@@ -114,6 +114,7 @@
                 <dhcp_vendor type="TextField"/>
                 <talks_to type="TextField"/>
                 <mac_prefix type="TextField"/>
+                <eero_type type="TextField"/>
                 <private_mac type="OptionField">
                     <BlankDesc>Either</BlankDesc>
                     <OptionValues>

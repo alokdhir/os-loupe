@@ -4,7 +4,7 @@
   "One entry per type: a device is that type when any of its alternatives ('any') matches. An alternative matches when every condition in 'when' (or every entry of 'all') matches; a list value means any of.",
   "Fields: mac_prefix, mdns_model (regex), mdns_name (Bonjour instance name, regex), hostname (regex), mdns_service (exact),",
   "category (HomeKit category hap:N or Matter device type matter:0xNNNN, exact), dhcp_vendor (regex),",
-  "dhcp_params (prefix of the request list), talks_to (domain suffix), vendor (whole word), private_mac (bool).",
+  "dhcp_params (prefix of the request list), talks_to (domain suffix), vendor (whole word), private_mac (bool), eero_type (the type os-eero gives a Wi-Fi client, exact).",
   "Category codes: HomeKit accessory categories (HAP spec; as in HAP-NodeJS Categories) and Matter device types",
   "(connectedhomeip data_model/1.7/device_types/device_type_ids.json); generic ones (bridge, root node, other) have no rule.",
   "Tiers run in a fixed order (strongest evidence first, see TIERS in lib/devid.py); an alternative's tier defaults to its first field.",
@@ -38,15 +38,18 @@
   ]},
   {"type": "Mac", "any": [
    {"when": {"mdns_model": "^(MacBook|Macmini|MacPro|iMac|Mac\\d|MacStudio)"}, "example": {"info": {"mdns_models": ["model=Mac14,14"]}}},
-   {"when": {"hostname": "(?i)macbook|imac|mac-?mini|mac-?studio|mac-?pro"}, "example": {"hostname": "Someones-MacBook-Pro"}}
+   {"when": {"hostname": "(?i)macbook|imac|mac-?mini|mac-?studio|mac-?pro"}, "example": {"hostname": "Someones-MacBook-Pro"}},
+   {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$", "eero_type": ["laptop computer", "unknown computer"]}, "tier": "dhcp_params", "note": "Apple's DHCP request (it sends no name and announces nothing) and eero says computer", "example": {"mac": "02:00:00:00:00:01", "info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252", "eero_type": "laptop computer"}}}
   ]},
   {"type": "iPhone", "any": [
    {"when": {"mdns_model": "^iPhone"}, "example": {"info": {"mdns_models": ["model=iPhone15,2"]}}},
-   {"when": {"hostname": "(?i)iphone"}, "example": {"hostname": "Kids-iPhone"}}
+   {"when": {"hostname": "(?i)iphone"}, "example": {"hostname": "Kids-iPhone"}},
+   {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$", "eero_type": "phone"}, "tier": "dhcp_params", "note": "Apple's DHCP request (it sends no name and announces nothing) and eero says phone", "example": {"mac": "02:00:00:00:00:01", "info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252", "eero_type": "phone"}}}
   ]},
   {"type": "iPad", "any": [
    {"when": {"mdns_model": "^iPad"}, "example": {"info": {"mdns_models": ["model=iPad13,1"]}}},
-   {"when": {"hostname": "(?i)ipad"}, "example": {"hostname": "iPad"}}
+   {"when": {"hostname": "(?i)ipad"}, "example": {"hostname": "iPad"}},
+   {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$", "eero_type": "tablet"}, "tier": "dhcp_params", "note": "Apple's DHCP request (it sends no name and announces nothing) and eero says tablet", "example": {"mac": "02:00:00:00:00:01", "info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252", "eero_type": "tablet"}}}
   ]},
   {"type": "Apple Watch", "any": [
    {"when": {"mdns_model": "^Watch"}, "example": {"info": {"mdns_models": ["model=Watch6,1"]}}}
@@ -82,7 +85,8 @@
    {"when": {"hostname": "(?i)^pikvm\\b"}, "example": {"hostname": "pikvm"}}
   ]},
   {"type": "Watch", "any": [
-   {"when": {"hostname": "(?i)(^|-)watch$"}, "example": {"hostname": "Apple-Watch"}}
+   {"when": {"hostname": "(?i)(^|-)watch$"}, "example": {"hostname": "Apple-Watch"}},
+   {"when": {"dhcp_params": "1,121,3,6,15,108,114,119", "dhcp_vendor": "^$", "eero_type": "watch"}, "tier": "dhcp_params", "note": "Apple's DHCP request (it sends no name and announces nothing) and eero says watch", "example": {"mac": "02:00:00:00:00:01", "info": {"dhcp_params": "1,121,3,6,15,108,114,119,162,252", "eero_type": "watch"}}}
   ]},
   {"type": "PlayStation", "any": [
    {"when": {"hostname": "(?i)^(ps[345]|playstation)"}, "example": {"hostname": "ps5-0a1b2c"}},
@@ -119,13 +123,15 @@
   {"type": "TV", "any": [
    {"when": {"mdns_model": "(?i)bravia|smart ?tv|^(LG|Samsung|Vizio|TCL|Hisense)"}, "example": {"info": {"mdns_models": ["model=BRAVIA 4K VH22"]}}},
    {"when": {"hostname": "(?i)tv$|-tv-|bravia|lgwebos"}, "example": {"hostname": "Bedroom-TV"}},
-   {"when": {"category": ["hap:31", "matter:0x0028"]}, "example": {"info": {"mdns_categories": ["hap:31"]}}}
+   {"when": {"category": ["hap:31", "matter:0x0028"]}, "example": {"info": {"mdns_categories": ["hap:31"]}}},
+   {"when": {"eero_type": "television"}, "example": {"info": {"eero_type": "television"}}}
   ]},
   {"type": "Thermostat", "any": [
    {"when": {"hostname": "(?i)ecobee|thermostat|nest-?(learning|thermostat)"}, "example": {"hostname": "ecobee-thermostat"}},
    {"when": {"category": ["hap:9", "matter:0x0301"]}, "example": {"info": {"mdns_categories": ["hap:9"]}}},
    {"when": {"talks_to": "ecobee.com"}, "example": {"names": ["x.ecobee.com"]}},
-   {"when": {"vendor": "ecobee"}, "example": {"vendor": "ecobee Corp."}}
+   {"when": {"vendor": "ecobee"}, "example": {"vendor": "ecobee Corp."}},
+   {"when": {"eero_type": "thermostat"}, "example": {"info": {"eero_type": "thermostat"}}}
   ]},
   {"type": "NVR", "any": [
    {"when": {"hostname": "(?i)^nvr"}, "note": "Reolink NVRs call themselves NVR; nothing else sets them apart from their cameras", "example": {"hostname": "NVR"}}
@@ -148,7 +154,8 @@
   ]},
   {"type": "Smart plug", "any": [
    {"when": {"hostname": "(?i)^(EP|HS|KP|KS|P1)\\d\\d|kasa|smart-?plug"}, "example": {"hostname": "HS105"}},
-   {"when": {"category": ["hap:7", "matter:0x010a", "matter:0x010b"]}, "example": {"info": {"mdns_categories": ["hap:7"]}}}
+   {"when": {"category": ["hap:7", "matter:0x010a", "matter:0x010b"]}, "example": {"info": {"mdns_categories": ["hap:7"]}}},
+   {"when": {"eero_type": "plug"}, "example": {"info": {"eero_type": "plug"}}}
   ]},
   {"type": "Appliance (GE / Haier module)", "any": [
    {"when": {"hostname": "(?i)^GEModule|^GE[-_]"}, "example": {"hostname": "GEModule1234"}, "note": "GE Appliances' Wi-Fi module, also used in Fisher & Paykel and other Haier brands"},
@@ -156,7 +163,8 @@
   ]},
   {"type": "Smart lock", "any": [
    {"when": {"hostname": "(?i)^schlage"}, "note": "Schlage Encode (Wi-Fi) uses its brand as its DHCP name", "example": {"hostname": "Schlage", "info": {"dhcp_params": "1,3,6"}}},
-   {"when": {"category": ["hap:6", "matter:0x000a"]}, "example": {"info": {"mdns_categories": ["hap:6"]}}}
+   {"when": {"category": ["hap:6", "matter:0x000a"]}, "example": {"info": {"mdns_categories": ["hap:6"]}}},
+   {"when": {"eero_type": "door lock"}, "example": {"info": {"eero_type": "door lock"}}}
   ]},
   {"type": "TV tuner", "any": [
    {"when": {"hostname": "(?i)^HDHR-[0-9a-f]{8}$"}, "note": "SiliconDust HDHomeRun: HDHR- plus its device ID", "example": {"hostname": "HDHR-1A2B3C4D"}}
@@ -175,7 +183,8 @@
   ]},
   {"type": "Speaker / streamer", "any": [
    {"when": {"category": ["hap:26", "matter:0x0020", "matter:0x0021", "matter:0x0022"]}, "example": {"info": {"mdns_categories": ["hap:26"]}}},
-   {"when": {"mdns_service": "_spotify-connect._tcp"}, "example": {"info": {"mdns_services": ["_spotify-connect._tcp"]}}}
+   {"when": {"mdns_service": "_spotify-connect._tcp"}, "example": {"info": {"mdns_services": ["_spotify-connect._tcp"]}}},
+   {"when": {"eero_type": "audio"}, "example": {"info": {"eero_type": "audio"}}}
   ]},
   {"type": "Wi-Fi access point", "any": [
    {"when": {"category": "hap:27"}, "example": {"info": {"mdns_categories": ["hap:27"]}}},
@@ -186,7 +195,8 @@
    {"when": {"vendor": "Ubiquiti"}, "example": {"vendor": "Ubiquiti Corp."}}
   ]},
   {"type": "TV streamer", "any": [
-   {"when": {"category": ["hap:35", "hap:36", "matter:0x0023"]}, "example": {"info": {"mdns_categories": ["hap:35"]}}}
+   {"when": {"category": ["hap:35", "hap:36", "matter:0x0023"]}, "example": {"info": {"mdns_categories": ["hap:35"]}}},
+   {"when": {"eero_type": "media streamer"}, "example": {"info": {"eero_type": "media streamer"}}}
   ]},
   {"type": "Fan", "any": [
    {"when": {"category": ["hap:3", "matter:0x002b"]}, "example": {"info": {"mdns_categories": ["hap:3"]}}}
@@ -307,7 +317,8 @@
   ]},
   {"type": "Computer", "any": [
    {"when": {"mdns_service": ["_smb._tcp", "_ssh._tcp"]}, "example": {"info": {"mdns_services": ["_smb._tcp"]}}},
-   {"when": {"vendor": ["Intel", "ASUSTek", "Micro-Star", "Dell", "Lenovo"]}, "example": {"vendor": "Intel Corp."}}
+   {"when": {"vendor": ["Intel", "ASUSTek", "Micro-Star", "Dell", "Lenovo"]}, "example": {"vendor": "Intel Corp."}},
+   {"when": {"eero_type": "unknown computer"}, "example": {"info": {"eero_type": "unknown computer"}}}
   ]},
   {"type": "Android device", "any": [
    {"when": {"dhcp_vendor": "^android\\-dhcp"}, "example": {"info": {"dhcp_vendor_class": "android-dhcp-1.0"}}}
@@ -382,7 +393,8 @@
    {"when": {"vendor": "TP-LINK"}, "example": {"vendor": "TP-LINK Corp."}}
   ]},
   {"type": "Smart home hub", "any": [
-   {"when": {"vendor": ["Aqara", "Lumi United"]}, "example": {"vendor": "Aqara Corp."}}
+   {"when": {"vendor": ["Aqara", "Lumi United"]}, "example": {"vendor": "Aqara Corp."}},
+   {"when": {"eero_type": "hub"}, "example": {"info": {"eero_type": "hub"}}}
   ]},
   {"type": "VoIP adapter", "any": [
    {"when": {"vendor": "Magicjack"}, "example": {"vendor": "Magicjack Corp."}}
@@ -392,6 +404,21 @@
   ]},
   {"type": "Cellular IoT module", "any": [
    {"when": {"vendor": "Telit"}, "example": {"vendor": "Telit Corp."}}
+  ]},
+  {"type": "Phone", "any": [
+   {"when": {"eero_type": "phone"}, "example": {"info": {"eero_type": "phone"}}}
+  ]},
+  {"type": "Tablet", "any": [
+   {"when": {"eero_type": "tablet"}, "example": {"info": {"eero_type": "tablet"}}}
+  ]},
+  {"type": "Laptop", "any": [
+   {"when": {"eero_type": "laptop computer"}, "example": {"info": {"eero_type": "laptop computer"}}}
+  ]},
+  {"type": "Smartwatch", "any": [
+   {"when": {"eero_type": "watch"}, "example": {"info": {"eero_type": "watch"}}}
+  ]},
+  {"type": "Game console", "any": [
+   {"when": {"eero_type": "game console"}, "example": {"info": {"eero_type": "game console"}}}
   ]},
   {"type": "Phone/tablet/laptop", "any": [
    {"when": {"private_mac": true}, "example": {"mac": "02:00:00:00:00:02"}}
@@ -507,7 +534,12 @@
   "EV charger": {"icon": "fa-solid fa-charging-station"},
   "Solar inverter": {"icon": "fa-solid fa-solar-panel"},
   "Home battery": {"icon": "fa-solid fa-car-battery"},
-  "Energy meter": {"icon": "fa-solid fa-bolt"}
+  "Energy meter": {"icon": "fa-solid fa-bolt"},
+  "Phone": {"icon": "fa-solid fa-mobile-screen-button"},
+  "Tablet": {"icon": "fa-solid fa-tablet-screen-button"},
+  "Laptop": {"icon": "fa-solid fa-laptop"},
+  "Smartwatch": {"icon": "fa-solid fa-clock"},
+  "Game console": {"icon": "fa-solid fa-gamepad"}
  },
  "icon_words": {
   "clock": "fa-solid fa-clock",

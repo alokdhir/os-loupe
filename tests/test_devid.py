@@ -196,6 +196,32 @@ class TestRuleEvidence(unittest.TestCase):
     def tearDown(self):
         devid.set_user_rules([])
 
+    def test_eero_type(self):
+        """The type eero gives a Wi-Fi client says which Apple device sent Apple's DHCP request, and what a private
+        address is, but never outranks what the device says itself."""
+        apple = {"dhcp_params": "1,121,3,6,15,108,114,119,162,252"}
+        guest = "02:00:00:00:00:41"
+        self.assertEqual(devid.classify(guest, None, apple)[0], "iPhone/iPad/Mac")
+        self.assertEqual(devid.classify(guest, None, {**apple, "eero_type": "tablet"})[:2],
+                         ("iPad", "dhcp fingerprint + eero type tablet"))
+        self.assertEqual(devid.classify(guest, None, {**apple, "eero_type": "phone"})[0], "iPhone")
+        self.assertEqual(devid.classify(guest, None, {**apple, "eero_type": "laptop computer"})[0], "Mac")
+        self.assertEqual(devid.classify(guest, None, {**apple, "eero_type": "generic"})[0], "iPhone/iPad/Mac")
+        self.assertEqual(devid.classify(guest, None, {"eero_type": "phone"})[0], "Phone")     # not Phone/tablet/laptop
+        self.assertEqual(devid.classify(guest, None, {"eero_type": "Watch"})[0], "Smartwatch")      # any case
+        self.assertEqual(devid.classify(guest, "Kids-iPad", {**apple, "eero_type": "phone"})[0], "iPad")   # its own name wins
+        tv = {"mdns_models": ["model=AppleTV14,1"], "eero_type": "media streamer"}
+        self.assertEqual(devid.classify("dd:ee:ff:00:00:41", None, tv, (), OUI)[0], "Apple TV")
+        self.assertEqual(devid.classify("ac:00:00:00:00:42", None, {"eero_type": "game console"})[0], "Game console")
+
+    def test_eero_type_in_user_rules(self):
+        devid.set_user_rules([devid._split_lists({"when": {"eero_type": "appliance, plug", "vendor": "Acme"},
+                                                  "type": "Acme oven"})])
+        oui = {"AC0000": "Acme Inc."}
+        self.assertEqual(devid.classify("ac:00:00:00:00:43", None, {"eero_type": "plug"}, (), oui)[:2],
+                         ("Acme oven", "custom rule: eero type plug + vendor Acme Inc."))
+        self.assertNotEqual(devid.classify("ac:00:00:00:00:43", None, {}, (), oui)[0], "Acme oven")
+
     def test_ai_rules_keep_the_talks_to_guard(self):
         """A server using a vendor's cloud (Home Assistant driving a garage door) isn't that vendor's device: a rule
         the user typed applies anyway, one an AI suggested doesn't (like the shipped ones)."""

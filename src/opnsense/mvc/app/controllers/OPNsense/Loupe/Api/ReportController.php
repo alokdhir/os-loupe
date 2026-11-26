@@ -250,7 +250,8 @@ class ReportController extends ApiControllerBase
         'vendor' => 'MAC vendor', 'hostname' => 'Host name', 'mdns_model' => 'Bonjour model',
         'mdns_name' => 'Bonjour name', 'category' => 'Category code',
         'mdns_service' => 'Bonjour service', 'dhcp_vendor' => 'DHCP vendor class', 'dhcp_params' => 'DHCP request list',
-        'talks_to' => 'Talks to', 'mac_prefix' => 'MAC prefix', 'private_mac' => 'Private MAC',
+        'talks_to' => 'Talks to', 'mac_prefix' => 'MAC prefix', 'eero_type' => 'eero type',
+        'private_mac' => 'Private MAC',
     ];
 
     private function dataFile($name)

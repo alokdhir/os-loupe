@@ -36,7 +36,8 @@ import re
 from . import devid
 
 # rule fields the AI may use (and the GUI can store): see the prompt
-FIELDS = ("vendor", "hostname", "mdns_name", "mdns_model", "mdns_service", "category", "dhcp_vendor", "talks_to")
+FIELDS = ("vendor", "hostname", "mdns_name", "mdns_model", "mdns_service", "category", "dhcp_vendor", "talks_to",
+          "eero_type")
 REGEX = ("hostname", "mdns_name", "mdns_model", "dhcp_vendor")
 # domains that say nothing about what a device is: platforms, CDNs, clouds, time
 COMMON_DOMAINS = ("google.com", "googleapis.com", "gstatic.com", "googleusercontent.com", "google-analytics.com",
@@ -95,11 +96,12 @@ def evidence(dev):
         "dhcp_vendor": info.get("dhcp_vendor_class") or "",
         "dhcp_params": devid._params(info),
         "domains": [d for d, _ in sorted(domains.items(), key=lambda kv: (-kv[1], kv[0]))[:8]],
+        "eero_type": info.get("eero_type") or "",
     }
 
 
 COLUMNS = ("vendor", "current", "model", "hostname", "bonjour_names", "bonjour_hosts", "bonjour_models",
-           "bonjour_services", "categories", "dhcp_vendor", "dhcp_params", "domains")
+           "bonjour_services", "categories", "dhcp_vendor", "dhcp_params", "domains", "eero_type")
 
 
 # what a row's id is made of: the evidence, but not the device's current type, which a rule saved between copying
@@ -150,6 +152,7 @@ For each row, work out what the device is: its category (what kind of thing it i
 - dhcp_vendor: DHCP vendor class (option 60)
 - dhcp_params: DHCP parameter request list (option 55)
 - domains: internet domains it contacted (generic ones such as Google, Apple, CDNs and NTP removed)
+- eero_type: the kind of device the eero mesh Wi-Fi system says it is ("tablet", "phone", "watch"), when it says more than "generic"
 
 ## Rule format
 A rule matches when every condition in "when" matches; a list value means any of. Fields:
@@ -161,6 +164,7 @@ A rule matches when every condition in "when" matches; a list value means any of
 - "category": a category code, exactly, e.g. "hap:9"
 - "dhcp_vendor": regex on the DHCP vendor class
 - "talks_to": a domain the device contacts, and its subdomains
+- "eero_type": the eero_type column's value, exactly
 
 Rules must be specific to the product:
 - never a rule on a network-chip maker alone ("Espressif", "Texas Instruments", "Telit"), and never on a generic or shared cloud domain (azure-devices.net, amazonaws.com);

@@ -164,8 +164,9 @@ A rule sets the type of every device that matches it, e.g. *every device whose M
 | Category code | `hap:9` (HomeKit thermostat), `matter:0x0301` |
 | DHCP vendor class | `^udhcp` (regular expression) |
 | Talks to | `nordvpn.com` (and its subdomains) |
+| eero type | `tablet`, `game console` (what eero says it is, with the [os-eero](https://github.com/alokdhir/os-eero) plugin installed) |
 
-Then the **Type** to show, an optional **Icon**, and an optional **Model** for devices that don't announce one (a device with no real name of its own, or only that code as its name, is then named after it). Your rules are checked before the built-in ones; an override for one device still wins. They're tried by their strongest clue (MAC prefix, Bonjour model, host name, DHCP vendor class, domain, Bonjour service, MAC vendor), then in the order you added them, and the first that matches decides. After *Apply*, devices are reclassified within a minute. The **Source** filter shows the rules you wrote (*Manual*), the AI Rule Generator's (*AI*) or both.
+Then the **Type** to show, an optional **Icon**, and an optional **Model** for devices that don't announce one (a device with no real name of its own, or only that code as its name, is then named after it). Your rules are checked before the built-in ones; an override for one device still wins. They're tried by their strongest clue (MAC prefix, Bonjour model, host name, DHCP vendor class, domain, Bonjour service, MAC vendor, eero type), then in the order you added them, and the first that matches decides. After *Apply*, devices are reclassified within a minute. The **Source** filter shows the rules you wrote (*Manual*), the AI Rule Generator's (*AI*) or both.
 
 *Device rules → Built-in* lists the rules Loupe ships with, in the order they're tried.
 
@@ -223,9 +224,10 @@ A device is the type when any alternative matches. An alternative matches when a
 | `dhcp_params` | start of the DHCP parameter request list (`1,121,3,6`) |
 | `talks_to` | a domain it looked up or connected to, and its subdomains |
 | `vendor` | a whole word in the maker's name for the MAC prefix |
+| `eero_type` | the kind of device eero says it is (`tablet`, `phone`, `watch`…), with the [os-eero](https://github.com/alokdhir/os-eero) plugin installed, exact |
 | `private_mac` | `true` for a randomized (private) MAC |
 
-Evidence is trusted in a fixed order — Bonjour model, Bonjour name, host name, hosting role, strong Bonjour services, standard category (exact, but generic: a Fire TV stays a Fire TV), DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching alternative wins (file order within a tier: specific makers come before general categories). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
+Evidence is trusted in a fixed order — Bonjour model, Bonjour name, host name, hosting role, strong Bonjour services, standard category (exact, but generic: a Fire TV stays a Fire TV), DHCP vendor, DHCP fingerprint, domains it talks to (after the fingerprint: a phone running a smart-home app talks to the same cloud as the device), other Bonjour services, MAC maker, the kind of device eero says it is (after everything the device itself says, so it fills in what Loupe can't tell, such as which Apple device sent Apple's DHCP request), generic fingerprints too common to beat anything else (BusyBox's `udhcp`), a private MAC — and the first matching alternative wins (file order within a tier: specific makers come before general categories). Every type needs an entry in `types` with a [Font Awesome](https://fontawesome.com/icons) icon (the set OPNsense ships), and a `vendor` when only one maker makes it.
 
 For your own network you don't need to edit these files: see [Settings](#settings).
 

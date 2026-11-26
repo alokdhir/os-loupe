@@ -43,7 +43,7 @@ RULES_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "devices.json
 # than guessing from a private MAC; a HomeKit or Matter category is exact but generic, so it comes after the
 # specific Bonjour services: a Fire TV stays a Fire TV rather than a "TV streamer")
 TIERS = ("mac_prefix", "mdns_model", "mdns_name", "hostname", "role", "strong_service", "category", "dhcp_vendor",
-         "dhcp_params", "talks_to", "mdns_service", "vendor", "fallback", "private_mac")
+         "dhcp_params", "talks_to", "mdns_service", "vendor", "eero_type", "fallback", "private_mac")
 
 
 REGEX_FIELDS = ("hostname", "mdns_model", "mdns_name", "dhcp_vendor")
@@ -132,7 +132,7 @@ def rules():
     return _rules
 
 
-LISTABLE = ("mac_prefix", "vendor", "mdns_service", "talks_to", "category")     # a comma can't be part of these
+LISTABLE = ("mac_prefix", "vendor", "mdns_service", "talks_to", "category", "eero_type")     # a comma can't be part of these
 
 
 def _split_lists(r):
@@ -209,6 +209,8 @@ def _check(field, want, ev):
         return f"vendor {ev['vendor']}" if ev["vendor"] and re.search(r"(?i)\b" + re.escape(want) + r"\b", ev["vendor"]) else None
     if field == "private_mac":
         return ("private MAC" if want else "") if ev["private"] == want else None
+    if field == "eero_type":
+        return f"eero type {ev['eero_type']}" if ev["eero_type"] and ev["eero_type"] == want.strip().lower() else None
     raise ValueError(f"unknown rule field {field}")
 
 
@@ -272,6 +274,7 @@ def classify(mac, hostname=None, info=None, names=(), oui=None, table=None):
           "models": info.get("mdns_models", []), "services": info.get("mdns_services", []),
           "instances": [n for n in info.get("mdns_names", []) if not _id_item("names", n)], "categories": categories(info),
           "vc": info.get("dhcp_vendor_class") or "", "params": _params(info),
+          "eero_type": (info.get("eero_type") or "").strip().lower(),
           "hosts": [hostname or "", info.get("dhcp_hostname") or ""] + list(info.get("mdns_hosts", []))}
     t = table or rules()
     computer = private or any(re.search(r"(?i)\b" + re.escape(v) + r"\b", ven or "") for v in t.computer_vendors)
