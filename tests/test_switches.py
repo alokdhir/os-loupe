@@ -645,7 +645,7 @@ class TestStartAsUser(unittest.TestCase):
 
     def test_reply_file_is_handed_over(self):
         path = "/tmp/loupe-ai-0123456789abcdef.json"
-        for cmd in ("switchrefresh", "aipreview", "aimodelpreview"):
+        for cmd in ("aipreview", "aimodelpreview"):
             self.run_start(cmd, path).assert_called_once_with(path, 1787, 1787)
 
     def test_other_paths_are_not(self):

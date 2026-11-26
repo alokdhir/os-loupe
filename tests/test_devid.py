@@ -123,6 +123,14 @@ class TestDevid(unittest.TestCase):
         self.assertEqual(devid.display_name("", "iPhone", None), "iPhone")          # nothing better
         self.assertEqual(devid.display_name("office-pc", "x", "y"), "office-pc")
 
+    def test_eero_name_only_when_loupe_has_none(self):
+        self.assertEqual(devid.with_eero_name(None, "iPad-1"), ("iPad-1", True))           # nothing sent, nothing announced
+        self.assertEqual(devid.with_eero_name("iPhone", "Guest-iPhone"), ("Guest-iPhone", True))   # a placeholder gives way
+        self.assertEqual(devid.with_eero_name("MacBookPro", "ab1234"), ("MacBookPro", False))      # Loupe's own name stays
+        self.assertEqual(devid.with_eero_name("iPhone", None), ("iPhone", False))
+        self.assertEqual(devid.with_eero_name("iPhone", "iPhone"), ("iPhone", False))      # the same name isn't eero's
+        self.assertEqual(devid.with_eero_name(None, None), (None, False))
+
 
 def mdns_response(*records):
     """A synthetic mDNS response; records are (name, type, rdata bytes)."""

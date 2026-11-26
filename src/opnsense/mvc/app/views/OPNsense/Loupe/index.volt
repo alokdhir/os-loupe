@@ -81,7 +81,8 @@ POSSIBILITY OF SUCH DAMAGE.
         /* a device's model, unless loupd named the device after it ("Miele Combi-Steam Oven XXL") */
         /* where a device's name comes from, on hover, when it isn't the user's or the device's own */
         const nameTitle = d => d.name_source === 'home assistant'
-            ? ' title="' + esc('{{ lang._("Name from Home Assistant") }}' + (d.area ? ' · ' + d.area : '')) + '"' : '';
+            ? ' title="' + esc('{{ lang._("Name from Home Assistant") }}' + (d.area ? ' · ' + d.area : '')) + '"'
+            : d.name_source === 'eero' ? ' title="' + esc('{{ lang._("Name from eero") }}') + '"' : '';
         const modelShown = d => d.model_in_name ? '' : (d.model || '');
         /* a device's type, unless the model shown beside it already says it ("HomePod mini") */
         const typeShown = d => d.type_in_model && modelShown(d) ? '' : (d.type || '');

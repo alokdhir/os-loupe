@@ -35,7 +35,7 @@ usage:
   query.py summary
   query.py switchmap
   query.py switches HOURS
-  query.py switchrefresh FILE|- all|ID
+  query.py switchrefresh all|ID
 """
 import collections
 import ipaddress
@@ -48,7 +48,7 @@ import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
-from lib import airules, devid, netif, privs, switches  # noqa: E402
+from lib import airules, configd, devid, netif, privs, switches  # noqa: E402
 from lib.devid import is_private, loose, rules, set_user_rules  # noqa: E402
 from lib.report import (WEB_PORTS, Namer, add, add_site, build_day, days, local_day, next_day, pieces, port_key,  # noqa: E402
                         recent_rows, site_rows)
@@ -130,7 +130,7 @@ def start_as_user(cmd, path):
             pass
     devid.read_root_files()
     pw = privs.user()
-    if pw and cmd in ("aipreview", "aimodelpreview", "switchrefresh") and AI_REPLY.match(path or ""):
+    if pw and cmd in ("aipreview", "aimodelpreview") and AI_REPLY.match(path or ""):
         try:
             os.chown(path, pw.pw_uid, pw.pw_gid)
         except OSError:
@@ -1086,18 +1086,12 @@ def switch_map(info, traffic=None, since=0):
                              router_ports(), since)
 
 
-def cmd_switchrefresh(path, target):
-    """Read the switches now (all, or one) and keep what they say. `path`: a file the GUI left with os-eero's units and
-    Wi-Fi clients, removed once read, or - without that plugin."""
+def cmd_switchrefresh(target):
+    """Read the switches now (all, or one) and keep what they say, with os-eero's units and Wi-Fi clients when that
+    plugin is installed."""
     if target != "all" and not switches.SWITCH_ID.match(target or ""):
         raise ValueError("expected a switch")
-    eero = {}
-    if path != "-":
-        try:
-            eero = take_file(path)
-        except (OSError, ValueError):
-            pass
-    return {"errors": switches.refresh(switch_state_path(), switch_list(), target, eero,
+    return {"errors": switches.refresh(switch_state_path(), switch_list(), target, configd.eero(),
                                        router_macs=netif.link_macs(), router=router_ports())}
 
 
@@ -1186,7 +1180,7 @@ def main(argv):
         elif cmd == "switches":
             out = cmd_switches(hours_arg(argv[2]))
         elif cmd == "switchrefresh":
-            out = cmd_switchrefresh(arg(2), arg(3))
+            out = cmd_switchrefresh(arg(2))
         else:
             out = {"error": "unknown command"}
     except (IndexError, ValueError) as e:

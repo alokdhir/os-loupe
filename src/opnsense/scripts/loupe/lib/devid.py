@@ -421,6 +421,13 @@ def display_name(*candidates):
                 names[0] if names else None)
 
 
+def with_eero_name(own, eero):
+    """(name, from eero?): os-eero's name for a device only if Loupe's own (`own`, from display_name) is missing or
+    not a real name (a placeholder such as "iPhone", an ID)."""
+    first = display_name(own, eero)
+    return first, bool(eero) and first == eero and first != own
+
+
 # a maker's name followed by a serial or MAC (Miele-0011223344556677, ESP_A1B2C3D4E5F6): not a name either
 SERIAL_NAME = re.compile(r"(?i)^[a-z][a-z0-9]*[-_ ][0-9a-f]{12,}$")
 # the legal form and other words a maker's registered name ends with ("Miele & Cie. KG", "Sub-Zero Group, Inc.")

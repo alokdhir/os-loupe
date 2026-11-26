@@ -44,7 +44,7 @@ import time
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from capture import Capture  # noqa: E402
-from lib import devid, hass, names, neighbours, netif, pfstate, privs, quic, report, rootfiles, services, store, unbound  # noqa: E402
+from lib import configd, devid, hass, names, neighbours, netif, pfstate, privs, quic, report, rootfiles, services, store, unbound  # noqa: E402
 from lib.report import local_day  # noqa: E402
 
 
@@ -54,6 +54,7 @@ SHARED_ADDRESS = 1800       # two MACs using one IPv4 address this long are one 
 SAME_CLAIM = 120            # two MACs announcing one Bonjour host name this close together are one host
 MAX_BUFFERED = 200000       # unwritten rows kept while the database is failing
 HEARD_FOR = 3600            # how long an address seen in a device's own frames still counts as that device's
+EERO_REFRESH = 300          # seconds between fetches of os-eero's client names
 
 
 def usable_networks(networks):
@@ -93,6 +94,7 @@ class Loupe:
         self.map_fingerprint = report.map_fingerprint(self.svc)
         self.stopping = False
         self.hass = hass_names         # names from Home Assistant (optional), kept fresh by a thread
+        self.eero = {}                 # names os-eero has for Wi-Fi clients (when installed), kept fresh by a thread
         self.oui = devid.load_oui()
         self.ip_mac = {}
         self.heard = {}             # {ip: (mac, ts)} from the devices' own frames
@@ -302,11 +304,13 @@ class Loupe:
             known[mac]["type"] = t
             model = devid.model(info, fallback=rule_model)
             # a device that only calls itself by an ID, a serial or its model code is named after its model
-            shown, by_model = devid.name_with_model(devid.display_name(name, hostname, devid.mdns_name(info)), ven, model,
-                                                    devid.model_codes(info, rule_model))
+            # eero's name for it (what the device told eero, or the user named it there) only if Loupe has none
+            first, from_eero = devid.with_eero_name(devid.display_name(name, hostname, devid.mdns_name(info)),
+                                                    self.eero.get(mac))
+            shown, by_model = devid.name_with_model(first, ven, model, devid.model_codes(info, rule_model))
             # Home Assistant's name for it (the user's, in its device registry) wins over any the device sent
             ha = self.hass.get(mac) if self.hass else None
-            source = "home assistant" if ha else ("model" if by_model else None)
+            source = "home assistant" if ha else ("model" if by_model else ("eero" if from_eero else None))
             rows.append((ha["name"] if ha else shown, source, (ha or {}).get("area") or None, ven, t, src, model, mac))
         self.store.set_device_types(rows)
         # an interface that replaced another (wired and Wi-Fi at different times, a new private address)
@@ -478,6 +482,17 @@ def main():
                         return
                     time.sleep(1)
         threading.Thread(target=refresh, name="hass", daemon=True).start()
+
+    def eero_names():
+        while not lp.stopping:
+            clients = configd.query("eero query clients all", list)
+            if clients is not None:             # None: os-eero isn't installed, or didn't answer (keep what we had)
+                lp.eero = configd.eero_names(clients)
+            for _ in range(EERO_REFRESH):
+                if lp.stopping:
+                    return
+                time.sleep(1)
+    threading.Thread(target=eero_names, name="eero", daemon=True).start()
     cap.emit = lp.emit
     if from_root is not None:
         def root_files():
